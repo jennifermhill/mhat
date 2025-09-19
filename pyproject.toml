@@ -27,7 +27,7 @@ dependencies = [
   "lsds",
   # "funlib.learn.torch",
   "traccuracy",
-  "motile-plugin @ git+https://github.com/funkelab/motile_napari_plugin@fe5bed08f4e089b38f6e50d431439b826a7a5e9b"
+  "motile-plugin"
 ]
 
 [project.optional-dependencies]

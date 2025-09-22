@@ -29,7 +29,7 @@ def generate_fragments(data_zarr: Path, output_zarr: Path):
         for tp in range(T):
             print(f"Processing channel {channel}, frame {tp}")
             frame = raw_data[tp, channel]
-            labels = voronoi_otsu_labeling(frame, spot_sigma=2, outline_sigma=1)
+            labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
 
             output_root['fragments'][tp, channel] = labels
 
@@ -108,25 +108,44 @@ def get_segmentation(zarr_path, threshold, outfile):
     # zarr_root["fragments"] = fragments
     # zarr_root["fragments"].attrs["resolution"] = (1, 1, 1)
 
-    ws_affs = np.stack(
-        [np.zeros_like(affinities[0]), affinities[0], affinities[1]]
-    ).astype(np.float32)
+    # Process each timepoint and channel separately
+    all_merge_history = []
+    
+    T, C = fragments.shape[:2]
+    
+    for t in range(T):
+        for c in range(C):
+            print(f"Processing timepoint {t}, channel {c}")
+            
+            # Extract 3D data for this timepoint and channel
+            fragments_3d = fragments[t, c]  # Shape: (Z, Y, X)
+            affinities_3d = affinities[t, c]  # Shape: (3, Z, Y, X)
+            
+            # Prepare affinities for waterz (expects 4D: (3, Z, Y, X))
+            ws_affs = affinities_3d.astype(np.float32)
+            
+            generator = waterz.agglomerate(
+                affs=ws_affs,
+                fragments=fragments_3d,
+                thresholds=thresholds,
+                return_merge_history=True,
+            )
 
-    generator = waterz.agglomerate(
-        affs=ws_affs,
-        fragments=fragments,
-        thresholds=thresholds,
-        return_merge_history=True,
-    )
+            segmentation, merge_history = next(generator)
+            
+            # Add timepoint and channel info to merge history
+            for row in merge_history:
+                row['timepoint'] = t
+                row['channel'] = c
+                all_merge_history.append(row)
 
-    segmentation, merge_history = next(generator)
-
-    fields = ["a", "b", "c", "score"]
+    # Write all merge history to file
+    fields = ["a", "b", "c", "score", "timepoint", "channel"]
 
     with open(outfile, "w") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
-        for row in merge_history:
+        for row in all_merge_history:
             writer.writerow(row)
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import csv
 from pathlib import Path
 
 import numpy as np
-import waterz
+import waterz # type: ignore
 import zarr
 from scipy.ndimage import label
 from scipy.ndimage.filters import maximum_filter
@@ -29,28 +29,9 @@ def generate_fragments(data_zarr: Path, output_zarr: Path):
         for tp in range(T):
             print(f"Processing channel {channel}, frame {tp}")
             frame = raw_data[tp, channel]
-            labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
+            labels = voronoi_otsu_labeling(frame, spot_sigma=0, outline_sigma=0.5)
 
             output_root['fragments'][tp, channel] = labels
-
-def generate_affinities(output_zarr: Path):
-    output_root = zarr.open(output_zarr, "a")
-    raw_data = output_root['fragments']
-
-    T, C, Z, Y, X = raw_data.shape
-
-    neighborhood = [[0, 0, 1], [0, 1, 0], [1, 0, 0]]
-
-    output_root.create_dataset(
-        "affinities", shape=(T, C, 3, Z, Y, X), chunks=(1, 1, 1, 1, Y, X), dtype=np.int32, overwrite=True
-    )
-
-    for channel in range(C):
-        for tp in range(T):
-            print(f"Processing channel {channel}, frame {tp}")
-            frame = raw_data[tp, channel]
-            affinities = compute_affinities(frame, neighborhood)
-            output_root['affinities'][tp, channel] = affinities
 
 
 def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
@@ -64,71 +45,30 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
 
     output_root = zarr.open(output_zarr, "a")
     output_root.create_dataset(
-        "affinities", shape=(T, C, 3, Z, Y, X), chunks=(1, 1, 1, 1, Y, X), dtype=np.int32, overwrite=True
+        "affinities", shape=(T, C, 3, Z, Y, X), chunks=(1, 1, 1, 1, Y, X), dtype=np.float32, overwrite=True
     )
 
+    affinities = np.zeros((T, C, 3, Z, Y, X), dtype=np.float32)
     for channel in range(C):
         for tp in range(T):
             print(f"Processing channel {channel}, frame {tp}")
             frame = raw_data[tp, channel]
-            affinities = compute_fluorescent_affinities(frame, neighborhood)
-            output_root['affinities'][tp, channel] = affinities
+            affinities[tp, channel] = compute_fluorescent_affinities(frame, neighborhood)
+
+    # Normalize affinities to range [0, 1] and invert
+    max_val = np.max(affinities)
+    min_val = np.min(affinities)
+    if max_val > 0:
+        affinities = (affinities - min_val) / (max_val - min_val)
+
+    affinities = 1.0 - affinities
+    output_root['affinities'][:] = affinities
 
 
-def watershed_from_boundary_distance(
-    boundary_distances, boundary_mask, id_offset=0, min_seed_distance=10
-):
-    max_filtered = maximum_filter(boundary_distances, min_seed_distance)
-    maxima = max_filtered == boundary_distances
-    seeds, n = label(maxima)
-
-    print(f"Found {n} fragments")
-
-    if n == 0:
-        return np.zeros(boundary_distances.shape, dtype=np.uint64), id_offset
-
-    seeds[seeds != 0] += id_offset
-
-    fragments = watershed(
-        boundary_distances.max() - boundary_distances, seeds, mask=boundary_mask
-    )
-
-    ret = (fragments.astype(np.uint64), n + id_offset)
-
-    return ret
-
-
-def watershed_from_affinities(
-    affs, max_affinity_value=1.0, id_offset=0, min_seed_distance=3
-):
-    mean_affs = 0.5 * (affs[0] + affs[1])
-
-    boundary_mask = mean_affs > 0.5 * max_affinity_value
-
-    fragments = np.zeros(mean_affs.shape, dtype=np.uint64)
-
-    for time in range(0, affs.shape[1]):
-        boundary_distances = distance_transform_edt(boundary_mask[time])
-
-        frags, id_offset = watershed_from_boundary_distance(
-            boundary_distances,
-            boundary_mask[time],
-            id_offset=id_offset,
-            min_seed_distance=min_seed_distance,
-        )
-        fragments[time] = frags
-
-    return fragments
-
-def get_segmentation(zarr_path, threshold, outfile):
+def get_segmentation(zarr_path, thresholds, outfile):
     zarr_root = zarr.open(zarr_path, "a")
     fragments = zarr_root["fragments"][:]
     affinities = zarr_root["affinities"][:]
-    thresholds = [threshold]
-
-    # fragments = watershed_from_affinities(affinities)
-    # zarr_root["fragments"] = fragments
-    # zarr_root["fragments"].attrs["resolution"] = (1, 1, 1)
 
     T, C, Z, Y, X = fragments.shape
 
@@ -139,34 +79,27 @@ def get_segmentation(zarr_path, threshold, outfile):
     # Process each timepoint and channel separately
     all_merge_history = []
     
-    T, C = fragments.shape[:2]
-    
-    for threshold in thresholds:
-        for t in range(T):
-            for c in range(C):
-                print(f"Processing timepoint {t}, channel {c}")
-                
-                # Extract 3D data for this timepoint and channel
-                fragments_3d = fragments[t, c]  # Shape: (Z, Y, X)
-                affinities_3d = affinities[t, c]  # Shape: (3, Z, Y, X)
-                
-                # Prepare affinities for waterz (expects 4D: (3, Z, Y, X))
-                ws_affs = affinities_3d.astype(np.float32)
+    for t in range(T):
+        for c in range(C):
+            print(f"Processing timepoint {t}, channel {c}")
+            
+            fragments_3d = fragments[t, c]  # Shape: (Z, Y, X)
+            affinities_3d = affinities[t, c]  # Shape: (3, Z, Y, X)
+            
+            ws_affs = affinities_3d.astype(np.float32)
+            
+            generator = waterz.agglomerate(
+                affs=ws_affs,
+                fragments=fragments_3d,
+                thresholds=thresholds,
+                return_merge_history=True,
+            )
 
-                # TODO: iterate through thresholds inside this loop using the next(generator)
-                
-                generator = waterz.agglomerate(
-                    affs=ws_affs,
-                    fragments=fragments_3d,
-                    thresholds=thresholds,
-                    return_merge_history=True,
-                )
-
+            for threshold in thresholds:
                 segmentation, merge_history = next(generator)
 
                 output_root['segmentations'][thresholds.index(threshold), t, c] = segmentation
                 
-                # Add timepoint and channel info to merge history
                 for row in merge_history:
                     row['threshold'] = threshold
                     row['timepoint'] = t
@@ -206,9 +139,9 @@ if __name__ == "__main__":
     if "affinities" not in output_root or args.overwrite:
         generate_fluorescent_affinities(data_zarr, output_zarr)
 
-    threshold = 0.5
+    thresholds = [0, 0.001, 0.0015, 0.002, 0.0025, 1]
 
     merge_history_file = output_zarr.parent / "merge_history.csv"
-    get_segmentation(output_zarr, threshold, merge_history_file)
+    get_segmentation(output_zarr, thresholds, merge_history_file)
 
     

@@ -68,46 +68,43 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
 def get_segmentation(zarr_path, thresholds, outfile):
     zarr_root = zarr.open(zarr_path, "a")
     fragments = zarr_root["fragments"][:]
-    affinities = zarr_root["affinities"][:]
+    affinities = zarr_root["affinities"][:].astype(np.float32)
 
     T, C, Z, Y, X = fragments.shape
 
     output_root.create_dataset(
-        "segmentations", shape=(len(thresholds), T, C, Z, Y, X), chunks=(1, 1, 1, 1, Y, X), dtype=np.uint64, overwrite=True
+        "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
     )
 
     # Process each timepoint and channel separately
     all_merge_history = []
     
     for t in range(T):
-        for c in range(C):
-            print(f"Processing timepoint {t}, channel {c}")
-            
-            fragments_3d = fragments[t, c]  # Shape: (Z, Y, X)
-            affinities_3d = affinities[t, c]  # Shape: (3, Z, Y, X)
-            
-            ws_affs = affinities_3d.astype(np.float32)
-            
-            generator = waterz.agglomerate(
-                affs=ws_affs,
-                fragments=fragments_3d,
-                thresholds=thresholds,
-                return_merge_history=True,
-            )
+        print(f"Processing timepoint {t}")
+        
+        fragments_3d = fragments[t, 0]  # Shape: (Z, Y, X)
+        affinities_3d = affinities[t, 0]  # Shape: (3, Z, Y, X)
+        
+        ws_affs = affinities_3d.astype(np.float32)
+        
+        generator = waterz.agglomerate(
+            affs=ws_affs,
+            fragments=fragments_3d,
+            thresholds=thresholds,
+            return_merge_history=True,
+        )
 
-            for threshold in thresholds:
-                segmentation, merge_history = next(generator)
+        segmentation, merge_history = next(generator)
 
-                output_root['segmentations'][thresholds.index(threshold), t, c] = segmentation
-                
-                for row in merge_history:
-                    row['threshold'] = threshold
-                    row['timepoint'] = t
-                    row['channel'] = c
-                    all_merge_history.append(row)
+        output_root['segmentations'][t] = segmentation
+        
+        for row in merge_history:
+            row['timepoint'] = t
+            all_merge_history.append(row)
 
     # Write all merge history to file
-    fields = ["a", "b", "c", "score", "threshold", "timepoint", "channel"]
+    fields = ["a", "b", "c", "score", "timepoint"]
+
 
     with open(outfile, "w") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
@@ -139,9 +136,7 @@ if __name__ == "__main__":
     if "affinities" not in output_root or args.overwrite:
         generate_fluorescent_affinities(data_zarr, output_zarr)
 
-    thresholds = [0, 0.001, 0.0015, 0.002, 0.0025, 1]
+    threshold = [0.5]
 
     merge_history_file = output_zarr.parent / "merge_history.csv"
-    get_segmentation(output_zarr, thresholds, merge_history_file)
-
-    
+    get_segmentation(output_zarr, threshold, merge_history_file)

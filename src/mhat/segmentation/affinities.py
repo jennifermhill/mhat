@@ -81,5 +81,4 @@ def compute_fluorescent_affinities(raw: np.ndarray, nhood: list):
             max(0, -nhood[e, 2]) : min(shape[2], shape[2] - nhood[e, 2]),
         ] = diff
 
-    # Convert back to int32 if needed, or keep as float32
-    return affinity.astype(np.int32)
+    return affinity

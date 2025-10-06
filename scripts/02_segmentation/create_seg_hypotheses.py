@@ -22,16 +22,15 @@ def generate_fragments(data_zarr: Path, output_zarr: Path):
 
     output_root = zarr.open(output_zarr, "a")
     output_root.create_dataset(
-        "fragments", shape=(T, C, Z, Y, X), chunks=(1, 1, 1, Y, X), dtype=np.uint64, overwrite=True
+        "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
     )
 
-    for channel in range(C):
-        for tp in range(T):
-            print(f"Processing channel {channel}, frame {tp}")
-            frame = raw_data[tp, channel]
-            labels = voronoi_otsu_labeling(frame, spot_sigma=0, outline_sigma=0.5)
+    for tp in range(T):
+        print(f"Processing frame {tp}")
+        frame = raw_data[tp, 0]
+        labels = voronoi_otsu_labeling(frame, spot_sigma=0, outline_sigma=0.5)
 
-            output_root['fragments'][tp, channel] = labels
+        output_root['fragments'][tp] = labels
 
 
 def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
@@ -45,15 +44,14 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
 
     output_root = zarr.open(output_zarr, "a")
     output_root.create_dataset(
-        "affinities", shape=(T, C, 3, Z, Y, X), chunks=(1, 1, 1, 1, Y, X), dtype=np.float32, overwrite=True
+        "affinities", shape=(T, 3, Z, Y, X), chunks=(1, 1, 1, Y, X), dtype=np.float32, overwrite=True
     )
 
-    affinities = np.zeros((T, C, 3, Z, Y, X), dtype=np.float32)
-    for channel in range(C):
-        for tp in range(T):
-            print(f"Processing channel {channel}, frame {tp}")
-            frame = raw_data[tp, channel]
-            affinities[tp, channel] = compute_fluorescent_affinities(frame, neighborhood)
+    affinities = np.zeros((T, 3, Z, Y, X), dtype=np.float32)
+    for tp in range(T):
+        print(f"Processing frame {tp}")
+        frame = raw_data[tp, 0]
+        affinities[tp] = compute_fluorescent_affinities(frame, neighborhood)
 
     # Normalize affinities to range [0, 1] and invert
     max_val = np.max(affinities)
@@ -70,7 +68,7 @@ def get_segmentation(zarr_path, thresholds, outfile):
     fragments = zarr_root["fragments"][:]
     affinities = zarr_root["affinities"][:].astype(np.float32)
 
-    T, C, Z, Y, X = fragments.shape
+    T, Z, Y, X = fragments.shape
 
     output_root.create_dataset(
         "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
@@ -81,10 +79,10 @@ def get_segmentation(zarr_path, thresholds, outfile):
     
     for t in range(T):
         print(f"Processing timepoint {t}")
-        
-        fragments_3d = fragments[t, 0]  # Shape: (Z, Y, X)
-        affinities_3d = affinities[t, 0]  # Shape: (3, Z, Y, X)
-        
+
+        fragments_3d = fragments[t]  # Shape: (Z, Y, X)
+        affinities_3d = affinities[t]  # Shape: (3, Z, Y, X)
+
         ws_affs = affinities_3d.astype(np.float32)
         
         generator = waterz.agglomerate(

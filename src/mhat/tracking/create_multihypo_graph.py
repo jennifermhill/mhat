@@ -26,7 +26,8 @@ def load_merge_history(merge_path: Path) -> np.ndarray:
             b = int(row["b"])
             c = int(row["c"])
             score = float(row["score"])
-            merge_history.append([a, b, c, score])
+            timepoint = int(row["timepoint"])
+            merge_history.append([a, b, c, score, timepoint])
 
     merge_history = np.array(merge_history)
     return merge_history
@@ -57,6 +58,16 @@ def renumber_merge_history(merge_history: np.ndarray, max_node_id: int) -> np.nd
         # replace all instances of c after this row and later with new node id
         if idx < merge_history.shape[0]:
             merge_history[idx + 1 :][merge_history[idx + 1 :] == c] = max_node_id
+
+    # renumber for each timepoint
+    timepoints = np.unique(merge_history[:, 4])
+    prev_max_id = np.max(merge_history[merge_history[:, 4] == 0][:, 2])
+    for tp in timepoints:
+        # Add the previous max id to all a, b, c values in this timepoint
+        merge_history[merge_history[:, 4] == tp][:, :3] += prev_max_id
+
+        # Find the new highest node ID from this timepoint's merges
+        prev_max_id = np.max(merge_history[merge_history[:, 4] == tp][:, 2])
 
     return merge_history
 
@@ -144,7 +155,7 @@ def nodes_from_fragments(
     conflict_sets = {}
 
     for merge in merge_history:
-        a, b, c, score = merge
+        a, b, c, score, tp = merge
         a = int(a)
         b = int(b)
         c = int(c)

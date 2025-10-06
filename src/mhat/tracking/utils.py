@@ -37,6 +37,7 @@ def nodes_from_segmentation(
                 "time": t,
                 "x": float(regionprop.centroid[0]),
                 "y": float(regionprop.centroid[1]),
+                "z": float(regionprop.centroid[2]),
                 "label": node_id,
                 "area": regionprop.area,
             }

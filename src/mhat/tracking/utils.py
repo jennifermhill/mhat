@@ -68,7 +68,7 @@ def create_kdtree(
     cand_graph: nx.DiGraph, node_ids: Iterable[Any]
 ) -> scipy.spatial.KDTree:
     positions = [
-        [cand_graph.nodes[node]["x"], cand_graph.nodes[node]["y"]] for node in node_ids
+        [cand_graph.nodes[node]["x"], cand_graph.nodes[node]["y"], cand_graph.nodes[node]["z"]] for node in node_ids
     ]
     return scipy.spatial.KDTree(positions)
 
@@ -101,7 +101,11 @@ def add_cand_edges(
         next_node_ids = node_frame_dict[frame + 1]
         next_kdtree = create_kdtree(cand_graph, next_node_ids)
 
-        matched_indices = prev_kdtree.query_ball_tree(next_kdtree, max_edge_distance)
+        # match indices based on a max edge distance
+        #matched_indices = prev_kdtree.query_ball_tree(next_kdtree, max_edge_distance)
+
+        # match indices based on k nearest neighbors
+        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=5)
 
         for prev_node_id, next_node_indices in zip(prev_node_ids, matched_indices):
             for next_node_index in next_node_indices:

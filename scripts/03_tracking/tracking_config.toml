@@ -10,7 +10,7 @@ drift_constant = -10.0
 area_weight = 0.5
 area_constant = 0
 cohesion_weight = -10
-cohesion_constant = 10
+cohesion_constant = -500
 adhesion_weight = -100
 adhesion_constant = 0
 appear_constant = 200.0
@@ -19,6 +19,6 @@ disappear_constant = 200.0
 # cand graph creation params
 min_merge_score = 0.0
 max_merge_score = 0.5
-max_edge_distance = 40
+max_edge_distance = 8
 
 size_threshold = 50

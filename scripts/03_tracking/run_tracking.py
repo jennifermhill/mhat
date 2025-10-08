@@ -1,7 +1,9 @@
+import sys
 import argparse
 import datetime
 from pathlib import Path
 
+import ilpy
 import motile
 import numpy as np
 import toml
@@ -16,7 +18,7 @@ def get_solution_seg(fragments, merge_history, solution_graph):
 
     merge_dict = {}
     for merge in merge_history:
-        a, b, c, score = merge
+        a, b, c, score, tp = merge
         a = int(a)
         b = int(b)
         c = int(c)
@@ -47,54 +49,63 @@ def get_solution_seg(fragments, merge_history, solution_graph):
 
 
 def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_name):
-    exp_path = output_video_path / exp_name
-    exp_path.mkdir()
-    input_zarr_path = input_video_path / "data.zarr"
-    output_zarr_path = output_video_path / "data.zarr"
-    merge_history_csv_path = input_video_path / "merge_history.csv"
-    config_filepath = exp_path / "config.toml"
-    output_filepath = exp_path / "pred_tracks.csv"
+    original_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(15000)
 
-    with open(config_filepath, "w") as config_file:
-        toml.dump(config, config_file)
+    try:
+        exp_path = output_video_path / exp_name
+        exp_path.mkdir()
+        input_zarr_path = input_video_path / "data.zarr"
+        output_zarr_path = output_video_path / "data.zarr"
+        merge_history_csv_path = input_video_path / "merge_history.csv"
+        config_filepath = exp_path / "config.toml"
+        output_filepath = exp_path / "pred_tracks.csv"
 
-    seg_group = "fragments"
-    output_seg_group = f"{exp_name}_pred_mask"
+        with open(config_filepath, "w") as config_file:
+            toml.dump(config, config_file)
 
-    max_edge_distance = config["max_edge_distance"]
+        seg_group = "fragments"
+        output_seg_group = f"{exp_name}_pred_mask"
 
-    input_zarr_root = zarr.open(input_zarr_path)
-    fragments = input_zarr_root[seg_group][:]
-    max_node_id = np.max(fragments)
+        max_edge_distance = config["max_edge_distance"]
 
-    merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
-    merge_history = create_multihypo_graph.renumber_merge_history(
-        merge_history, max_node_id
-    )
-    cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
-        fragments,
-        merge_history,
-        min_score=config["min_merge_score"],
-        max_score=config["max_merge_score"],
-        size_threshold=config["size_threshold"],
-    )
+        input_zarr_root = zarr.open(input_zarr_path)
+        fragments = input_zarr_root[seg_group][:]
+        max_node_id = np.max(fragments)
 
-    utils.add_cand_edges(cand_graph, max_edge_distance)
-    print("Edges before hyperedges: ", cand_graph.number_of_edges())
-    cand_graph = utils.add_division_hyperedges(cand_graph)
-    print("Edges after hyperedges: ", cand_graph.number_of_edges())
-    utils.add_appear_ignore_attr(cand_graph)
-    utils.add_disappear(cand_graph)
-    track_graph = motile.TrackGraph(cand_graph, frame_attribute="time")
-    utils.add_drift_dist_attr(track_graph, drift=config["drift"])
-    utils.add_area_diff_attr(track_graph)
+        merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
+        merge_history = create_multihypo_graph.renumber_merge_history(
+            merge_history, max_node_id
+        )
 
-    solution_graph = solve_with_motile(config, track_graph, exclusion_sets)
+        cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
+            fragments,
+            merge_history,
+            min_score=config["min_merge_score"],
+            max_score=config["max_merge_score"],
+            size_threshold=config["size_threshold"],
+        )
 
-    save_tracks_to_csv(solution_graph, output_filepath)
-    solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
-    output_zarr_root = zarr.open(output_zarr_path)
-    output_zarr_root[output_seg_group] = solution_seg
+        utils.add_cand_edges(cand_graph, max_edge_distance)
+        print("Edges before hyperedges: ", cand_graph.number_of_edges())
+        cand_graph = utils.add_division_hyperedges(cand_graph)
+        print("Edges after hyperedges: ", cand_graph.number_of_edges())
+        utils.add_appear_ignore_attr(cand_graph)
+        utils.add_disappear(cand_graph)
+        track_graph = motile.TrackGraph(cand_graph, frame_attribute="time")
+        utils.add_drift_dist_attr(track_graph, drift=config["drift"])
+        utils.add_area_diff_attr(track_graph)
+
+        with ilpy.expressions.recursion_limit_raised_by(10000):
+            solution_graph = solve_with_motile(config, track_graph, exclusion_sets)
+
+        save_tracks_to_csv(solution_graph, output_filepath)
+        solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
+        output_zarr_root = zarr.open(output_zarr_path)
+        output_zarr_root[output_seg_group] = solution_seg
+    
+    finally:
+        sys.setrecursionlimit(original_limit)
 
 
 if __name__ == "__main__":

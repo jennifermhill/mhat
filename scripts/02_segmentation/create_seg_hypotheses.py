@@ -13,7 +13,7 @@ from skimage.segmentation import watershed
 from mhat.segmentation.voronoi_otsu import voronoi_otsu_labeling
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
 
-def generate_fragments(data_zarr: Path, output_zarr: Path):
+def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
     zarr_root = zarr.open(data_zarr, "r+")
 
     raw_data = zarr_root
@@ -28,10 +28,11 @@ def generate_fragments(data_zarr: Path, output_zarr: Path):
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
-        labels = voronoi_otsu_labeling(frame, spot_sigma=0, outline_sigma=0.5)
+        labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
+
+        labels[labels != 0] += tp * id_offset
 
         output_root['fragments'][tp] = labels
-
 
 def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
     zarr_root = zarr.open(data_zarr, "r+")
@@ -62,11 +63,60 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
     affinities = 1.0 - affinities
     output_root['affinities'][:] = affinities
 
+def watershed_from_boundary_distance(
+    boundary_distances, boundary_mask, id_offset=0, min_seed_distance=10
+):
+    max_filtered = maximum_filter(boundary_distances, min_seed_distance)
+    maxima = max_filtered == boundary_distances
+    seeds, n = label(maxima)
 
-def get_segmentation(zarr_path, thresholds, outfile):
+    print(f"Found {n} fragments")
+
+    if n == 0:
+        return np.zeros(boundary_distances.shape, dtype=np.uint64), id_offset
+
+    seeds[seeds != 0] += id_offset
+
+    fragments = watershed(
+        boundary_distances.max() - boundary_distances, seeds, mask=boundary_mask
+    )
+
+    ret = (fragments.astype(np.uint64), n + id_offset)
+
+    return ret
+
+
+def watershed_from_affinities(
+    affs, max_affinity_value=1.0, id_offset=0, min_seed_distance=3
+):
+    mean_affs = 0.33 * (affs[:, 0] + affs[:, 1] + affs[:, 2])
+
+    boundary_mask = mean_affs > 0.5 * max_affinity_value
+
+    fragments = np.zeros(mean_affs.shape, dtype=np.uint64)
+
+    for time in range(0, affs.shape[0]):
+        boundary_distances = distance_transform_edt(boundary_mask[time])
+
+        frags, id_offset = watershed_from_boundary_distance(
+            boundary_distances,
+            boundary_mask[time],
+            id_offset=id_offset,
+            min_seed_distance=min_seed_distance,
+        )
+        fragments[time] = frags
+
+    return fragments
+
+def get_segmentation(zarr_path, thresholds, seg_method, outfile):
     zarr_root = zarr.open(zarr_path, "a")
-    fragments = zarr_root["fragments"][:]
     affinities = zarr_root["affinities"][:].astype(np.float32)
+
+    if seg_method == 'fluor_affs':
+        fragments = watershed_from_affinities(affinities)
+        zarr_root["fragments"] = fragments
+    else:
+        fragments = zarr_root["fragments"][:]
 
     T, Z, Y, X = fragments.shape
 
@@ -120,6 +170,12 @@ if __name__ == "__main__":
         action="store_true",
         help="overwrite existing affinity predictions",
     )
+    parser.add_argument(
+        "-sm",
+        "--seg_method",
+        default="voronoi_otsu",
+        help="segmentation method: fluor_affs or voronoi_otsu",
+    )
     args = parser.parse_args()
     data_zarr = Path(args.data_path)
     if args.output_path is not None:
@@ -128,7 +184,7 @@ if __name__ == "__main__":
         output_zarr = data_zarr
 
     output_root = zarr.open(output_zarr, "a")
-    if "fragments" not in output_root or args.overwrite:
+    if "fragments" not in output_root or args.overwrite or args.seg_method == 'voronoi_otsu':
         generate_fragments(data_zarr, output_zarr)
 
     if "affinities" not in output_root or args.overwrite:
@@ -137,4 +193,4 @@ if __name__ == "__main__":
     threshold = [0.5]
 
     merge_history_file = output_zarr.parent / "merge_history.csv"
-    get_segmentation(output_zarr, threshold, merge_history_file)
+    get_segmentation(output_zarr, threshold, args.seg_method, merge_history_file)

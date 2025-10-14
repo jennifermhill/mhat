@@ -11,7 +11,7 @@ import skimage
 
 
 def nodes_from_segmentation(
-    segmentation: np.ndarray, size_threshold: int | None = None
+    segmentation: np.ndarray, size_threshold: int | None = None, tp: int = 0
 ) -> nx.DiGraph:
     """Extract candidate nodes from a segmentation.
 
@@ -26,22 +26,22 @@ def nodes_from_segmentation(
         nx.DiGraph: A candidate graph with only nodes.
     """
     cand_graph = nx.DiGraph()
-    for t in range(len(segmentation)):
-        seg_frame = segmentation[t]
-        props = skimage.measure.regionprops(seg_frame)
-        for regionprop in props:
-            if size_threshold and regionprop.area < size_threshold:
-                continue
-            node_id = int(regionprop.label)
-            attrs = {
-                "time": t,
-                "x": float(regionprop.centroid[0]),
-                "y": float(regionprop.centroid[1]),
-                "z": float(regionprop.centroid[2]),
-                "label": node_id,
-                "area": regionprop.area,
-            }
-            cand_graph.add_node(node_id, **attrs)
+    # for t in range(len(segmentation)):
+    #     seg_frame = segmentation[t]
+    props = skimage.measure.regionprops(segmentation)
+    for regionprop in props:
+        if size_threshold and regionprop.area < size_threshold:
+            continue
+        node_id = int(regionprop.label)
+        attrs = {
+            "time": int(tp),
+            "x": float(regionprop.centroid[2]),
+            "y": float(regionprop.centroid[1]),
+            "z": float(regionprop.centroid[0]),
+            "label": node_id,
+            "area": regionprop.area,
+        }
+        cand_graph.add_node(node_id, **attrs)
 
     return cand_graph
 

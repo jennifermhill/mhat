@@ -33,7 +33,7 @@ def load_tracks_from_csv(csv_path: str | Path) -> nx.DiGraph:
 
 def save_tracks_to_csv(tracks: nx.DiGraph, csv_path: str | Path) -> None:
     with open(csv_path, "w") as f:
-        writer = DictWriter(f, fieldnames=["time", "x", "y", "id", "parent_id"])
+        writer = DictWriter(f, fieldnames=["time", "x", "y", "z", "id", "parent_id"])
         writer.writeheader()
         for node, data in tracks.nodes(data=True):
             parents = list(tracks.predecessors(node))
@@ -47,6 +47,7 @@ def save_tracks_to_csv(tracks: nx.DiGraph, csv_path: str | Path) -> None:
                 "time": data["time"],
                 "x": data["x"],
                 "y": data["y"],
+                "z": data["z"],
                 "id": node,
                 "parent_id": parent_id,
             }

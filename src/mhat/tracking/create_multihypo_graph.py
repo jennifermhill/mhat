@@ -57,17 +57,7 @@ def renumber_merge_history(merge_history: np.ndarray, max_node_id: int) -> np.nd
         merge_history[idx][2] = max_node_id
         # replace all instances of c after this row and later with new node id
         if idx < merge_history.shape[0]:
-            merge_history[idx + 1 :][merge_history[idx + 1 :] == c] = max_node_id
-
-    # renumber for each timepoint
-    timepoints = np.unique(merge_history[:, 4])
-    prev_max_id = np.max(merge_history[merge_history[:, 4] == 0][:, 2])
-    for tp in timepoints:
-        # Add the previous max id to all a, b, c values in this timepoint
-        merge_history[merge_history[:, 4] == tp][:, :3] += prev_max_id
-
-        # Find the new highest node ID from this timepoint's merges
-        prev_max_id = np.max(merge_history[merge_history[:, 4] == tp][:, 2])
+            merge_history[idx + 1 :, :3][merge_history[idx + 1 :, :3] == c] = max_node_id
 
     return merge_history
 
@@ -162,7 +152,7 @@ def nodes_from_fragments(
 
         if score >= min_score and graph is None:
             # get the initial fragments we want to populate the cand graph with
-            graph = nodes_from_segmentation(fragments, size_threshold=size_threshold)
+            graph = nodes_from_segmentation(fragments, size_threshold=size_threshold, tp=tp)
 
         # merge the fragments and add to history
         fragments[fragments == a] = c
@@ -176,7 +166,7 @@ def nodes_from_fragments(
             new_seg_only = np.zeros_like(fragments)
             new_seg_only[fragments == c] = c
             node_graph = nodes_from_segmentation(
-                new_seg_only, size_threshold=size_threshold
+                new_seg_only, size_threshold=size_threshold, tp=tp,
             )
             graph.add_nodes_from(node_graph.nodes(data=True))
 

@@ -1,6 +1,6 @@
 import motile
 import motile.variables
-from motile_toolbox.candidate_graph import graph_to_nx
+from mhat.tracking.utils import to_nx_graph
 
 
 def solve_with_motile(config, graph, exclusion_sets):
@@ -67,5 +67,5 @@ def solve_with_motile(config, graph, exclusion_sets):
     solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))
 
     solver.solve()
-    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    solution_graph = to_nx_graph(solver.get_selected_subgraph())
     return solution_graph

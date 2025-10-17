@@ -14,13 +14,17 @@ def main(raw_zarr_path, track_data_path, exp_name):
     pred_seg_path = track_data_path / exp_name / 'pred_seg.zarr'
 
     raw = zarr.open(raw_zarr_path, mode='r')
-    pred_seg = zarr.open(pred_seg_path, mode='r')
-
     raw = raw[:, 0, ...]
-    pred_seg = pred_seg[:]
-
     print(f"Raw shape: {raw.shape}, dtype: {raw.dtype}")
-    print(f"Tracks shape: {pred_seg.shape}, dtype: {pred_seg.dtype}")
+
+    # load the segmentation data if available
+    try:
+        pred_seg = zarr.open(pred_seg_path, mode='r')
+        pred_seg = pred_seg[:]
+        print(f"Segmentation shape: {pred_seg.shape}, dtype: {pred_seg.dtype}")
+    except:
+        pred_seg = None
+        print(f"Segmentation not found at {pred_seg_path}, loading only raw image and tracks.")
 
     # load the tracks data
     csvfile = pred_tracks_path
@@ -45,7 +49,8 @@ def main(raw_zarr_path, track_data_path, exp_name):
 
     viewer = napari.Viewer()
     viewer.add_image(raw, name='raw')
-    viewer.add_labels(pred_seg, name='pred_seg', opacity=0.5)
+    if pred_seg is not None:
+        viewer.add_labels(pred_seg, name='pred_seg', opacity=0.5)
     widget = MainApp(viewer)
     viewer.window.add_dock_widget(widget)
     TracksViewer.get_instance(viewer).tracks_list.add_tracks(tracks, "example")
@@ -55,7 +60,7 @@ def main(raw_zarr_path, track_data_path, exp_name):
 if __name__ == '__main__':
     # raw_zarr_path = Path('/groups/sgro/sgrolab/jennifer/mhat/data/mixin63/02_test_data.zarr')
     # track_data_path = Path('/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/mixin63/03_test_data')
-    raw_zarr_path = Path('Y:\\jennifer\\mhat\\data\\mixin63\\02_test_data.zarr')
-    track_data_path = Path('Y:\\jennifer\\mhat\\experiments\\tracking\\mixin63\\03_test_data')
-    exp_name = "2025-10-14_16-55-32"
+    raw_zarr_path = Path('Y:\\jennifer\\mhat\\data\\mixin63\\01_test_data.zarr')
+    track_data_path = Path('Y:\\jennifer\\mhat\\experiments\\tracking\\mixin63\\01_test_data')
+    exp_name = "2025-10-16_11-04-32"
     main(raw_zarr_path, track_data_path, exp_name)

@@ -4,9 +4,6 @@ output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/"
 dataset = "mixin63"
 
 # ILP params
-drift = 0.0
-drift_weight = 0.0
-drift_constant = 0.0
 area_weight = 0.5
 area_constant = 0
 cohesion_weight = -10

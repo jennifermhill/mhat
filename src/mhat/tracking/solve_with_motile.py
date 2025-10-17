@@ -17,14 +17,14 @@ def solve_with_motile(config, graph, exclusion_sets):
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(1))
 
-    solver.add_cost(
-        motile.costs.EdgeSelection(
-            weight=config["drift_weight"],
-            attribute="drift_dist",
-            constant=config["drift_constant"],
-        ),
-        name="drift",
-    )
+    # solver.add_cost(
+    #     motile.costs.EdgeSelection(
+    #         weight=config["drift_weight"],
+    #         attribute="drift_dist",
+    #         constant=config["drift_constant"],
+    #     ),
+    #     name="drift",
+    # )
 
     solver.add_cost(
         motile.costs.EdgeSelection(

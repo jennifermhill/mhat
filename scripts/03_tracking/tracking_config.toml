@@ -1,7 +1,7 @@
 # IO
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/"
-dataset = "mixin63"
+dataset = "mixin25"
 
 # ILP params
 drift = 0.0
@@ -19,6 +19,6 @@ disappear_constant = 200.0
 # cand graph creation params
 min_merge_score = 0.0
 max_merge_score = 0.5
-max_edge_distance = 8
+max_edge_distance = 50
 
 size_threshold = 50

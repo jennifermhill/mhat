@@ -33,8 +33,7 @@ def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
     # blur and threshold
     blurred_outline = gaussian(image, outline_sigma)
     threshold = sk_threshold_otsu(blurred_outline)
-    # hard code threshold at 1000 for now
-    binary_otsu = blurred_outline > 1100
+    binary_otsu = blurred_outline > threshold
 
     # determine local maxima within the thresholded area
     remaining_spots = spot_centroids * binary_otsu

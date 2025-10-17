@@ -29,6 +29,6 @@ def main(raw_zarr_path, seg_zarr_path):
     napari.run()
 
 if __name__ == '__main__':
-    raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/mixin63/02_test_data.zarr'
-    seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/mixin63/03_test_data/data.zarr'
+    raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/mixin25/02_test_data.zarr'
+    seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/mixin25/02_test_data/data.zarr'
     main(raw_zarr_path, seg_zarr_path)

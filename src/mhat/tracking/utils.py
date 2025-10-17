@@ -102,10 +102,10 @@ def add_cand_edges(
         next_kdtree = create_kdtree(cand_graph, next_node_ids)
 
         # match indices based on a max edge distance
-        #matched_indices = prev_kdtree.query_ball_tree(next_kdtree, max_edge_distance)
+        matched_indices = prev_kdtree.query_ball_tree(next_kdtree, max_edge_distance)
 
         # match indices based on k nearest neighbors
-        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=5)
+        # _, matched_indices = next_kdtree.query(prev_kdtree.data, k=5)
 
         for prev_node_id, next_node_indices in zip(prev_node_ids, matched_indices):
             for next_node_index in next_node_indices:

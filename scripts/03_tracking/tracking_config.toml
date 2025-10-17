@@ -1,16 +1,16 @@
 # IO
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/"
-dataset = "mixin25"
+dataset = "mixin63"
 
 # ILP params
-drift = 10
-drift_weight = 1.0
-drift_constant = -10.0
+drift = 0.0
+drift_weight = 0.0
+drift_constant = 0.0
 area_weight = 0.5
 area_constant = 0
 cohesion_weight = -10
-cohesion_constant = -500
+cohesion_constant = -250
 adhesion_weight = -100
 adhesion_constant = 0
 appear_constant = 200.0

@@ -215,6 +215,10 @@ def add_division_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
     nodes_original = list(candidate_graph.nodes)
     for node in nodes_original:
         successors = candidate_graph.successors(node)
+        # TODO: iterate through combinations of size 2-5 (5 is max number of edges for single node, set as k nearest neighbors in add_cand_edges)
+        # combos = []
+        # for i in range(2, 6):
+        #     combos.extend(list(combinations(successors, i)))
         pairs = list(combinations(successors, 2))
         for pair in pairs:
             hypernode = str(node) + "_" + str(pair[0]) + "_" + str(pair[1])
@@ -232,6 +236,41 @@ def add_division_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
                 pair[1],
             )
     return candidate_graph
+
+
+def add_merge_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
+    """Add hyper edges representing specific merges to the graph
+
+    Args:
+        candidate_graph (nx.DiGraph): A candidate graph already populated with
+            normal nodes and edges.
+
+    Returns:
+        nx.DiGraph: The candidate graph with additional hypernodes for each
+            possible merge
+    """
+    nodes_original = list(candidate_graph.nodes)
+    for node in nodes_original:
+        predecessors = candidate_graph.predecessors(node)
+        # TODO: iterate through combinations of size 2-5 (5 is max number of edges for single node, set as k nearest neighbors in add_cand_edges)
+        pairs = list(combinations(predecessors, 2))
+        for pair in pairs:
+            hypernode = str(pair[0]) + "_" + str(pair[1]) + "_" + str(node)
+            candidate_graph.add_node(hypernode)
+            candidate_graph.add_edge(
+                pair[0],
+                hypernode,
+            )
+            candidate_graph.add_edge(
+                pair[1],
+                hypernode,
+            )
+            candidate_graph.add_edge(
+                hypernode,
+                node,
+            )
+    return candidate_graph
+
 
 def to_nx_graph(graph, flatten_hyperedges: bool = True) -> nx.DiGraph:
     """Convert a this TrackGraph into a networkx DiGraph.

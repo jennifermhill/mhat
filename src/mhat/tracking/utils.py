@@ -101,14 +101,13 @@ def add_cand_edges(
         next_node_ids = node_frame_dict[frame + 1]
         next_kdtree = create_kdtree(cand_graph, next_node_ids)
 
-        # match indices based on a max edge distance
-        #matched_indices = prev_kdtree.query_ball_tree(next_kdtree, max_edge_distance)
-
         # match indices based on k nearest neighbors
-        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=5)
+        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=5, distance_upper_bound=max_edge_distance)
 
         for prev_node_id, next_node_indices in zip(prev_node_ids, matched_indices):
             for next_node_index in next_node_indices:
+                if next_node_index == len(next_node_ids):
+                    continue
                 next_node_id = next_node_ids[next_node_index]
                 cand_graph.add_edge(prev_node_id, next_node_id)
 
@@ -171,10 +170,8 @@ def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=10):
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
             us, vs = edge
-            u = us[0]  # assume always one "source" node
-            v1, v2 = vs  # assume always two "target" nodes
-            pos_u = drift + cand_graph.nodes[u]["x"]
-            pos_v = (cand_graph.nodes[v1]["x"] + cand_graph.nodes[v2]["x"]) / 2
+            pos_u = drift + (sum(cand_graph.nodes[n]["x"] for n in us)) / len(us)
+            pos_v = (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
         else:
             u, v = edge
             pos_u = drift + cand_graph.nodes[u]["x"]
@@ -188,10 +185,8 @@ def add_area_diff_attr(cand_graph: motile.TrackGraph):
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
             us, vs = edge
-            u = us[0]  # assume always one "source" node
-            v1, v2 = vs  # assume always two "target" nodes
-            area_u = cand_graph.nodes[u]["area"]
-            area_v = cand_graph.nodes[v1]["area"] + cand_graph.nodes[v2]["area"]
+            area_u = sum(cand_graph.nodes[n]["area"] for n in us)
+            area_v = sum(cand_graph.nodes[n]["area"] for n in vs)
         else:
             u, v = edge
             area_u = cand_graph.nodes[u]["area"]
@@ -199,6 +194,17 @@ def add_area_diff_attr(cand_graph: motile.TrackGraph):
 
         area_diff = np.abs(area_u - area_v)
         cand_graph.edges[edge]["area_diff"] = area_diff
+
+def is_hypernode(node_id: Any) -> bool:
+    """Check if a given node id represents a hypernode.
+
+    Args:
+        node_id (Any): A node id in a candidate graph.
+
+    Returns:
+        bool: True iff the given node id represents a hypernode. Hypernodes have the format 'parent_child1_child2' (e.g. '5_10_12').
+    """
+    return isinstance(node_id, str) and "_" in node_id
 
 
 def add_division_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
@@ -214,27 +220,27 @@ def add_division_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
     """
     nodes_original = list(candidate_graph.nodes)
     for node in nodes_original:
-        successors = candidate_graph.successors(node)
-        # TODO: iterate through combinations of size 2-5 (5 is max number of edges for single node, set as k nearest neighbors in add_cand_edges)
-        # combos = []
-        # for i in range(2, 6):
-        #     combos.extend(list(combinations(successors, i)))
-        pairs = list(combinations(successors, 2))
-        for pair in pairs:
-            hypernode = str(node) + "_" + str(pair[0]) + "_" + str(pair[1])
+        if is_hypernode(node):
+            continue
+        combos = []
+        # Generate combinations of successors of size 2 to 5
+        for i in range(2, 6):
+            successors = candidate_graph.successors(node)
+            combos.extend(list(combinations(successors, i)))
+        for combo in combos:
+            if any(is_hypernode(node) for node in combo):
+                continue
+            hypernode = str(node) + "_" + "_".join(map(str, combo))
             candidate_graph.add_node(hypernode)
             candidate_graph.add_edge(
                 node,
                 hypernode,
             )
-            candidate_graph.add_edge(
-                hypernode,
-                pair[0],
-            )
-            candidate_graph.add_edge(
-                hypernode,
-                pair[1],
-            )
+            for item in combo:
+                candidate_graph.add_edge(
+                    hypernode,
+                    item,
+                )
     return candidate_graph
 
 
@@ -251,20 +257,23 @@ def add_merge_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
     """
     nodes_original = list(candidate_graph.nodes)
     for node in nodes_original:
-        predecessors = candidate_graph.predecessors(node)
-        # TODO: iterate through combinations of size 2-5 (5 is max number of edges for single node, set as k nearest neighbors in add_cand_edges)
-        pairs = list(combinations(predecessors, 2))
-        for pair in pairs:
-            hypernode = str(pair[0]) + "_" + str(pair[1]) + "_" + str(node)
+        if is_hypernode(node):
+            continue
+        combos = []
+        # Generate combinations of predecessors of size 2-5
+        for i in range(2, 6):
+            predecessors = candidate_graph.predecessors(node)
+            combos.extend(list(combinations(predecessors, i)))
+        for combo in combos:
+            if any(is_hypernode(node) for node in combo):
+                continue
+            hypernode = str(node) + "_" + "_".join(map(str, combo))
             candidate_graph.add_node(hypernode)
-            candidate_graph.add_edge(
-                pair[0],
-                hypernode,
-            )
-            candidate_graph.add_edge(
-                pair[1],
-                hypernode,
-            )
+            for item in combo:
+                candidate_graph.add_edge(
+                    item,
+                    hypernode,
+                )
             candidate_graph.add_edge(
                 hypernode,
                 node,

@@ -98,8 +98,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
 
     utils.add_cand_edges(all_cand_graph, max_edge_distance)
     print("Edges before hyperedges: ", all_cand_graph.number_of_edges())
-    all_cand_graph = utils.add_division_hyperedges(all_cand_graph)
-    all_cand_graph = utils.add_merge_hyperedges(all_cand_graph)
+    all_cand_graph = utils.add_hyperedges(all_cand_graph)
     print("Edges after hyperedges: ", all_cand_graph.number_of_edges())
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph)
@@ -107,6 +106,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     # utils.add_drift_dist_attr(track_graph, drift=config["drift"])
     utils.add_area_diff_attr(track_graph)
 
+    print("Solving tracking with motile...")
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets)
 
     print("Saving results...")

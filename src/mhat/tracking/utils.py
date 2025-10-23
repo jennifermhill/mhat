@@ -8,6 +8,7 @@ import networkx as nx
 import numpy as np
 import scipy
 import skimage
+from line_profiler import profile
 
 
 def nodes_from_segmentation(
@@ -17,7 +18,7 @@ def nodes_from_segmentation(
 
     Args:
         segmentation (np.ndarray): A numpy array with integer labels and dimensions
-            (t, y, x).
+            (z, y, x).
 
         size_threshold (int): A minimum area for candidate nodes. Nodes smaller
             than this area will not be added to the graph.
@@ -195,89 +196,51 @@ def add_area_diff_attr(cand_graph: motile.TrackGraph):
         area_diff = np.abs(area_u - area_v)
         cand_graph.edges[edge]["area_diff"] = area_diff
 
-def is_hypernode(node_id: Any) -> bool:
-    """Check if a given node id represents a hypernode.
 
-    Args:
-        node_id (Any): A node id in a candidate graph.
-
-    Returns:
-        bool: True iff the given node id represents a hypernode. Hypernodes have the format 'parent_child1_child2' (e.g. '5_10_12').
-    """
-    return isinstance(node_id, str) and "_" in node_id
-
-
-def add_division_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
-    """Add hyper edges representing specific divisions to the graph
+@profile
+def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: bool = True) -> nx.DiGraph:
+    """Add hyper edges representing specific merges and divisions to the graph
 
     Args:
         candidate_graph (nx.DiGraph): A candidate graph already populated with
             normal nodes and edges.
+        divisions (bool, optional): Whether to add division hyperedges. Defaults to True.
+        merges (bool, optional): Whether to add merge hyperedges. Defaults to True.
 
     Returns:
         nx.DiGraph: The candidate graph with additional hypernodes for each
-            possible division
+            possible merge and division
     """
     nodes_original = list(candidate_graph.nodes)
+    hypernodes = []
+    hyperedges = []
     for node in nodes_original:
-        if is_hypernode(node):
-            continue
-        combos = []
-        # Generate combinations of successors of size 2 to 5
-        for i in range(2, 6):
-            successors = candidate_graph.successors(node)
-            combos.extend(list(combinations(successors, i)))
-        for combo in combos:
-            if any(is_hypernode(node) for node in combo):
-                continue
-            hypernode = str(node) + "_" + "_".join(map(str, combo))
-            candidate_graph.add_node(hypernode)
-            candidate_graph.add_edge(
-                node,
-                hypernode,
-            )
-            for item in combo:
-                candidate_graph.add_edge(
-                    hypernode,
-                    item,
-                )
-    return candidate_graph
+        if divisions:
+            successor_combos = []
+            for i in range(2, 6):
+                successors = candidate_graph.successors(node)
+                successor_combos.extend(list(combinations(successors, i)))
+            for succ_combo in successor_combos:
+                hypernode_succ = str(node) + "_" + "_".join(map(str, succ_combo))
+                hypernodes.append(hypernode_succ)
+                hyperedges.append((node, hypernode_succ))
+                for item in succ_combo:
+                    hyperedges.append((hypernode_succ, item))
+        if merges:
+            predecessor_combos = []
+            for i in range(2, 6):
+                predecessors = candidate_graph.predecessors(node)
+                predecessor_combos.extend(list(combinations(predecessors, i)))
+            for pred_combo in predecessor_combos:
+                hypernode_pred = str(node) + "_" + "_".join(map(str, pred_combo))
+                hypernodes.append(hypernode_pred)
+                hyperedges.append((hypernode_pred, node))
+                for item in pred_combo:
+                    hyperedges.append((item, hypernode_pred))
 
-
-def add_merge_hyperedges(candidate_graph: nx.DiGraph) -> nx.DiGraph:
-    """Add hyper edges representing specific merges to the graph
-
-    Args:
-        candidate_graph (nx.DiGraph): A candidate graph already populated with
-            normal nodes and edges.
-
-    Returns:
-        nx.DiGraph: The candidate graph with additional hypernodes for each
-            possible merge
-    """
-    nodes_original = list(candidate_graph.nodes)
-    for node in nodes_original:
-        if is_hypernode(node):
-            continue
-        combos = []
-        # Generate combinations of predecessors of size 2-5
-        for i in range(2, 6):
-            predecessors = candidate_graph.predecessors(node)
-            combos.extend(list(combinations(predecessors, i)))
-        for combo in combos:
-            if any(is_hypernode(node) for node in combo):
-                continue
-            hypernode = str(node) + "_" + "_".join(map(str, combo))
-            candidate_graph.add_node(hypernode)
-            for item in combo:
-                candidate_graph.add_edge(
-                    item,
-                    hypernode,
-                )
-            candidate_graph.add_edge(
-                hypernode,
-                node,
-            )
+    candidate_graph.add_nodes_from(hypernodes)
+    candidate_graph.add_edges_from(hyperedges)
+    
     return candidate_graph
 
 

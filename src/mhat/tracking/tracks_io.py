@@ -39,19 +39,29 @@ def save_tracks_to_csv(tracks: nx.DiGraph, csv_path: str | Path) -> None:
             parents = list(tracks.predecessors(node))
             if len(parents) == 1:
                 parent_id = parents[0]
+                row = {
+                    "time": data["time"],
+                    "x": data["x"],
+                    "y": data["y"],
+                    "z": data["z"],
+                    "id": node,
+                    "parent_id": parent_id,
+                }
+                writer.writerow(row)
             elif len(parents) == 0:
                 parent_id = -1
             else:
-                raise ValueError(f"Node {node} has too many parents! {parents}")
-            row = {
-                "time": data["time"],
-                "x": data["x"],
-                "y": data["y"],
-                "z": data["z"],
-                "id": node,
-                "parent_id": parent_id,
-            }
-            writer.writerow(row)
+                for parent in parents:
+                    parent_id = parent
+                    row = {
+                        "time": data["time"],
+                        "x": data["x"],
+                        "y": data["y"],
+                        "z": data["z"],
+                        "id": node,
+                        "parent_id": parent_id,
+                    }
+                    writer.writerow(row)
 
 
 def read_gt_tracks(mask_zarr, tracks_file) -> nx.DiGraph:

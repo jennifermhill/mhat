@@ -4,6 +4,7 @@ from skimage.filters import threshold_otsu as sk_threshold_otsu
 from skimage.measure import label
 from skimage.morphology import local_maxima
 from skimage.segmentation import watershed
+from skimage.filters import threshold_mean
 
 
 def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
@@ -33,8 +34,8 @@ def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
     # blur and threshold
     blurred_outline = gaussian(image, outline_sigma)
     threshold = sk_threshold_otsu(blurred_outline)
-    # hard code threshold at 1000 for now
-    binary_otsu = blurred_outline > 1100
+    
+    binary_otsu = blurred_outline > threshold
 
     # determine local maxima within the thresholded area
     remaining_spots = spot_centroids * binary_otsu
@@ -42,5 +43,39 @@ def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
     # start from remaining spots and flood binary image with labels
     labeled_spots = label(remaining_spots)
     labels = watershed(binary_otsu, labeled_spots, mask=binary_otsu)
+
+    return labels
+
+def mean_threshold_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
+    """Simple segmentation algorithm that thresholds the image at its mean intensity.
+
+    Args:
+        image (np.ndarray): Input image.
+        spot_sigma (float, optional): Unused parameter for compatibility.
+            Defaults to 2.
+        outline_sigma (float, optional): Unused parameter for compatibility.
+            Defaults to 1.
+
+    Returns:
+        np.ndarray: Labels array of same shape as input and dtype int32.
+    """
+    image = np.asarray(image)
+
+    # blur and detect local maxima
+    blurred_spots = gaussian(image, spot_sigma)
+    spot_centroids = local_maxima(blurred_spots)
+
+    # blur and threshold
+    blurred_outline = gaussian(image, outline_sigma)
+    threshold = threshold_mean(blurred_outline)
+
+    binary_mean = blurred_outline > threshold
+
+    # determine local maxima within the thresholded area
+    remaining_spots = spot_centroids * binary_mean
+
+    # start from remaining spots and flood binary image with labels
+    labeled_spots = label(remaining_spots)
+    labels = watershed(binary_mean, labeled_spots, mask=binary_mean)
 
     return labels

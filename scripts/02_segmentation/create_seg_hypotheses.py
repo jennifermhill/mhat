@@ -10,7 +10,7 @@ from scipy.ndimage.filters import maximum_filter
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage.segmentation import watershed
 
-from mhat.segmentation.voronoi_otsu import voronoi_otsu_labeling
+from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, mean_threshold_labeling
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
 
 def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
@@ -28,7 +28,10 @@ def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
-        labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
+        if args.seg_method == 'mean_threshold':
+            labels = mean_threshold_labeling(frame, spot_sigma=0.5, outline_sigma=5)
+        else:
+            labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=5)
 
         labels[labels != 0] += tp * id_offset
 
@@ -139,6 +142,7 @@ def get_segmentation(zarr_path, thresholds, seg_method, outfile):
             affs=ws_affs,
             fragments=fragments_3d,
             thresholds=thresholds,
+            #scoring_function="ContactArea<RegionGraphType>",
             return_merge_history=True,
         )
 
@@ -174,7 +178,7 @@ if __name__ == "__main__":
         "-sm",
         "--seg_method",
         default="voronoi_otsu",
-        help="segmentation method: fluor_affs or voronoi_otsu",
+        help="segmentation method: fluor_affs, voronoi_otsu, mean_threshold",
     )
     args = parser.parse_args()
     data_zarr = Path(args.data_path)

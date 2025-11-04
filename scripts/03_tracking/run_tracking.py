@@ -1,3 +1,4 @@
+import csv
 import sys
 import argparse
 import datetime
@@ -59,6 +60,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     input_zarr_path = input_video_path / "data.zarr"
     output_seg_path = exp_path / "pred_seg.zarr"
     merge_history_csv_path = input_video_path / "merge_history.csv"
+    normalized_merge_history_csv_path = exp_path / "normalized_merge_history.csv"
     config_filepath = exp_path / "config.toml"
     output_filepath_csv = exp_path / "pred_tracks.csv"
     output_filepath_graphml = exp_path / "pred_tracks.graphml"
@@ -76,9 +78,19 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     max_node_id = np.max(fragments)
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
+    merge_history = create_multihypo_graph.normalize_scores(merge_history)
     merge_history = create_multihypo_graph.renumber_merge_history(
         merge_history, max_node_id
     )
+
+    # Save the normalized and renumbered merge history
+    fields = ["a", "b", "c", "score", "timepoint"]
+
+    with open(normalized_merge_history_csv_path, "w") as f:
+        writer = csv.writer(f)
+        writer.writerow(fields)
+        for row in merge_history:
+            writer.writerow(row)
 
     for timepoint in range(fragments.shape[0]):
         print(f"Processing timepoint {timepoint}")
@@ -103,7 +115,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
-    # utils.add_drift_dist_attr(track_graph, drift=config["drift"])
+    utils.add_drift_dist_attr(track_graph)
     utils.add_area_diff_attr(track_graph)
 
     print("Solving tracking with motile...")
@@ -113,12 +125,13 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
 
     save_tracks_to_csv(solution_graph, output_filepath_csv)
     # Save tracks to geff file format
-    geff.write(solution_graph, output_filepath_geff)
+    geff.write(solution_graph, output_filepath_geff, axis_names=["time", "z", "y", "x"], axis_types=["time", "space", "space", "space"], axis_scales=[1.0, 1.0, 1.0, 1.0])
     nx.write_graphml(solution_graph, output_filepath_graphml)
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
     assign_tracklet_ids(solution_graph)
     solution_seg = utils.relabel_segmentation(solution_graph, solution_seg)
-    output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 256, 256), dtype=np.uint32)
+    output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
+    output_zarr_root.attrs["axes"] = ["time", "z", "y", "x"]
     output_zarr_root[:] = solution_seg
 
 
@@ -135,6 +148,7 @@ if __name__ == "__main__":
     assert output_base_dir.is_dir()
 
     data_dir = input_base_dir / dataset
+    print(data_dir)
     assert data_dir.is_dir()
 
     current_datetime = datetime.datetime.now()

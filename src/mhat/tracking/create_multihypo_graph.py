@@ -33,6 +33,25 @@ def load_merge_history(merge_path: Path) -> np.ndarray:
     return merge_history
 
 
+def normalize_scores(merge_history: np.ndarray) -> np.ndarray:
+    """Normalize the scores in the merge history to be between 0 and 1.
+
+    Args:
+        merge_history (np.ndarray): The merge history array with shape (4, N)
+            where N is the number of merges. The columns are a, b, c, score.
+
+    Returns:
+        np.ndarray: The merge history with normalized scores.
+    """
+    scores = merge_history[:, 3]
+    min_score = np.min(scores)
+    max_score = np.max(scores)
+    normalized_scores = (scores - min_score) / (max_score - min_score)
+    merge_history[:, 3] = normalized_scores
+
+    return merge_history
+
+
 def renumber_merge_history(merge_history: np.ndarray, max_node_id: int) -> np.ndarray:
     """Renumber the merge history to produce a new id from each merge,
     instead of reusing ids.
@@ -174,7 +193,7 @@ def nodes_from_fragments(
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)
 
     for node in graph.nodes():
-        cohesion_score = 1 - last_scores.get(node, 0.0)
+        cohesion_score = 1 - last_scores.get(node, 1.0)
         adhesion_score = next_scores.get(node, 1.0)
         graph.nodes[node]["cohesion"] = cohesion_score
         graph.nodes[node]["adhesion"] = adhesion_score

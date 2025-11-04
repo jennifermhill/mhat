@@ -29,9 +29,9 @@ def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
         if args.seg_method == 'mean_threshold':
-            labels = mean_threshold_labeling(frame, spot_sigma=0.5, outline_sigma=5)
+            labels = mean_threshold_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
         else:
-            labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=5)
+            labels = voronoi_otsu_labeling(frame, spot_sigma=1.5, outline_sigma=0.5)
 
         labels[labels != 0] += tp * id_offset
 
@@ -57,17 +57,17 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
         frame = raw_data[tp, 0]
         affinities[tp] = compute_fluorescent_affinities(frame, neighborhood)
 
-    # Normalize affinities to range [0, 1] and invert
+    # Clip top and bottom 5% and normalize affinities to range [0, 1] and invert
+    affinities = np.clip(affinities, np.percentile(affinities, 5), np.percentile(affinities, 95))
     max_val = np.max(affinities)
     min_val = np.min(affinities)
     if max_val > 0:
         affinities = (affinities - min_val) / (max_val - min_val)
 
-    affinities = 1.0 - affinities
     output_root['affinities'][:] = affinities
 
 def watershed_from_boundary_distance(
-    boundary_distances, boundary_mask, id_offset=0, min_seed_distance=10
+    boundary_distances, boundary_mask, id_offset=0, min_seed_distance=50
 ):
     max_filtered = maximum_filter(boundary_distances, min_seed_distance)
     maxima = max_filtered == boundary_distances
@@ -142,7 +142,7 @@ def get_segmentation(zarr_path, thresholds, seg_method, outfile):
             affs=ws_affs,
             fragments=fragments_3d,
             thresholds=thresholds,
-            #scoring_function="ContactArea<RegionGraphType>",
+            # scoring_function="ContactArea<RegionGraphType>",
             return_merge_history=True,
         )
 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     if "affinities" not in output_root or args.overwrite:
         generate_fluorescent_affinities(data_zarr, output_zarr)
 
-    threshold = [0.5]
+    threshold = [1]
 
     merge_history_file = output_zarr.parent / "merge_history.csv"
     get_segmentation(output_zarr, threshold, args.seg_method, merge_history_file)

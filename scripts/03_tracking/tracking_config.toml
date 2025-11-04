@@ -1,21 +1,25 @@
 # IO
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/"
-dataset = "mixin63"
+dataset = "nc281-spiAmSG"
 
 # ILP params
-area_weight = 0.5
+drift_weight = 1.0
+drift_constant = -10.0
+area_weight = 0
 area_constant = 0
-cohesion_weight = -10
-cohesion_constant = -250
-adhesion_weight = -100
-adhesion_constant = 0
+cohesion_weight = -3000
+cohesion_constant = -100
+adhesion_weight = -10
+adhesion_constant = -100
 appear_constant = 200.0
 disappear_constant = 200.0
 
 # cand graph creation params
 min_merge_score = 0.0
 max_merge_score = 0.5
-max_edge_distance = 8
+# max distance traveled between frames
+max_edge_distance = 25
 
-size_threshold = 50
+# fragments smaller than size_threshold will be ignored
+size_threshold = 75

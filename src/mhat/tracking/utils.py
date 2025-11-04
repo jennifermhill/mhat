@@ -103,7 +103,7 @@ def add_cand_edges(
         next_kdtree = create_kdtree(cand_graph, next_node_ids)
 
         # match indices based on k nearest neighbors
-        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=5, distance_upper_bound=max_edge_distance)
+        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=3, distance_upper_bound=max_edge_distance)
 
         for prev_node_id, next_node_indices in zip(prev_node_ids, matched_indices):
             for next_node_index in next_node_indices:
@@ -137,10 +137,16 @@ def relabel_segmentation(
     tracked_masks = np.zeros_like(segmentation)
     id_counter = 1
     parent_nodes = [n for (n, d) in solution_nx_graph.out_degree() if d > 1]
+    child_nodes = [n for (n, d) in solution_nx_graph.in_degree() if d > 1]
     soln_copy = solution_nx_graph.copy()
     for parent_node in parent_nodes:
         out_edges = solution_nx_graph.out_edges(parent_node)
         soln_copy.remove_edges_from(out_edges)
+    for child_node in child_nodes:
+        in_edges = solution_nx_graph.in_edges(child_node)
+        for in_edge in in_edges:
+            if soln_copy.has_edge(in_edge[0], in_edge[1]):
+                soln_copy.remove_edge(in_edge[0], in_edge[1])
     for node_set in nx.weakly_connected_components(soln_copy):
         for node in node_set:
             time_frame = solution_nx_graph.nodes[node]["time"]
@@ -160,14 +166,15 @@ def add_appear_ignore_attr(cand_graph):
 
 
 def add_disappear(cand_graph):
+    # TODO: make this more general to handle different datasets
     for node_id, attrs in cand_graph.nodes(data=True):
         if "time" not in attrs:
             continue  # skip hypernodes
-        if attrs.get("time") == 99 or attrs.get("x") > 380:
+        if attrs.get("time") == 19 or attrs.get("x") > 512:
             cand_graph.nodes[node_id]["ignore_disappear"] = True
 
 
-def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=10):
+def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=0):
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
             us, vs = edge
@@ -193,7 +200,7 @@ def add_area_diff_attr(cand_graph: motile.TrackGraph):
             area_u = cand_graph.nodes[u]["area"]
             area_v = cand_graph.nodes[v]["area"]
 
-        area_diff = np.abs(area_u - area_v)
+        area_diff = np.abs(area_u - area_v)/np.mean([area_u, area_v])
         cand_graph.edges[edge]["area_diff"] = area_diff
 
 

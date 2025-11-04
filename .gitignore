@@ -2,6 +2,11 @@
 /data
 /experiments
 
+# Locally editable installed packages
+/funtracks
+/motile_toolbox
+/motile_tracker
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

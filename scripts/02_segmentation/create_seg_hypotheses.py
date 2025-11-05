@@ -5,12 +5,14 @@ from pathlib import Path
 import numpy as np
 import waterz # type: ignore
 import zarr
+import torch
 from scipy.ndimage import label
 from scipy.ndimage.filters import maximum_filter
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage.segmentation import watershed
 
-from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, mean_threshold_labeling
+from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, voronoi_mean_labeling
+from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
 
 def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
@@ -25,11 +27,21 @@ def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
         "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
     )
 
+    if args.seg_method == 'cellpose':
+        # Check for cuda availability
+        if torch.cuda.is_available():
+            print("CUDA is available. Using GPU for Cellpose.")
+            gpu = True
+        else:
+            print("CUDA is not available. Using CPU for Cellpose.")
+
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
-        if args.seg_method == 'mean_threshold':
-            labels = mean_threshold_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
+        if args.seg_method == 'cellpose':
+            labels = segment_with_cellpose(frame, diameter=30, gpu=gpu)
+        elif args.seg_method == 'voronoi_mean':
+            labels = voronoi_mean_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
         else:
             labels = voronoi_otsu_labeling(frame, spot_sigma=1.5, outline_sigma=0.5)
 
@@ -66,60 +78,56 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
 
     output_root['affinities'][:] = affinities
 
-def watershed_from_boundary_distance(
-    boundary_distances, boundary_mask, id_offset=0, min_seed_distance=50
-):
-    max_filtered = maximum_filter(boundary_distances, min_seed_distance)
-    maxima = max_filtered == boundary_distances
-    seeds, n = label(maxima)
+# def watershed_from_boundary_distance(
+#     boundary_distances, boundary_mask, id_offset=0, min_seed_distance=50
+# ):
+#     max_filtered = maximum_filter(boundary_distances, min_seed_distance)
+#     maxima = max_filtered == boundary_distances
+#     seeds, n = label(maxima)
 
-    print(f"Found {n} fragments")
+#     print(f"Found {n} fragments")
 
-    if n == 0:
-        return np.zeros(boundary_distances.shape, dtype=np.uint64), id_offset
+#     if n == 0:
+#         return np.zeros(boundary_distances.shape, dtype=np.uint64), id_offset
 
-    seeds[seeds != 0] += id_offset
+#     seeds[seeds != 0] += id_offset
 
-    fragments = watershed(
-        boundary_distances.max() - boundary_distances, seeds, mask=boundary_mask
-    )
+#     fragments = watershed(
+#         boundary_distances.max() - boundary_distances, seeds, mask=boundary_mask
+#     )
 
-    ret = (fragments.astype(np.uint64), n + id_offset)
+#     ret = (fragments.astype(np.uint64), n + id_offset)
 
-    return ret
+#     return ret
 
 
-def watershed_from_affinities(
-    affs, max_affinity_value=1.0, id_offset=0, min_seed_distance=3
-):
-    mean_affs = 0.33 * (affs[:, 0] + affs[:, 1] + affs[:, 2])
+# def watershed_from_affinities(
+#     affs, max_affinity_value=1.0, id_offset=0, min_seed_distance=3
+# ):
+#     mean_affs = 0.33 * (affs[:, 0] + affs[:, 1] + affs[:, 2])
 
-    boundary_mask = mean_affs > 0.5 * max_affinity_value
+#     boundary_mask = mean_affs > 0.5 * max_affinity_value
 
-    fragments = np.zeros(mean_affs.shape, dtype=np.uint64)
+#     fragments = np.zeros(mean_affs.shape, dtype=np.uint64)
 
-    for time in range(0, affs.shape[0]):
-        boundary_distances = distance_transform_edt(boundary_mask[time])
+#     for time in range(0, affs.shape[0]):
+#         boundary_distances = distance_transform_edt(boundary_mask[time])
 
-        frags, id_offset = watershed_from_boundary_distance(
-            boundary_distances,
-            boundary_mask[time],
-            id_offset=id_offset,
-            min_seed_distance=min_seed_distance,
-        )
-        fragments[time] = frags
+#         frags, id_offset = watershed_from_boundary_distance(
+#             boundary_distances,
+#             boundary_mask[time],
+#             id_offset=id_offset,
+#             min_seed_distance=min_seed_distance,
+#         )
+#         fragments[time] = frags
 
-    return fragments
+#     return fragments
 
-def get_segmentation(zarr_path, thresholds, seg_method, outfile):
+def get_segmentation(zarr_path, thresholds, outfile):
     zarr_root = zarr.open(zarr_path, "a")
     affinities = zarr_root["affinities"][:].astype(np.float32)
 
-    if seg_method == 'fluor_affs':
-        fragments = watershed_from_affinities(affinities)
-        zarr_root["fragments"] = fragments
-    else:
-        fragments = zarr_root["fragments"][:]
+    fragments = zarr_root["fragments"][:]
 
     T, Z, Y, X = fragments.shape
 
@@ -178,7 +186,7 @@ if __name__ == "__main__":
         "-sm",
         "--seg_method",
         default="voronoi_otsu",
-        help="segmentation method: fluor_affs, voronoi_otsu, mean_threshold",
+        help="segmentation method: voronoi_otsu, voronoi_mean, cellpose",
     )
     args = parser.parse_args()
     data_zarr = Path(args.data_path)
@@ -188,7 +196,7 @@ if __name__ == "__main__":
         output_zarr = data_zarr
 
     output_root = zarr.open(output_zarr, "a")
-    if "fragments" not in output_root or args.overwrite or args.seg_method == 'voronoi_otsu':
+    if "fragments" not in output_root or args.overwrite:
         generate_fragments(data_zarr, output_zarr)
 
     if "affinities" not in output_root or args.overwrite:
@@ -197,4 +205,4 @@ if __name__ == "__main__":
     threshold = [1]
 
     merge_history_file = output_zarr.parent / "merge_history.csv"
-    get_segmentation(output_zarr, threshold, args.seg_method, merge_history_file)
+    get_segmentation(output_zarr, threshold, merge_history_file)

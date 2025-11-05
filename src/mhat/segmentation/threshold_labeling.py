@@ -46,7 +46,7 @@ def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
 
     return labels
 
-def mean_threshold_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
+def voronoi_mean_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
     """Simple segmentation algorithm that thresholds the image at its mean intensity.
 
     Args:

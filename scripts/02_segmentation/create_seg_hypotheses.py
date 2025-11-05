@@ -15,8 +15,23 @@ from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, voronoi_
 from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
 
+def get_axes_metadata(zarr_root):
+    axes = zarr_root.attrs.get("axes", None)
+    if axes is not None:
+        axes = [axis for axis in axes if axis.get("name") != "channel"]
+    else:
+        # Default axes metadata
+        axes = [
+            dict(name='time', type='time', unit='second', scale=1.0),
+            dict(name='z', type='space', unit='micrometer', scale=1.0),
+            dict(name='y', type='space', unit='micrometer', scale=1.0),
+            dict(name='x', type='space', unit='micrometer', scale=1.0),
+        ]
+    return axes
+
 def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
     zarr_root = zarr.open(data_zarr, "r+")
+    axes = get_axes_metadata(zarr_root)
 
     raw_data = zarr_root
 
@@ -26,6 +41,7 @@ def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
     output_root.create_dataset(
         "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
     )
+    output_root['fragments'].attrs["axes"] = axes
 
     if args.seg_method == 'cellpose':
         # Check for cuda availability
@@ -51,6 +67,7 @@ def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
 
 def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
     zarr_root = zarr.open(data_zarr, "r+")
+    axes = get_axes_metadata(zarr_root)
 
     raw_data = zarr_root
 
@@ -62,6 +79,7 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
     output_root.create_dataset(
         "affinities", shape=(T, 3, Z, Y, X), chunks=(1, 1, 1, Y, X), dtype=np.float32, overwrite=True
     )
+    output_root['affinities'].attrs["axes"] = axes
 
     affinities = np.zeros((T, 3, Z, Y, X), dtype=np.float32)
     for tp in range(T):
@@ -126,14 +144,16 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
 def get_segmentation(zarr_path, thresholds, outfile):
     zarr_root = zarr.open(zarr_path, "a")
     affinities = zarr_root["affinities"][:].astype(np.float32)
-
     fragments = zarr_root["fragments"][:]
+
+    axes = get_axes_metadata(zarr_root["fragments"])
 
     T, Z, Y, X = fragments.shape
 
     output_root.create_dataset(
         "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
     )
+    output_root['segmentations'].attrs["axes"] = axes
 
     # Process each timepoint and channel separately
     all_merge_history = []

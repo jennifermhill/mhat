@@ -75,6 +75,16 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
 
     input_zarr_root = zarr.open(input_zarr_path)
     fragments = input_zarr_root[seg_group][:]
+    axes = input_zarr_root[seg_group].attrs.get("axes", None)
+    if axes is not None:
+        for axis in axes:
+            if axis["scale"] is None:
+                scale
+            else:
+                axis["scale"] = float(axis["scale"])
+        scale = [axis["scale"] for axis in axes if "scale" in axis]
+    else:
+        scale = [1.0, 1.0, 1.0, 1.0]
     max_node_id = np.max(fragments)
     img_shape = fragments.shape
 
@@ -116,7 +126,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph, img_shape)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
-    utils.add_drift_dist_attr(track_graph)
+    utils.add_drift_dist_attr(track_graph, scale)
     utils.add_area_diff_attr(track_graph)
 
     print("Solving tracking with motile...")
@@ -126,13 +136,14 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
 
     save_tracks_to_csv(solution_graph, output_filepath_csv)
     # Save tracks to geff file format
-    geff.write(solution_graph, output_filepath_geff, axis_names=["time", "z", "y", "x"], axis_types=["time", "space", "space", "space"], axis_scales=[1.0, 1.0, 1.0, 1.0])
+    geff.write(solution_graph, output_filepath_geff, axis_names=["time", "z", "y", "x"], axis_types=["time", "space", "space", "space"], axis_scales=scale)
     nx.write_graphml(solution_graph, output_filepath_graphml)
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
     assign_tracklet_ids(solution_graph)
     solution_seg = utils.relabel_segmentation(solution_graph, solution_seg)
     output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
-    output_zarr_root.attrs["axes"] = ["time", "z", "y", "x"]
+    if axes is not None:
+        output_zarr_root.attrs["axes"] = axes
     output_zarr_root[:] = solution_seg
 
 

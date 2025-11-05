@@ -165,12 +165,12 @@ def add_appear_ignore_attr(cand_graph):
             cand_graph.nodes[node_id]["ignore_appear"] = True
 
 
-def add_disappear(cand_graph):
-    # TODO: make this more general to handle different datasets
+def add_disappear(cand_graph, img_shape):
     for node_id, attrs in cand_graph.nodes(data=True):
         if "time" not in attrs:
             continue  # skip hypernodes
-        if attrs.get("time") == 19 or attrs.get("x") > 512:
+        T, Z, Y, X = img_shape
+        if attrs.get("time") == T - 1 or attrs.get("z") > Z or attrs.get("y") > Y or attrs.get("x") > X:
             cand_graph.nodes[node_id]["ignore_disappear"] = True
 
 

@@ -76,6 +76,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     input_zarr_root = zarr.open(input_zarr_path)
     fragments = input_zarr_root[seg_group][:]
     max_node_id = np.max(fragments)
+    img_shape = fragments.shape
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
     merge_history = create_multihypo_graph.normalize_scores(merge_history)
@@ -92,7 +93,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
         for row in merge_history:
             writer.writerow(row)
 
-    for timepoint in range(fragments.shape[0]):
+    for timepoint in range(img_shape[0]):
         print(f"Processing timepoint {timepoint}")
         cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
             fragments[timepoint],
@@ -113,7 +114,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     all_cand_graph = utils.add_hyperedges(all_cand_graph)
     print("Edges after hyperedges: ", all_cand_graph.number_of_edges())
     utils.add_appear_ignore_attr(all_cand_graph)
-    utils.add_disappear(all_cand_graph)
+    utils.add_disappear(all_cand_graph, img_shape)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
     utils.add_drift_dist_attr(track_graph)
     utils.add_area_diff_attr(track_graph)

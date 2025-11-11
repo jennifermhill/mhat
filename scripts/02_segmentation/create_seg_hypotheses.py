@@ -55,11 +55,11 @@ def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
         if args.seg_method == 'cellpose':
-            labels = segment_with_cellpose(frame, diameter=30, gpu=gpu)
+            labels = segment_with_cellpose(frame, gpu=gpu)
         elif args.seg_method == 'voronoi_mean':
             labels = voronoi_mean_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
         else:
-            labels = voronoi_otsu_labeling(frame, spot_sigma=1.5, outline_sigma=0.5)
+            labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
 
         labels[labels != 0] += tp * id_offset
 

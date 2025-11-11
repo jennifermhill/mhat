@@ -21,11 +21,11 @@ def main(dataset_name, exp_number, exp_name):
     # data_path = Path('/Volumes/sgrolab/jennifer/mhat/data')
     # experiment_path = Path('/Volumes/sgrolab/jennifer/mhat/experiments')
 
-    raw_cells_zarr_path = data_path / dataset_name / f"{exp_number:02d}_cells.zarr"
+    raw_cells_zarr_path = data_path / dataset_name / f"{exp_number:02d}_cells_binned.zarr"
     raw_rocks_zarr_path = data_path / dataset_name / f"{exp_number:02d}_rocks.zarr"
-    frag_zarr_path = experiment_path / 'segmentation' / dataset_name / f"{exp_number:02d}_cells" / 'data.zarr'
+    frag_zarr_path = experiment_path / 'segmentation' / dataset_name / f"{exp_number:02d}_cells_binned" / 'data.zarr'
     rocks_seg_zarr_path = experiment_path / 'segmentation' / dataset_name / f"{exp_number:02d}_rocks" / 'data.zarr'
-    track_seg_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_cells" / exp_name / 'pred_seg.zarr'
+    track_seg_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_cells_binned" / exp_name / 'pred_seg.zarr'
 
     if all(path.exists() is False for path in [raw_cells_zarr_path, raw_rocks_zarr_path, frag_zarr_path, rocks_seg_zarr_path, track_seg_zarr_path]):
         raise FileNotFoundError("None of the required data paths exist. Exiting.")
@@ -48,13 +48,13 @@ def main(dataset_name, exp_number, exp_name):
         print("Defaulting scale to [1.0, 1.0, 1.0, 1.0]")
         scale = [1.0, 1.0, 1.0, 1.0]
 
-    if raw_rocks_zarr_path.exists():
-        raw_rocks = zarr.open(raw_rocks_zarr_path, mode='r')
-        raw_rocks = raw_rocks[:, 0, ...]
-        print(f"Rocks shape: {raw_rocks.shape}, dtype: {raw_rocks.dtype}")
-        viewer.add_image(raw_rocks, name='rocks', colormap='gray', blending='additive', scale=scale)
-    else:
-        print(f"Warning: Raw rocks path {raw_rocks_zarr_path} does not exist.")
+    # if raw_rocks_zarr_path.exists():
+    #     raw_rocks = zarr.open(raw_rocks_zarr_path, mode='r')
+    #     raw_rocks = raw_rocks[:, 0, ...]
+    #     print(f"Rocks shape: {raw_rocks.shape}, dtype: {raw_rocks.dtype}")
+    #     viewer.add_image(raw_rocks, name='rocks', colormap='gray', blending='additive', scale=scale)
+    # else:
+    #     print(f"Warning: Raw rocks path {raw_rocks_zarr_path} does not exist.")
 
     if frag_zarr_path.exists():
         fragments = zarr.open(frag_zarr_path, mode='r')
@@ -64,13 +64,13 @@ def main(dataset_name, exp_number, exp_name):
     else:
         print(f"Warning: Fragments path {frag_zarr_path} does not exist.")
 
-    if rocks_seg_zarr_path.exists():
-        rocks_seg = zarr.open(rocks_seg_zarr_path, mode='r')
-        rocks_seg = rocks_seg['segmentations'][:, ...]
-        print(f"Rocks segmentation shape: {rocks_seg.shape}, dtype: {rocks_seg.dtype}")
-        viewer.add_labels(rocks_seg, name='rocks_seg', opacity=0.5, scale=scale)
-    else:
-        print(f"Warning: Rocks segmentation path {rocks_seg_zarr_path} does not exist.")
+    # if rocks_seg_zarr_path.exists():
+    #     rocks_seg = zarr.open(rocks_seg_zarr_path, mode='r')
+    #     rocks_seg = rocks_seg['segmentations'][:, ...]
+    #     print(f"Rocks segmentation shape: {rocks_seg.shape}, dtype: {rocks_seg.dtype}")
+    #     viewer.add_labels(rocks_seg, name='rocks_seg', opacity=0.5, scale=scale)
+    # else:
+    #     print(f"Warning: Rocks segmentation path {rocks_seg_zarr_path} does not exist.")
 
     if track_seg_zarr_path.exists():
         track_seg = zarr.open(track_seg_zarr_path, mode='r')
@@ -81,7 +81,7 @@ def main(dataset_name, exp_number, exp_name):
         print(f"Warning: Track segmentation path {track_seg_zarr_path} does not exist.")
 
     # Load tracking data if it exists
-    track_data_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_cells" / exp_name / 'pred_tracks.zarr'
+    track_data_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_cells_binned" / exp_name / 'pred_tracks.zarr'
     
     # Add the MainApp widget first
     widget = MainApp(viewer)
@@ -112,8 +112,8 @@ def main(dataset_name, exp_number, exp_name):
             tracks_viewer.tracks_list.add_tracks(tracks, exp_name)
             print(f"Successfully loaded tracks: {tracks}")
 
-            viewer.layers[f"{exp_name}_points"].scale = tracks.scale
-            viewer.layers[f"{exp_name}_tracks"].scale = tracks.scale
+            # viewer.layers[f"{exp_name}_points"].scale = tracks.scale
+            # viewer.layers[f"{exp_name}_tracks"].scale = tracks.scale
             
         except Exception as e:
             print(f"Failed to load tracks: {e}")
@@ -124,6 +124,6 @@ def main(dataset_name, exp_number, exp_name):
 
 if __name__ == '__main__':
     main(dataset_name="nc281-spiAmSG", 
-         exp_number=2, 
-         exp_name="2025-11-05_13-01-38",
+         exp_number=1, 
+         exp_name="2025-11-07_10-21-53",
          )

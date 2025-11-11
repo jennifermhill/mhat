@@ -34,8 +34,8 @@ def main(raw_zarr_path, seg_zarr_path):
     napari.run()
 
 if __name__ == '__main__':
-    raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/nc281-spiAmSG/02_cells.zarr'
-    seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/nc281-spiAmSG/02_cells/data.zarr'
+    raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/nc281-spiAmSG/01_cells_binned.zarr'
+    seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/nc281-spiAmSG/01_cells_binned/data.zarr'
     # raw_zarr_path = '/Volumes/sgrolab/jennifer/mhat/data/nc281-spiAmSG/01_cells.zarr'
     # seg_zarr_path = '/Volumes/sgrolab/jennifer/mhat/experiments/segmentation/nc281-spiAmSG/01_cells/data.zarr'
     main(raw_zarr_path, seg_zarr_path)

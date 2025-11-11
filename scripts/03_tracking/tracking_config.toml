@@ -6,8 +6,8 @@ dataset = "nc281-spiAmSG"
 # ILP params
 drift_weight = 1.0
 drift_constant = -10.0
-area_weight = 0
-area_constant = 0
+area_weight = 5.0
+area_constant = -10.0
 cohesion_weight = -3000
 cohesion_constant = -100
 adhesion_weight = -10

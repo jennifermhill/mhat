@@ -124,6 +124,7 @@ def nodes_from_fragments(
     min_score: float = 0.0,
     max_score: float = 0.5,
     size_threshold: int | None = None,
+    scale: list[float] = [1.0, 1.0, 1.0, 1.0],
 ) -> tuple[nx.DiGraph, list[tuple]]:
     """Compute the nodes of a candidate graph from a set of fragments and a
     merge history.
@@ -147,6 +148,8 @@ def nodes_from_fragments(
             score higher than max_score from the graph. Defaults to 0.5.
         size_threshold (int, optional): Exclude candidates with area less than
             size_threshold pixels from the graph. Defaults to None.
+        scale (list[float], optional): The scaling factors for each axis of
+            the fragments array. Defaults to [1.0, 1.0, 1
 
     Returns:
         tuple[nx.DiGraph, list[tuple, ...]]: returns a networkx graph with all
@@ -171,7 +174,7 @@ def nodes_from_fragments(
 
         if score >= min_score and graph is None:
             # get the initial fragments we want to populate the cand graph with
-            graph = nodes_from_segmentation(fragments, size_threshold=size_threshold, tp=tp)
+            graph = nodes_from_segmentation(fragments, size_threshold=size_threshold, tp=tp, scale=scale)
 
         # merge the fragments and add to history
         fragments[fragments == a] = c
@@ -185,7 +188,7 @@ def nodes_from_fragments(
             new_seg_only = np.zeros_like(fragments)
             new_seg_only[fragments == c] = c
             node_graph = nodes_from_segmentation(
-                new_seg_only, size_threshold=size_threshold, tp=tp,
+                new_seg_only, size_threshold=size_threshold, tp=tp, scale=scale
             )
             graph.add_nodes_from(node_graph.nodes(data=True))
 

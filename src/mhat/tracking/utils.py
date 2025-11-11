@@ -12,7 +12,10 @@ from line_profiler import profile
 
 
 def nodes_from_segmentation(
-    segmentation: np.ndarray, size_threshold: int | None = None, tp: int = 0
+    segmentation: np.ndarray,
+    size_threshold: int | None = None,
+    tp: int = 0,
+    scale: list[float] = [1.0, 1.0, 1.0, 1.0]
 ) -> nx.DiGraph:
     """Extract candidate nodes from a segmentation.
 
@@ -22,6 +25,11 @@ def nodes_from_segmentation(
 
         size_threshold (int): A minimum area for candidate nodes. Nodes smaller
             than this area will not be added to the graph.
+
+        tp (int, optional): The timepoint to assign to the nodes. Defaults to 0.
+
+        scale (list[float], optional): The scaling factors for each axis of
+            the fragments array. Defaults to [1.0, 1.0, 1.0, 1.0].
 
     Returns:
         nx.DiGraph: A candidate graph with only nodes.
@@ -36,9 +44,9 @@ def nodes_from_segmentation(
         node_id = int(regionprop.label)
         attrs = {
             "time": int(tp),
-            "x": float(regionprop.centroid[2]),
-            "y": float(regionprop.centroid[1]),
-            "z": float(regionprop.centroid[0]),
+            "x": float(regionprop.centroid[2] * scale[3]),
+            "y": float(regionprop.centroid[1] * scale[2]),
+            "z": float(regionprop.centroid[0] * scale[1]),
             "label": node_id,
             "area": regionprop.area,
         }

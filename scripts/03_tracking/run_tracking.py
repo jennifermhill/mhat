@@ -87,6 +87,9 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
         scale = [1.0, 1.0, 1.0, 1.0]
     max_node_id = np.max(fragments)
     img_shape = fragments.shape
+    img_shape_scaled = [
+        int(img_shape[i] * scale[i]) for i in range(len(img_shape))
+    ]
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
     merge_history = create_multihypo_graph.normalize_scores(merge_history)
@@ -111,6 +114,7 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
             min_score=config["min_merge_score"],
             max_score=config["max_merge_score"],
             size_threshold=config["size_threshold"],
+            scale=scale,
         )
         if timepoint == 0:
             all_cand_graph = cand_graph
@@ -124,9 +128,9 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
     all_cand_graph = utils.add_hyperedges(all_cand_graph)
     print("Edges after hyperedges: ", all_cand_graph.number_of_edges())
     utils.add_appear_ignore_attr(all_cand_graph)
-    utils.add_disappear(all_cand_graph, img_shape)
+    utils.add_disappear(all_cand_graph, img_shape_scaled)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
-    utils.add_drift_dist_attr(track_graph, scale)
+    utils.add_drift_dist_attr(track_graph)
     utils.add_area_diff_attr(track_graph)
 
     print("Solving tracking with motile...")

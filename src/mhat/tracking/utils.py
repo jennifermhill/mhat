@@ -85,6 +85,7 @@ def create_kdtree(
 def add_cand_edges(
     cand_graph: nx.DiGraph,
     max_edge_distance: float,
+    max_children: int,
 ) -> None:
     """Add candidate edges to a candidate graph by connecting all nodes in adjacent
     frames that are closer than max_edge_distance. Also adds attributes to the edges.
@@ -111,14 +112,21 @@ def add_cand_edges(
         next_kdtree = create_kdtree(cand_graph, next_node_ids)
 
         # match indices based on k nearest neighbors
-        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=3, distance_upper_bound=max_edge_distance)
+        _, matched_indices = next_kdtree.query(prev_kdtree.data, k=max_children, distance_upper_bound=max_edge_distance)
 
-        for prev_node_id, next_node_indices in zip(prev_node_ids, matched_indices):
-            for next_node_index in next_node_indices:
+        if max_children == 1:
+            for prev_node_id, next_node_index in zip(prev_node_ids, matched_indices):
                 if next_node_index == len(next_node_ids):
                     continue
                 next_node_id = next_node_ids[next_node_index]
                 cand_graph.add_edge(prev_node_id, next_node_id)
+        else:
+            for prev_node_id, next_node_indices in zip(prev_node_ids, matched_indices):
+                for next_node_index in next_node_indices:
+                    if next_node_index == len(next_node_ids):
+                        continue
+                    next_node_id = next_node_ids[next_node_index]
+                    cand_graph.add_edge(prev_node_id, next_node_id)
 
         prev_node_ids = next_node_ids
         prev_kdtree = next_kdtree
@@ -184,6 +192,7 @@ def add_disappear(cand_graph, img_shape):
 
 def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=0):
     for edge in cand_graph.edges:
+        # TODO: fix to include y and z pos
         if cand_graph.is_hyperedge(edge):
             us, vs = edge
             pos_u = drift + (sum(cand_graph.nodes[n]["x"] for n in us)) / len(us)

@@ -1,19 +1,16 @@
-from pathlib import Path
 import napari
 import zarr
-import csv
-import numpy as np
-import networkx as nx
+import dask.array as da
 
 
-def main(raw_zarr_path, seg_zarr_path):
-    raw = zarr.open(raw_zarr_path, mode='r')
-    seg = zarr.open(seg_zarr_path, mode='r')
+def main(raw_zarr_path, seg_zarr_path, compute=False):
+    raw = da.from_zarr(raw_zarr_path)
     raw = raw[:, 0, ...]
 
-    affinities = seg['affinities'][:, ...]
-    fragments = seg['fragments'][:, ...]
-    segmentations = seg['segmentations'][:, ...]
+    seg = zarr.open(seg_zarr_path, mode='r')
+    affinities = da.from_zarr(seg['affinities'])[:, ...]
+    fragments = da.from_zarr(seg['fragments'])[:, ...]
+    segmentations = da.from_zarr(seg['segmentations'])[:, ...]
     axes = seg['affinities'].attrs.get("axes", None)
     if axes is not None:
         scale = [axis["scale"] for axis in axes if axis["scale"] is not None]
@@ -25,6 +22,12 @@ def main(raw_zarr_path, seg_zarr_path):
     print(f"Fragments shape: {fragments.shape}, dtype: {fragments.dtype}")
     print(f"Segmentations shape: {segmentations.shape}, dtype: {segmentations.dtype}")
 
+    if compute:
+        raw = raw.compute()
+        affinities = affinities.compute()
+        fragments = fragments.compute()
+        segmentations = segmentations.compute()
+
     viewer = napari.Viewer()
     viewer.add_image(raw, name='raw', scale=scale)
     viewer.add_image(affinities, name='affinities', channel_axis=1, contrast_limits=[0, 1], scale=scale)
@@ -34,8 +37,10 @@ def main(raw_zarr_path, seg_zarr_path):
     napari.run()
 
 if __name__ == '__main__':
-    raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/nc281-spiAmSG/01_cells_binned.zarr'
-    seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/nc281-spiAmSG/01_cells_binned/data.zarr'
-    # raw_zarr_path = '/Volumes/sgrolab/jennifer/mhat/data/nc281-spiAmSG/01_cells.zarr'
-    # seg_zarr_path = '/Volumes/sgrolab/jennifer/mhat/experiments/segmentation/nc281-spiAmSG/01_cells/data.zarr'
-    main(raw_zarr_path, seg_zarr_path)
+    # raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/NC281-Fl2mSiH2B/02_cells.zarr'
+    # seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/NC281-Fl2mSiH2B/03_test_data/data.zarr'
+    raw_zarr_path = 'Y:\\jennifer\\mhat\\data\\mixin63\\01_test_data.zarr'
+    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\mixin63\\08_test_data\\data.zarr'
+    # raw_zarr_path = '/Volumes/sgrolab/jennifer/mhat/data/mixin63/02_test_data.zarr'
+    # seg_zarr_path = '/Volumes/sgrolab/jennifer/mhat/experiments/segmentation/mixin63/03_test_data/data.zarr'
+    main(raw_zarr_path, seg_zarr_path, compute=True)

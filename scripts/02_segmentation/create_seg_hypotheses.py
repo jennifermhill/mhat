@@ -29,7 +29,7 @@ def get_axes_metadata(zarr_root):
         ]
     return axes
 
-def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
+def generate_fragments(data_zarr: Path, output_zarr: Path):
     zarr_root = zarr.open(data_zarr, "r+")
     axes = get_axes_metadata(zarr_root)
 
@@ -60,8 +60,11 @@ def generate_fragments(data_zarr: Path, output_zarr: Path, id_offset=10000):
             labels = voronoi_mean_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
         else:
             labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
+        
+        if tp != 0:
+            labels[labels != 0] += max_node_id
 
-        labels[labels != 0] += tp * id_offset
+        max_node_id = np.max(labels)
 
         output_root['fragments'][tp] = labels
 

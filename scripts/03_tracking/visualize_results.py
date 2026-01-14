@@ -1,14 +1,9 @@
 from pathlib import Path
 import napari
 import zarr
-import networkx as nx
-import pandas as pd
-import numpy as np
 from typing import Any
 
 from funtracks.import_export.import_from_geff import import_from_geff
-from motile_toolbox.candidate_graph import NodeAttr
-from motile_tracker.import_export.load_tracks import tracks_from_df
 from motile_tracker.application_menus import MainApp
 from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
 
@@ -20,12 +15,14 @@ def main(dataset_name, exp_number, exp_name):
     experiment_path = Path('Y:\\jennifer\\mhat\\experiments')
     # data_path = Path('/Volumes/sgrolab/jennifer/mhat/data')
     # experiment_path = Path('/Volumes/sgrolab/jennifer/mhat/experiments')
+    # data_path = Path('/groups/sgro/sgrolab/jennifer/mhat/data')
+    # experiment_path = Path('/groups/sgro/sgrolab/jennifer/mhat/experiments')
 
-    raw_cells_zarr_path = data_path / dataset_name / f"{exp_number:02d}_cells_binned.zarr"
+    raw_cells_zarr_path = data_path / dataset_name / f"{exp_number:02d}_nuclei.zarr"
     raw_rocks_zarr_path = data_path / dataset_name / f"{exp_number:02d}_rocks.zarr"
-    frag_zarr_path = experiment_path / 'segmentation' / dataset_name / f"{exp_number:02d}_cells_binned" / 'data.zarr'
+    frag_zarr_path = experiment_path / 'segmentation' / dataset_name / f"no_{exp_number:02d}_nuclei" / 'data.zarr'
     rocks_seg_zarr_path = experiment_path / 'segmentation' / dataset_name / f"{exp_number:02d}_rocks" / 'data.zarr'
-    track_seg_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_cells_binned" / exp_name / 'pred_seg.zarr'
+    track_seg_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_nuclei" / exp_name / 'pred_seg.zarr'
 
     if all(path.exists() is False for path in [raw_cells_zarr_path, raw_rocks_zarr_path, frag_zarr_path, rocks_seg_zarr_path, track_seg_zarr_path]):
         raise FileNotFoundError("None of the required data paths exist. Exiting.")
@@ -81,7 +78,7 @@ def main(dataset_name, exp_number, exp_name):
         print(f"Warning: Track segmentation path {track_seg_zarr_path} does not exist.")
 
     # Load tracking data if it exists
-    track_data_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_cells_binned" / exp_name / 'pred_tracks.zarr'
+    track_data_zarr_path = experiment_path / 'tracking' / dataset_name / f"{exp_number:02d}_nuclei" / exp_name / 'pred_tracks.zarr'
     
     # Add the MainApp widget first
     widget = MainApp(viewer)
@@ -106,14 +103,11 @@ def main(dataset_name, exp_number, exp_name):
                 segmentation_path=None,
                 scale=scale,
             )
-
             # Add tracks to the TracksViewer
             tracks_viewer = TracksViewer.get_instance(viewer)
             tracks_viewer.tracks_list.add_tracks(tracks, exp_name)
             print(f"Successfully loaded tracks: {tracks}")
 
-            # viewer.layers[f"{exp_name}_points"].scale = tracks.scale
-            # viewer.layers[f"{exp_name}_tracks"].scale = tracks.scale
             
         except Exception as e:
             print(f"Failed to load tracks: {e}")
@@ -123,7 +117,7 @@ def main(dataset_name, exp_number, exp_name):
     napari.run()
 
 if __name__ == '__main__':
-    main(dataset_name="nc281-spiAmSG", 
-         exp_number=1, 
-         exp_name="2025-11-07_10-21-53",
+    main(dataset_name="NC281-Fl2mSiH2B", 
+         exp_number=3, 
+         exp_name="2025-12-15_15-37-21",
          )

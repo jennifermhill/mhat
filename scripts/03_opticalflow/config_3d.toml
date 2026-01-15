@@ -1,0 +1,24 @@
+# IO
+data_dir = "/groups/sgro/sgrolab/jennifer/cryolite/John/"
+dataset = "251120_1613_NC281-Fl2mSiH2B_250cryo_20XWI_volMov_imersolpt2"
+channel = 3
+
+# optical flow params
+downsample_factor = [1, 1, 1]
+pyr_scale = 0.5
+levels = 3
+winsize = [5, 15, 15]
+iterations = 8
+poly_n = 3
+poly_sigma = [0.37, 1.2, 1.2]
+filter_type = "gaussian"
+presmoothing = 0.1
+
+# hyper params
+enhance_contrast = true
+temporal_smoothing = true
+temporal_smoothing_sigma = 0.7
+frame_averaging = 5
+
+# display params
+color_wheel = true

@@ -1,7 +1,10 @@
 # IO
-input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
-output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/"
-dataset = "NC281-Fl2mSiH2B"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "NC281-Fl2mSiH2B"
+dataset = "00_nuclei"
+
+seg_result = "2026-01-15_14-27-10"
 
 # ILP params
 drift_distance = 8.0
@@ -19,9 +22,9 @@ disappear_constant = 200.0
 # cand graph creation params
 max_children = 3
 min_merge_score = 0.0
-max_merge_score = 1.0
+max_merge_score = 0.5
 # max distance traveled between frames
-max_edge_distance = 20
+max_edge_distance = 25
 
 # fragments smaller than size_threshold will be ignored
-size_threshold = 25
+size_threshold = 75

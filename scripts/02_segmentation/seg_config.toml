@@ -1,0 +1,9 @@
+# IO
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
+experiment = "NC281-Fl2mSiH2B"
+dataset = "00_nuclei"
+
+# segmentation parameters
+seg_method = "otsu"
+overwrite = false

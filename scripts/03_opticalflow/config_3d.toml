@@ -1,7 +1,8 @@
 # IO
-data_dir = "/groups/sgro/sgrolab/jennifer/cryolite/John/"
-dataset = "251120_1613_NC281-Fl2mSiH2B_250cryo_20XWI_volMov_imersolpt2"
-channel = 3
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/opticalflow/"
+experiment = "NC281-Fl2mSiH2B"
+dataset = "00_nuclei"
 
 # optical flow params
 downsample_factor = [1, 1, 1]

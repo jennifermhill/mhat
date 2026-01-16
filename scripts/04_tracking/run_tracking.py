@@ -1,10 +1,8 @@
 import csv
-import sys
 import argparse
 import datetime
 from pathlib import Path
 
-import ilpy
 import motile
 import numpy as np
 import toml
@@ -53,18 +51,17 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_name):
+def run_tracking(config, seg_dir: Path, flow_dir: Path, output_dir: Path):
 
-    exp_path = output_video_path / exp_name
-    exp_path.mkdir()
-    input_zarr_path = input_video_path / "data.zarr"
-    output_seg_path = exp_path / "pred_seg.zarr"
-    merge_history_csv_path = input_video_path / "merge_history.csv"
-    normalized_merge_history_csv_path = exp_path / "normalized_merge_history.csv"
-    config_filepath = exp_path / "config.toml"
-    output_filepath_csv = exp_path / "pred_tracks.csv"
-    output_filepath_graphml = exp_path / "pred_tracks.graphml"
-    output_filepath_geff = exp_path / "pred_tracks.zarr"
+    seg_zarr_path = seg_dir / "data.zarr"
+    flow_zarr_path = flow_dir / "data.zarr" if flow_dir is not None else None
+    output_seg_path = output_dir / "pred_seg.zarr"
+    merge_history_csv_path = seg_dir / "merge_history.csv"
+    normalized_merge_history_csv_path = output_dir / "normalized_merge_history.csv"
+    config_filepath = output_dir / "config.toml"
+    output_filepath_csv = output_dir / "pred_tracks.csv"
+    output_filepath_graphml = output_dir / "pred_tracks.graphml"
+    output_filepath_geff = output_dir / "pred_tracks.zarr"
 
     with open(config_filepath, "w") as config_file:
         toml.dump(config, config_file)
@@ -73,9 +70,9 @@ def run_tracking(config, input_video_path: Path, output_video_path: Path, exp_na
 
     max_edge_distance = config["max_edge_distance"]
 
-    input_zarr_root = zarr.open(input_zarr_path)
-    fragments = input_zarr_root[seg_group][:]
-    axes = input_zarr_root[seg_group].attrs.get("axes", None)
+    seg_zarr_root = zarr.open(seg_zarr_path)
+    fragments = seg_zarr_root[seg_group][:]
+    axes = seg_zarr_root[seg_group].attrs.get("axes", None)
     if axes is not None:
         for axis in axes:
             if axis["scale"] is None:
@@ -160,24 +157,28 @@ if __name__ == "__main__":
     input_base_dir = Path(config["input_base_dir"])
     output_base_dir = Path(config["output_base_dir"])
     dataset: str = config["dataset"]
+    experiment: str = config["experiment"]
     assert input_base_dir.is_dir()
     assert output_base_dir.is_dir()
 
-    data_dir = input_base_dir / dataset
-    print(data_dir)
-    assert data_dir.is_dir()
+    seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
+    print(f"Loading segmentation data from {seg_dir}")
+    assert seg_dir.is_dir()
+
+    flow_result = config.get("flow_result", None)
+    if flow_result is not None:
+        flow_dir = input_base_dir / "opticalflow" / experiment / dataset / config["flow_result"]
+        print(f"Loading optical flow data from {flow_dir}")
+        assert flow_dir.is_dir()
+    else:
+        flow_dir = None
 
     current_datetime = datetime.datetime.now()
-    exp_name = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    config["exp_name"] = exp_name
-    print(exp_name)
+    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+    config["exp_uid"] = exp_uid
 
-    output_dataset_dir = output_base_dir / dataset
+    output_dir = output_base_dir / "tracking" / experiment / dataset / exp_uid
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Saving results to {output_dir}")
 
-    for video_dir in data_dir.iterdir():
-        if check_video_dir(video_dir):
-            vid_name = video_dir.stem
-            output_video_dir = output_dataset_dir / vid_name
-            output_video_dir.mkdir(exist_ok=True, parents=True)
-            print("Writing tracking output to ", output_video_dir)
-            run_tracking(config, video_dir, output_video_dir, exp_name)
+    run_tracking(config, seg_dir, flow_dir, output_dir)

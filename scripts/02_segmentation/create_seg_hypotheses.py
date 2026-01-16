@@ -3,12 +3,14 @@ import csv
 from pathlib import Path
 
 import numpy as np
+import toml
 import waterz # type: ignore
 import zarr
 import torch
+import datetime
 from scipy.ndimage import label
-from scipy.ndimage.filters import maximum_filter
-from scipy.ndimage.morphology import distance_transform_edt
+# from scipy.ndimage.filters import maximum_filter
+# from scipy.ndimage.morphology import distance_transform_edt
 from skimage.segmentation import watershed
 
 from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, voronoi_mean_labeling
@@ -29,7 +31,7 @@ def get_axes_metadata(zarr_root):
         ]
     return axes
 
-def generate_fragments(data_zarr: Path, output_zarr: Path):
+def generate_fragments(data_zarr: Path, output_root, seg_method="otsu"):
     zarr_root = zarr.open(data_zarr, "r+")
     axes = get_axes_metadata(zarr_root)
 
@@ -37,26 +39,26 @@ def generate_fragments(data_zarr: Path, output_zarr: Path):
 
     T, C, Z, Y, X = raw_data.shape
 
-    output_root = zarr.open(output_zarr, "a")
     output_root.create_dataset(
         "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
     )
     output_root['fragments'].attrs["axes"] = axes
 
-    if args.seg_method == 'cellpose':
+    if seg_method == 'cellpose':
         # Check for cuda availability
         if torch.cuda.is_available():
             print("CUDA is available. Using GPU for Cellpose.")
             gpu = True
         else:
             print("CUDA is not available. Using CPU for Cellpose.")
+            gpu = False
 
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
-        if args.seg_method == 'cellpose':
+        if seg_method == 'cellpose':
             labels = segment_with_cellpose(frame, gpu=gpu)
-        elif args.seg_method == 'voronoi_mean':
+        elif seg_method == 'voronoi_mean':
             labels = voronoi_mean_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
         else:
             labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
@@ -68,7 +70,7 @@ def generate_fragments(data_zarr: Path, output_zarr: Path):
 
         output_root['fragments'][tp] = labels
 
-def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
+def generate_fluorescent_affinities(data_zarr: Path, output_root):
     zarr_root = zarr.open(data_zarr, "r+")
     axes = get_axes_metadata(zarr_root)
 
@@ -78,7 +80,6 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
 
     neighborhood = [[0, 0, 1], [0, 1, 0], [1, 0, 0]]
 
-    output_root = zarr.open(output_zarr, "a")
     output_root.create_dataset(
         "affinities", shape=(T, 3, Z, Y, X), chunks=(1, 1, 1, Y, X), dtype=np.float32, overwrite=True
     )
@@ -144,12 +145,11 @@ def generate_fluorescent_affinities(data_zarr: Path, output_zarr: Path):
 
 #     return fragments
 
-def get_segmentation(zarr_path, thresholds, outfile):
-    zarr_root = zarr.open(zarr_path, "a")
-    affinities = zarr_root["affinities"][:].astype(np.float32)
-    fragments = zarr_root["fragments"][:]
+def get_segmentation(output_root, thresholds, outfile):
+    affinities = output_root["affinities"][:].astype(np.float32)
+    fragments = output_root["fragments"][:]
 
-    axes = get_axes_metadata(zarr_root["fragments"])
+    axes = get_axes_metadata(output_root["fragments"])
 
     T, Z, Y, X = fragments.shape
 
@@ -197,35 +197,40 @@ def get_segmentation(zarr_path, thresholds, outfile):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("data_path", help="zarr with input data")
-    parser.add_argument("-op", "--output_path", default=None)
-    parser.add_argument(
-        "-o",
-        "--overwrite",
-        action="store_true",
-        help="overwrite existing affinity predictions",
-    )
-    parser.add_argument(
-        "-sm",
-        "--seg_method",
-        default="voronoi_otsu",
-        help="segmentation method: voronoi_otsu, voronoi_mean, cellpose",
-    )
+    parser.add_argument("config")
     args = parser.parse_args()
-    data_zarr = Path(args.data_path)
-    if args.output_path is not None:
-        output_zarr = Path(args.output_path)
-    else:
-        output_zarr = data_zarr
+    config = toml.load(args.config)
 
-    output_root = zarr.open(output_zarr, "a")
-    if "fragments" not in output_root or args.overwrite:
-        generate_fragments(data_zarr, output_zarr)
+    input_base_dir = Path(config["input_base_dir"])
+    output_base_dir = Path(config["output_base_dir"])
+    experiment: str = config["experiment"]
+    dataset: str = config["dataset"]
+    assert input_base_dir.is_dir()
+    assert output_base_dir.is_dir()
 
-    if "affinities" not in output_root or args.overwrite:
-        generate_fluorescent_affinities(data_zarr, output_zarr)
+    data_dir = input_base_dir / experiment / f"{dataset}.zarr"
+    print(f"Loading data from {data_dir}")
+    assert data_dir.is_dir()
+
+    current_datetime = datetime.datetime.now()
+    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+    config["exp_uid"] = exp_uid
+
+    output_dir = output_base_dir / experiment / dataset / exp_uid
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Saving results to {output_dir}")
+
+    with open(output_dir / "config.toml", "w") as config_file:
+        toml.dump(config, config_file)
+
+    output_root = zarr.open(output_dir / "data.zarr", "a")
+    if "fragments" not in output_root or config["overwrite"]:
+        generate_fragments(data_dir, output_root, config["seg_method"])
+
+    if "affinities" not in output_root or config["overwrite"]:
+        generate_fluorescent_affinities(data_dir, output_root)
 
     threshold = [1]
 
-    merge_history_file = output_zarr.parent / "merge_history.csv"
-    get_segmentation(output_zarr, threshold, merge_history_file)
+    merge_history_file = output_dir / "merge_history.csv"
+    get_segmentation(output_root, threshold, merge_history_file)

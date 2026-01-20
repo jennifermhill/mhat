@@ -127,7 +127,16 @@ def run_tracking(config, seg_dir: Path, flow_dir: Path, output_dir: Path):
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph, img_shape_scaled)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
-    utils.add_drift_dist_attr(track_graph, drift=config["drift_distance"])
+    if "drift_distance" in config:
+        print("Calculating drift distances using drift_distance parameter...")
+        utils.add_drift_dist_attr(track_graph, drift=config["drift_distance"])
+    elif flow_zarr_path is not None:   
+        print("Calculating drift distances using optical flow...")
+        # TODO: Add flow dist attr function
+        utils.add_flow_dist_attr(track_graph, flow_zarr_path, scale=scale)
+    else:
+        print("No drift distance or flow provided; setting drift distances to zero.")
+        utils.add_drift_dist_attr(track_graph, drift=0)
     utils.add_area_diff_attr(track_graph)
 
     print("Solving tracking with motile...")

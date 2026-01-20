@@ -47,6 +47,7 @@ def calculate_flow_2d(config, zarr_path: Path, output_dir: Path):
                 start_idx = max(0, i - config['frame_averaging'] // 2)
                 end_idx = min(T-1, i + config['frame_averaging'] // 2 + 1)
                 flow[i, z_slice, ...] = np.mean(output_zarr['flow_raw'][start_idx:end_idx, z_slice, ...], axis=0)
+        output_zarr['flow_raw'][:, z_slice, :, :] = flow[:, z_slice, :, :]
 
     generate_flow_frames(flow_zarr=output_zarr, color_wheel=True)
 
@@ -77,8 +78,6 @@ def calculate_flow_3d(config, zarr_path: Path, output_dir: Path):
     output_zarr.create_dataset('confidence', shape=(T-1, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
 
     flow, confidence = compute_farneback_flow_3d(config, frames_ds, output_zarr)
-
-    output_zarr['confidence'][:] = confidence
 
     if config['frame_averaging'] > 0:
         for i in range(1, T-1):

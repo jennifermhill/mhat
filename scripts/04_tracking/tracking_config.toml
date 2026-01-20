@@ -7,7 +7,7 @@ dataset = "00_nuclei"
 seg_result = "2026-01-15_14-27-10"
 
 # ILP params
-drift_distance = 8.0
+drift_distance = [3.0, 2.0, 6.0]
 drift_weight = 1.0
 drift_constant = -100.0
 area_weight = 5.0

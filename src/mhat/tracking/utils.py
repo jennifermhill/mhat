@@ -7,6 +7,7 @@ import motile
 import networkx as nx
 import numpy as np
 import scipy
+from scipy import linalg
 import skimage
 from line_profiler import profile
 
@@ -190,19 +191,32 @@ def add_disappear(cand_graph, img_shape):
             cand_graph.nodes[node_id]["ignore_disappear"] = True
 
 
-def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=0):
+def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=[0, 0, 0]):
+    if isinstance(drift, (int, float)):
+        drift = [drift, drift, drift]
     for edge in cand_graph.edges:
         # TODO: fix to include y and z pos
         if cand_graph.is_hyperedge(edge):
             us, vs = edge
-            pos_u = drift + (sum(cand_graph.nodes[n]["x"] for n in us)) / len(us)
-            pos_v = (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
+            pos_u = np.array([
+                (sum(cand_graph.nodes[n]["z"] for n in us)) / len(us),
+                (sum(cand_graph.nodes[n]["y"] for n in us)) / len(us),
+                (sum(cand_graph.nodes[n]["x"] for n in us)) / len(us)
+            ])
+            pos_v = np.array([
+                (sum(cand_graph.nodes[n]["z"] for n in vs)) / len(vs),
+                (sum(cand_graph.nodes[n]["y"] for n in vs)) / len(vs),
+                (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
+            ])
         else:
             u, v = edge
-            pos_u = drift + cand_graph.nodes[u]["x"]
-            pos_v = cand_graph.nodes[v]["x"]
+            node_u = cand_graph.nodes[u]
+            node_v = cand_graph.nodes[v]
+            pos_u = np.array([node_u["z"], node_u["y"], node_u["x"]])
+            pos_v = np.array([node_v["z"], node_v["y"], node_v["x"]])
 
-        drift_dist = abs(pos_u - pos_v)
+        # Add drift to pos_u and compute distance
+        drift_dist = linalg.norm(pos_u + drift - pos_v)
         cand_graph.edges[edge]["drift_dist"] = drift_dist
 
 

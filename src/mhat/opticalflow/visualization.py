@@ -69,23 +69,6 @@ def create_flow_color_wheel(width, height):
 
 
 def generate_flow_frame(flow, scale_factor=1):
-    height, width, _ = flow.shape
-    hsv = np.zeros((height, width, 3), dtype=np.uint8)  # initialize hsv image
-    hsv[..., 1] = 255  # set saturation to maximum
-
-    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])  # calculate magnitude and angle
-    hsv[..., 0] = ang * 180 / np.pi / 2  # set hue based on angle
-    hsv[..., 2] = np.clip(mag * 255 * scale_factor, 0, 255).astype(np.uint8) # dim = 2550, medium = 25500, bright = 255000
-
-    rgb_flow = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)  # convert hsv to bgr
-
-    # Create a copy of the flow visualization
-    final_frame = rgb_flow.copy()
-
-    return final_frame
-
-
-def generate_flow_frame_3d(flow, scale_factor=1):
     depth, height, width, _ = flow.shape
     hsv = np.zeros((depth, height, width, 3), dtype=np.uint8)  # initialize hsv image
     hsv[..., 1] = 255  # set saturation to maximum
@@ -107,25 +90,20 @@ def generate_flow_frame_3d(flow, scale_factor=1):
 def generate_flow_frames(flow_zarr, scale_factor=0.1, color_wheel=False):
     flow_raw = flow_zarr['flow_raw']
 
+    T, Z, Y, X, D = flow_raw.shape
+
+    flow_zarr.create_dataset('flow_frames_XY', shape=(T, Z, Y, X, 3), chunks=(1, Z, Y, X, 3), dtype=np.uint8)
+
     # Calculate scale factor
-    # TODO: Fix this
-    # print(f"95th percentile flow magnitude: {np.percentile(np.linalg.norm(flow_raw, axis=-1), 95)}")
-    # scale_factor = 255.0 / np.percentile(np.linalg.norm(flow_raw, axis=-1), 95)
-    # print(f"Using scale factor for flow visualization: {scale_factor}")
+    percentile_75 = np.percentile(np.linalg.norm(flow_raw, axis=-1), 75)
+    print(f"75th percentile flow magnitude: {percentile_75}")
+    scale_factor = 255.0 / percentile_75
+    print(f"Using scale factor for flow visualization: {scale_factor}")
 
-    if len(flow_raw.shape) == 4:
-        T, Y, X, _ = flow_raw.shape
-        flow_zarr.create_dataset('flow_frames', shape=(T, Y, X, 3), chunks=(1, Y, X, 3), dtype=np.uint8)
-        flow_frames = np.zeros((T, Y, X, 3), dtype=np.uint8)
-        generate_frame_func = generate_flow_frame
-    elif len(flow_raw.shape) == 5:
-        T, Z, Y, X, _ = flow_raw.shape
-        flow_zarr.create_dataset('flow_frames_XY', shape=(T, Z, Y, X, 3), chunks=(1, Z, Y, X, 3), dtype=np.uint8)
-        flow_frames = np.zeros((T, Z, Y, X, 3), dtype=np.uint8)
-        generate_frame_func = generate_flow_frame_3d
-
+    flow_zarr.create_dataset('flow_frames_XY', shape=(T, Z, Y, X, 3), chunks=(1, Z, Y, X, 3), dtype=np.uint8)
+    flow_frames = np.zeros((T, Z, Y, X, 3), dtype=np.uint8)
     for i in tqdm(range(T), desc="Generating flow visualization frames"):
-        flow_frame = generate_frame_func(flow_raw[i, ...], scale_factor=scale_factor)
+        flow_frame = generate_flow_frame(flow_raw[i, ...], scale_factor=scale_factor)
         flow_frames[i, ...] = flow_frame
 
         # Add color wheel legend
@@ -139,7 +117,4 @@ def generate_flow_frames(flow_zarr, scale_factor=0.1, color_wheel=False):
 
         flow_frames[..., pos_y:pos_y+legend_h, pos_x:pos_x+legend_w, :] = legend
 
-    if len(flow_raw.shape) == 4:
-        flow_zarr['flow_frames'][:] = flow_frames
-    elif len(flow_raw.shape) == 5:
-        flow_zarr['flow_frames_XY'][:] = flow_frames
+    flow_zarr['flow_frames_XY'][:] = flow_frames

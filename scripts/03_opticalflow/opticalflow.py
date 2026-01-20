@@ -9,15 +9,10 @@ import zarr
 import cv2
 from tqdm import tqdm
 
-from mhat.opticalflow.utils import enhance_contrast_AHE
+from mhat.opticalflow.utils import rename_flow_uid
 from mhat.opticalflow.farneback import compute_farneback_flow_2d, compute_farneback_flow_3d
 from mhat.opticalflow.visualization import generate_flow_frames
 
-#TODO: move to flow utils
-def rename_flow_uid(rerun_uid: str):
-    print(f"Renaming flow uid to rerun uid: {rerun_uid}")
-    # Implement renaming logic here if needed
-    pass
 
 def calculate_flow_2d(config, zarr_path: Path, output_dir: Path):
     '''
@@ -131,14 +126,16 @@ if __name__ == "__main__":
         print("Calculating 2D optical flow...")
         calculate_flow_2d(config["2d"], data_dir, output_dir)
     else:
-        print(f"Renaming previous flow run {rerun_uid} to current flow uid {exp_uid}")
-        rename_flow_uid(config["rerun_uid"])
+        print(f"Renaming previous flow run {rerun_uid} to current experiment uid {exp_uid}")
+        prev_flow_dir = output_base_dir / experiment / dataset / "opticalflow_2d" / rerun_uid
+        rename_flow_uid(prev_flow_dir, exp_uid)
 
     if config["3d"]["do_3d"]:
         print("Calculating 3D optical flow...")
         calculate_flow_3d(config["3d"], data_dir, output_dir)
     else:
-        print(f"Renaming previous flow run {rerun_uid} to current flow uid {exp_uid}")
-        rename_flow_uid(config["rerun_uid"])
+        print(f"Renaming previous flow run {rerun_uid} to current experiment uid {exp_uid}")
+        prev_flow_dir = output_base_dir / experiment / dataset / "opticalflow_3d" / rerun_uid
+        rename_flow_uid(prev_flow_dir, exp_uid)
 
     

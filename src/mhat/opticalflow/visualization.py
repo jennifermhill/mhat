@@ -92,12 +92,10 @@ def generate_flow_frames(flow_zarr, scale_factor=0.1, color_wheel=False):
 
     T, Z, Y, X, D = flow_raw.shape
 
-    flow_zarr.create_dataset('flow_frames_XY', shape=(T, Z, Y, X, 3), chunks=(1, Z, Y, X, 3), dtype=np.uint8)
-
     # Calculate scale factor
-    percentile_75 = np.percentile(np.linalg.norm(flow_raw, axis=-1), 75)
-    print(f"75th percentile flow magnitude: {percentile_75}")
-    scale_factor = 255.0 / percentile_75
+    # percentile_75 = np.percentile(np.linalg.norm(flow_raw, axis=-1), 75)
+    # print(f"75th percentile flow magnitude: {percentile_75}")
+    # scale_factor = 255.0 / percentile_75
     print(f"Using scale factor for flow visualization: {scale_factor}")
 
     flow_zarr.create_dataset('flow_frames_XY', shape=(T, Z, Y, X, 3), chunks=(1, Z, Y, X, 3), dtype=np.uint8)

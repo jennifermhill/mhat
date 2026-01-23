@@ -16,11 +16,18 @@ def enhance_contrast_AHE(frame):
 
 
 def rename_flow_uid(rerun_uid: Path, exp_uid: str):
-    print(f"Renaming previous flow uid to current experiment uid: {exp_uid}")
-    
     if rerun_uid.exists():
         new_path = rerun_uid.parent / exp_uid
         rerun_uid.rename(new_path)
         print(f"Renamed {rerun_uid} to {new_path}")
     else:
         print(f"Warning: Previous flow directory {rerun_uid} does not exist")
+        
+
+def frame_average(flow_zarr, frame_avg):
+    print("Applying frame averaging to flow data...")
+    for i in range(0, flow_zarr['flow_raw'].shape[0]-1):
+        start_idx = max(0, i - frame_avg // 2)
+        end_idx = min(flow_zarr['flow_raw'].shape[0], i + frame_avg // 2 + 1)
+        flow_zarr['flow_raw'][i, ...] = np.mean(flow_zarr['flow_raw'][start_idx:end_idx, ...], axis=0)
+    return flow_zarr['flow_raw']

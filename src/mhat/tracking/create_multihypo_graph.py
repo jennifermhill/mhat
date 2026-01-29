@@ -4,6 +4,7 @@ from typing import Any
 
 import networkx as nx
 import numpy as np
+from tqdm import trange
 
 from .utils import nodes_from_segmentation
 
@@ -123,6 +124,8 @@ def nodes_from_fragments(
     merge_history: np.ndarray,
     min_score: float = 0.0,
     max_score: float = 0.5,
+    flow_2d: np.ndarray | None = None,
+    flow_3d: np.ndarray | None = None,
     size_threshold: int | None = None,
     scale: list[float] = [1.0, 1.0, 1.0, 1.0],
 ) -> tuple[nx.DiGraph, list[tuple]]:
@@ -134,6 +137,9 @@ def nodes_from_fragments(
         "adhesion": NS, where NS is the score of the next merge with this node
             as a child, or 1 if the node is never merged with anything else
             in the history. (Higher is better)
+    Also calculates average flow in segment for each node if flow is provided.
+        If both 2D and 3D flow are provided, uses 2D flow for XY motion and 
+        3D flow for Z motion.
 
     Args:
         fragments (np.ndarray): An array of fragment labels to use to generate
@@ -146,10 +152,14 @@ def nodes_from_fragments(
             score lower than min_score from the graph. Defaults to 0.0.
         max_score (float, optional): Exclude candidates that are merged with a
             score higher than max_score from the graph. Defaults to 0.5.
+        flow_2d (np.ndarray, optional): 2D optical flow array for the timepoint
+            of the fragments. Defaults to None.
+        flow_3d (np.ndarray, optional): 3D optical flow array for the timepoint
+            of the fragments. Defaults to None.
         size_threshold (int, optional): Exclude candidates with area less than
             size_threshold pixels from the graph. Defaults to None.
         scale (list[float], optional): The scaling factors for each axis of
-            the fragments array. Defaults to [1.0, 1.0, 1
+            the fragments array. Defaults to [1.0, 1.0, 1.0, 1.0].
 
     Returns:
         tuple[nx.DiGraph, list[tuple, ...]]: returns a networkx graph with all
@@ -174,7 +184,12 @@ def nodes_from_fragments(
 
         if score >= min_score and graph is None:
             # get the initial fragments we want to populate the cand graph with
-            graph = nodes_from_segmentation(fragments, size_threshold=size_threshold, tp=tp, scale=scale)
+            graph = nodes_from_segmentation(
+                fragments, 
+                flow_3d=flow_3d, flow_2d=flow_2d, 
+                size_threshold=size_threshold, 
+                tp=tp, scale=scale
+            )
 
         # merge the fragments and add to history
         fragments[fragments == a] = c
@@ -188,7 +203,10 @@ def nodes_from_fragments(
             new_seg_only = np.zeros_like(fragments)
             new_seg_only[fragments == c] = c
             node_graph = nodes_from_segmentation(
-                new_seg_only, size_threshold=size_threshold, tp=tp, scale=scale
+                new_seg_only, 
+                flow_3d=flow_3d, flow_2d=flow_2d,
+                size_threshold=size_threshold, 
+                tp=tp, scale=scale
             )
             graph.add_nodes_from(node_graph.nodes(data=True))
 
@@ -199,7 +217,7 @@ def nodes_from_fragments(
         cohesion_score = 1 - last_scores.get(node, 1.0)
         adhesion_score = next_scores.get(node, 1.0)
         graph.nodes[node]["cohesion"] = cohesion_score
-        graph.nodes[node]["adhesion"] = adhesion_score
+        graph.nodes[node]["adhesion"] = adhesion_score            
 
     exclusion_sets = []
 

@@ -5,6 +5,7 @@ experiment = "NC281-Fl2mSiH2B"
 dataset = "00_nuclei"
 
 seg_result = "2026-01-15_14-27-10"
+flow_result = "2026-01-21_15-37-57"
 
 # ILP params
 drift_distance = [3.0, 2.0, 6.0]

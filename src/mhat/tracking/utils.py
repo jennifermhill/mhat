@@ -14,6 +14,8 @@ from line_profiler import profile
 
 def nodes_from_segmentation(
     segmentation: np.ndarray,
+    flow_3d: np.ndarray | None = None,
+    flow_2d: np.ndarray | None = None,
     size_threshold: int | None = None,
     tp: int = 0,
     scale: list[float] = [1.0, 1.0, 1.0, 1.0]
@@ -23,6 +25,12 @@ def nodes_from_segmentation(
     Args:
         segmentation (np.ndarray): A numpy array with integer labels and dimensions
             (z, y, x).
+
+        flow_3d (np.ndarray | None, optional): A numpy array with 3D flow vectors
+            for each pixel in the segmentation. Defaults to None.
+
+        flow_2d (np.ndarray | None, optional): A numpy array with 2D flow vectors
+            for each pixel in the segmentation. Defaults to None.
 
         size_threshold (int): A minimum area for candidate nodes. Nodes smaller
             than this area will not be added to the graph.
@@ -43,6 +51,14 @@ def nodes_from_segmentation(
         if size_threshold and regionprop.area < size_threshold:
             continue
         node_id = int(regionprop.label)
+        region = segmentation == node_id
+        if flow_3d is not None:
+            if flow_2d is not None:
+                flow = (flow_3d[region][2], flow_2d[region][1], flow_2d[region][0])
+            else:
+                flow = (flow_3d[region][2], flow_3d[region][1], flow_3d[region][0])
+        else:
+            flow = None
         attrs = {
             "time": int(tp),
             "x": float(regionprop.centroid[2] * scale[3]),
@@ -50,6 +66,7 @@ def nodes_from_segmentation(
             "z": float(regionprop.centroid[0] * scale[1]),
             "label": node_id,
             "area": regionprop.area,
+            "flow": flow
         }
         cand_graph.add_node(node_id, **attrs)
 
@@ -218,6 +235,34 @@ def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=[0, 0, 0]):
         # Add drift to pos_u and compute distance
         drift_dist = linalg.norm(pos_u + drift - pos_v)
         cand_graph.edges[edge]["drift_dist"] = drift_dist
+
+def add_flow_dist_attr(cand_graph: motile.TrackGraph):
+    # TODO: combine with drift distance function above and default to drift distance if no flow
+    for edge in cand_graph.edges:
+        if cand_graph.is_hyperedge(edge):
+            us, vs = edge
+            flow_u = np.mean([cand_graph.nodes[n]["flow"] for n in us], axis=0)
+            pos_u = np.array([
+                (sum(cand_graph.nodes[n]["z"] for n in us)) / len(us),
+                (sum(cand_graph.nodes[n]["y"] for n in us)) / len(us),
+                (sum(cand_graph.nodes[n]["x"] for n in us)) / len(us)
+            ])
+            pos_v = np.array([
+                (sum(cand_graph.nodes[n]["z"] for n in vs)) / len(vs),
+                (sum(cand_graph.nodes[n]["y"] for n in vs)) / len(vs),
+                (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
+            ])
+        else:
+            u, v = edge
+            node_u = cand_graph.nodes[u]
+            node_v = cand_graph.nodes[v]
+            flow_u = node_u["flow"]
+            pos_u = np.array([node_u["z"], node_u["y"], node_u["x"]])
+            pos_v = np.array([node_v["z"], node_v["y"], node_v["x"]])
+
+        # Apply flow to pos_u and compute distance
+        flow_dist = linalg.norm(pos_u + np.array(flow_u) - pos_v)
+        cand_graph.edges[edge]["drift_dist"] = flow_dist
 
 
 def add_area_diff_attr(cand_graph: motile.TrackGraph):

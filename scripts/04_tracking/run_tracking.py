@@ -51,10 +51,11 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, seg_dir: Path, flow_dir: Path, output_dir: Path):
+def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, output_dir: Path):
 
     seg_zarr_path = seg_dir / "data.zarr"
-    flow_zarr_path = flow_dir / "data.zarr" if flow_dir is not None else None
+    flow_2d_zarr_path = flow_dir_2d / "flow.zarr" if flow_dir_2d is not None else None
+    flow_3d_zarr_path = flow_dir_3d / "flow.zarr" if flow_dir_3d is not None else None
     output_seg_path = output_dir / "pred_seg.zarr"
     merge_history_csv_path = seg_dir / "merge_history.csv"
     normalized_merge_history_csv_path = output_dir / "normalized_merge_history.csv"
@@ -67,16 +68,38 @@ def run_tracking(config, seg_dir: Path, flow_dir: Path, output_dir: Path):
         toml.dump(config, config_file)
 
     seg_group = "fragments"
+    flow_group = "flow_raw"
 
     max_edge_distance = config["max_edge_distance"]
 
     seg_zarr_root = zarr.open(seg_zarr_path)
     fragments = seg_zarr_root[seg_group][:]
+    if flow_2d_zarr_path is not None:
+        flow_2d_zarr_root = zarr.open(flow_2d_zarr_path)
+        flow_2d = flow_2d_zarr_root[flow_group][:]
+        # Add a zero flow for the last timepoint
+        flow_2d = np.concatenate(
+            [flow_2d, np.zeros((1, *flow_2d[0].shape), dtype=flow_2d.dtype)],
+            axis=0,
+        )
+    else:
+        flow_2d = None
+    if flow_3d_zarr_path is not None:
+        flow_3d_zarr_root = zarr.open(flow_3d_zarr_path)
+        flow_3d = flow_3d_zarr_root[flow_group][:]
+        # Add a zero flow for the last timepoint
+        flow_3d = np.concatenate(
+            [flow_3d, np.zeros((1, *flow_3d[0].shape), dtype=flow_3d.dtype)],
+            axis=0,
+        )
+    else:
+        flow_3d = None
+    print(f"Segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d.shape if flow_2d is not None else None}, flow_3d shape: {flow_3d.shape if flow_3d is not None else None}")
     axes = seg_zarr_root[seg_group].attrs.get("axes", None)
     if axes is not None:
         for axis in axes:
             if axis["scale"] is None:
-                scale
+                axis["scale"] = 1.0
             else:
                 axis["scale"] = float(axis["scale"])
         scale = [axis["scale"] for axis in axes if "scale" in axis]
@@ -110,6 +133,8 @@ def run_tracking(config, seg_dir: Path, flow_dir: Path, output_dir: Path):
             merge_history[merge_history[:, 4] == timepoint],
             min_score=config["min_merge_score"],
             max_score=config["max_merge_score"],
+            flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
+            flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
             size_threshold=config["size_threshold"],
             scale=scale,
         )
@@ -127,13 +152,12 @@ def run_tracking(config, seg_dir: Path, flow_dir: Path, output_dir: Path):
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph, img_shape_scaled)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
-    if "drift_distance" in config:
+    if flow_3d is not None:   
+        print("Calculating drift distances using optical flow...")
+        utils.add_flow_dist_attr(track_graph)
+    elif "drift_distance" in config:
         print("Calculating drift distances using drift_distance parameter...")
         utils.add_drift_dist_attr(track_graph, drift=config["drift_distance"])
-    elif flow_zarr_path is not None:   
-        print("Calculating drift distances using optical flow...")
-        # TODO: Add flow dist attr function
-        utils.add_flow_dist_attr(track_graph, flow_zarr_path, scale=scale)
     else:
         print("No drift distance or flow provided; setting drift distances to zero.")
         utils.add_drift_dist_attr(track_graph, drift=0)
@@ -176,11 +200,19 @@ if __name__ == "__main__":
 
     flow_result = config.get("flow_result", None)
     if flow_result is not None:
-        flow_dir = input_base_dir / "opticalflow" / experiment / dataset / config["flow_result"]
-        print(f"Loading optical flow data from {flow_dir}")
-        assert flow_dir.is_dir()
+        flow_dir_2d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / config["flow_result"]
+        flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / config["flow_result"]
+        if not flow_dir_2d.is_dir():
+            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
+            flow_dir_2d = None
+        else:
+            print(f"Loading 2D optical flow data from {flow_dir_2d}")
+            assert flow_dir_2d.is_dir()
+        print(f"Loading 3D optical flow data from {flow_dir_3d}")
+        assert flow_dir_3d.is_dir()
     else:
-        flow_dir = None
+        flow_dir_2d = None
+        flow_dir_3d = None
 
     current_datetime = datetime.datetime.now()
     exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
@@ -190,4 +222,4 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, seg_dir, flow_dir, output_dir)
+    run_tracking(config, seg_dir, flow_dir_2d, flow_dir_3d, output_dir)

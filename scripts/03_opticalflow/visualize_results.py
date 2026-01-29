@@ -21,6 +21,7 @@ def main(config, compute: bool = False):
     path_to_raw = Path(input_base_dir / experiment / f"{dataset}.zarr")
     path_to_2d = Path(output_base_dir / experiment / dataset / "opticalflow_2d" / exp_uid / "flow.zarr")
     path_to_3d = Path(output_base_dir / experiment / dataset / "opticalflow_3d" / exp_uid / "flow.zarr")
+    path_to_lk = Path(output_base_dir / experiment / dataset / "opticalflow_lucaskanade" / exp_uid / "flow.zarr")
 
     viewer = napari.Viewer()
 
@@ -44,11 +45,6 @@ def main(config, compute: bool = False):
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
 
         flow_frames_2d = da.from_zarr(path_to_flow_frames_2d)
-        # if flow_frames_2d_zarr.nchunks_initialized == 0:
-        #     print(f"Flow frames dataset is empty (no chunks initialized). Regenerating...")
-        #     del flow_zarr['flow_frames_XY']
-        #     flow_zarr = zarr.open(path_to_2d, mode='a')
-        #     generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
 
         if compute:
             flow_frames_2d = flow_frames_2d.compute()
@@ -65,10 +61,6 @@ def main(config, compute: bool = False):
             print(f"Flow frames path does not exist. Creating at: {path_to_3d / 'flow_frames_XY'}")
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
         flow_frames_3d_XY = da.from_zarr(path_to_flow_frames_3d_XY)
-        # if flow_frames_3d_XY.nchunks_initialized == 0:
-        #     print(f"3D Flow frames dataset is empty (no chunks initialized). Regenerating...")
-        #     del flow_zarr['flow_frames_XY']
-        #     generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
 
         if compute:
             flow_frames_3d_XY = flow_frames_3d_XY.compute()
@@ -83,13 +75,6 @@ def main(config, compute: bool = False):
             flow_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
             flow_zarr['flow_frames_Z'][:] = flow_raw[..., 2]
         flow_frames_3d_Z = da.from_zarr(path_to_3d / "flow_frames_Z")
-        # if flow_frames_3d_Z.nchunks_initialized == 0:
-        #     print(f"3D Flow frames Z dataset is empty (no chunks initialized). Regenerating...")
-        #     del flow_zarr['flow_frames_Z']
-        #     flow_raw = da.from_zarr(path_to_3d / "flow_raw")
-        #     T, Z, Y, X, _ = flow_raw.shape
-        #     flow_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
-        #     flow_zarr['flow_frames_Z'][:] = flow_raw[..., 2]
 
         if compute:
             flow_frames_3d_Z = flow_frames_3d_Z.compute()
@@ -98,10 +83,28 @@ def main(config, compute: bool = False):
     else:
         print(f"3D optical flow data not found at {path_to_3d}")
 
+    if path_to_lk.exists():
+        flow_zarr = zarr.open(path_to_lk, mode='a')
+
+        path_to_flow_frames_lk = path_to_lk / "flow_frames_XY"
+        if not path_to_flow_frames_lk.exists(): 
+            print(f"Flow frames path does not exist. Creating at: {path_to_lk / 'flow_frames_XY'}")
+            flow_zarr = zarr.open(path_to_lk, mode='a')
+            generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
+
+        flow_frames_lk = da.from_zarr(path_to_flow_frames_lk)
+
+        if compute:
+            flow_frames_lk = flow_frames_lk.compute()
+        print(f"Lucas-Kanade Flow frames shape: {flow_frames_lk.shape}")
+        viewer.add_image(flow_frames_lk, name="Lucas-Kanade Flow Frames", blending='additive')
+    else:
+        print(f"Lucas-Kanade optical flow data not found at {path_to_lk}")
+
     napari.run()
 
 
 if __name__ == "__main__":
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-Fl2mSiH2B\\01_nuclei\\opticalflow_2d\\2026-01-22_12-51-55\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-Fl2mSiH2B\\00_nuclei\\opticalflow_lucaskanade\\2026-01-28_10-42-19\\config.toml"
     config = toml.load(path_to_config)
     main(config, compute=True)

@@ -11,12 +11,13 @@ from tqdm import tqdm
 
 from mhat.opticalflow.utils import rename_flow_uid, frame_average
 from mhat.opticalflow.farneback import compute_farneback_flow_2d, compute_farneback_flow_3d
+from mhat.opticalflow.lucaskanade import compute_lucaskanade_flow_3d
 from mhat.opticalflow.visualization import generate_flow_frames
 
 
-def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = False):
+def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = False, do_lk: bool = False):
     '''
-    # TODO: combine with calculate_flow_3d
+    # TODO: add axes scale to .zattrs metadata
     config: dictionary of configuration parameters
     zarr_path: path to zarr directory containing .zarray
     output_dir: directory to save output optical flow zarr
@@ -33,12 +34,15 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
     if do_3d:
         output_zarr.create_dataset('flow_raw', shape=(T-1, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
         output_zarr.create_dataset('confidence', shape=(T-1, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
-        farneback_function = compute_farneback_flow_3d
+        flow_function = compute_farneback_flow_3d
+    elif do_lk:
+        output_zarr.create_dataset('flow_raw', shape=(T-1, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
+        flow_function = compute_lucaskanade_flow_3d
     else:
         output_zarr.create_dataset('flow_raw', shape=(T-1, Z, Y, X, 2), chunks=(1, 1, Y, X, 2), dtype=np.float32)
-        farneback_function = compute_farneback_flow_2d
+        flow_function = compute_farneback_flow_2d
 
-    flow = farneback_function(config, zarr_img, output_zarr)
+    flow = flow_function(config, zarr_img, output_zarr)
     
     if config['hyperparams']['frame_averaging'] > 0:
         frame_avg = config['hyperparams']['frame_averaging']
@@ -46,9 +50,10 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
 
     generate_flow_frames(flow_zarr=output_zarr, color_wheel=True)
 
-    if do_3d:
+    if do_3d or do_lk:
         output_zarr.create_dataset('flow_frames_Z', shape=(T-1, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
         output_zarr['flow_frames_Z'][:] = flow[..., 2]
+
 
 
 if __name__ == "__main__":
@@ -86,7 +91,7 @@ if __name__ == "__main__":
             toml.dump(config, config_file)
 
         calculate_flow(config["2d"], data_dir, output_dir, do_3d=False)
-    else:
+    elif rerun_uid:
         prev_flow_dir = output_base_dir / experiment / dataset / "opticalflow_2d" / rerun_uid
         rename_flow_uid(prev_flow_dir, exp_uid)
 
@@ -100,8 +105,19 @@ if __name__ == "__main__":
             toml.dump(config, config_file)
 
         calculate_flow(config["3d"], data_dir, output_dir, do_3d=True)
-    else:
+    elif rerun_uid:
         prev_flow_dir = output_base_dir / experiment / dataset / "opticalflow_3d" / rerun_uid
         rename_flow_uid(prev_flow_dir, exp_uid)
+
+    if config["lucaskanade"]["do_lucaskanade"]:
+        print("Calculating 3D Lucas-Kanade optical flow...")
+        output_dir = output_base_dir / experiment / dataset / "opticalflow_lucaskanade" / exp_uid
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        config_filepath = output_dir / "config.toml"
+        with open(config_filepath, 'w') as config_file:
+            toml.dump(config, config_file)
+
+        calculate_flow(config["lucaskanade"], data_dir, output_dir, do_lk=True)
 
     

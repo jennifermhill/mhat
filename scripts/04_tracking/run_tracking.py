@@ -147,7 +147,7 @@ def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, ou
 
     utils.add_cand_edges(all_cand_graph, max_edge_distance, max_children=config["max_children"])
     print("Edges before hyperedges: ", all_cand_graph.number_of_edges())
-    all_cand_graph = utils.add_hyperedges(all_cand_graph)
+    all_cand_graph = utils.add_hyperedges(all_cand_graph, divisions=False, merges=False)
     print("Edges after hyperedges: ", all_cand_graph.number_of_edges())
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph, img_shape_scaled)
@@ -171,7 +171,6 @@ def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, ou
     save_tracks_to_csv(solution_graph, output_filepath_csv)
     # Save tracks to geff file format
     geff.write(solution_graph, output_filepath_geff, axis_names=["time", "z", "y", "x"], axis_types=["time", "space", "space", "space"], axis_scales=scale)
-    nx.write_graphml(solution_graph, output_filepath_graphml)
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
     assign_tracklet_ids(solution_graph)
     solution_seg = utils.relabel_segmentation(solution_graph, solution_seg)

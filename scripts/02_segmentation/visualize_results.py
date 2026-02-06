@@ -39,8 +39,8 @@ def main(raw_zarr_path, seg_zarr_path, compute=False):
 if __name__ == '__main__':
     # raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/NC281-Fl2mSiH2B/02_cells.zarr'
     # seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/NC281-Fl2mSiH2B/03_test_data/data.zarr'
-    raw_zarr_path = 'Y:\\jennifer\\mhat\\data\\mixin63\\01_test_data.zarr'
-    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\mixin63\\08_test_data\\data.zarr'
+    raw_zarr_path = 'Y:\\jennifer\\mhat\\data\\dJFD001_iXon\\nuclei_noised.zarr'
+    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\dJFD001_iXon\\nuclei_noised\\2026-01-30_16-45-28\\data.zarr'
     # raw_zarr_path = '/Volumes/sgrolab/jennifer/mhat/data/mixin63/02_test_data.zarr'
     # seg_zarr_path = '/Volumes/sgrolab/jennifer/mhat/experiments/segmentation/mixin63/03_test_data/data.zarr'
     main(raw_zarr_path, seg_zarr_path, compute=True)

@@ -105,6 +105,6 @@ def main(config, compute: bool = False):
 
 
 if __name__ == "__main__":
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-Fl2mSiH2B\\00_nuclei\\opticalflow_lucaskanade\\2026-01-28_10-42-19\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-Fl2mSiH2B\\02_nuclei\\opticalflow_2d\\2026-01-29_11-12-12\\config.toml"
     config = toml.load(path_to_config)
     main(config, compute=True)

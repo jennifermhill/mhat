@@ -1,8 +1,11 @@
 # IO
-input_base_dir = "/Volumes/funke/data/mother_machine/synthetic_data/"
-output_base_dir = "/Volumes/funke/projects/mhat/experiments/results/"
-dataset = "test1"
-exp_name = "2024-08-15_23-37-21"
+input_base_dir = "Y:/jennifer/mhat/experiments/"
+output_base_dir = "Y:/jennifer/mhat/experiments/"
+experiment = "NC281-Fl2mSiH2B"
+dataset = "03_nuclei"
+
+track_result = "2026-02-02_13-47-53"
 
 # Eval settings
 iou_threshold = 0.25
+match_threshold = 5

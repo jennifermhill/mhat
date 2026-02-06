@@ -1,4 +1,5 @@
 import cv2
+import dask.array as da
 import numpy as np
 from tqdm import tqdm
 from scipy.ndimage import zoom
@@ -9,6 +10,17 @@ from mhat.opticalflow.utils import enhance_contrast_AHE
 
 def compute_farneback_flow_2d(config, zarr_img, output_zarr):
     T, Z, Y, X = zarr_img.shape
+
+    # Check if Y or X dims are odd, and pad if so
+    pad_y = 0
+    pad_x = 0
+    if Y % 2 != 0:
+        pad_y = 1
+    if X % 2 != 0:
+        pad_x = 1
+    if pad_y != 0 or pad_x != 0:
+        zarr_img = da.pad(zarr_img, ((0,0),(0,0),(0,pad_y),(0,pad_x)), mode='edge')
+        T, Z, Y, X = zarr_img.shape
 
     ds_factor = config.get('downsample_factor', 1)
 
@@ -63,10 +75,14 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
                 flow_upsampled = zoom(flow, zoom_factors, order=1)  # order=1 is bilinear
 
                 # Scale the flow magnitudes by the zoom factor
-                flow_upsampled[..., 0] *= ds_factor  # vy
-                flow_upsampled[..., 1] *= ds_factor  # vx
+                flow_upsampled[..., 0] *= ds_factor  # vx
+                flow_upsampled[..., 1] *= ds_factor  # vy
 
                 flow = flow_upsampled
+            
+            # Unpad if necessary
+            if pad_y != 0 or pad_x != 0:
+                flow = flow[:Y - pad_y, :X - pad_x, :]
 
             output_zarr['flow_raw'][i-1, z_slice, ...] = flow.astype(np.float32)
 
@@ -75,6 +91,25 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
 
 def compute_farneback_flow_3d(config, zarr_img, output_zarr):
     T, Z, Y, X = zarr_img.shape
+
+    # # Check if Z dim is large enough for 3D optical flow
+    min_z_size = (int(config['pyr_scale'])^(int(config['levels']) - 1)) * 3  # heuristic minimum size
+    if Z < min_z_size:
+        pad_z = min_z_size - Z
+    else:
+        pad_z = 0
+
+    # Check if Z, Y, or X dims are odd, and pad if so
+    pad_y = 0
+    pad_x = 0
+    if Z % 2 != 0 and pad_z == 0:
+        pad_z = 1
+    if Y % 2 != 0:
+        pad_y = 1
+    if X % 2 != 0:
+        pad_x = 1
+    if pad_z != 0 or pad_y != 0 or pad_x != 0:
+        zarr_img = da.pad(zarr_img, ((0,0),(0,pad_z),(0,pad_y),(0,pad_x)), mode='edge')
 
     ds_factor = config.get('downsample_factor', [1, 1, 1])
 
@@ -138,6 +173,11 @@ def compute_farneback_flow_3d(config, zarr_img, output_zarr):
             flow_upsampled[..., 2] *= ds_factor[2]  # vx
             
             flow = flow_upsampled
+        
+        # Unpad if necessary
+        if pad_z != 0 or pad_y != 0 or pad_x != 0:
+            flow = flow[:Z, :Y, :X, :]
+            confidence_np = confidence_np[:Z, :Y, :X]
 
         output_zarr['flow_raw'][i-1] = flow.astype(np.float32)
         output_zarr['confidence'][i-1] = confidence_np.astype(np.float32)

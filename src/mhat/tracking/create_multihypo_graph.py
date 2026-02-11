@@ -124,6 +124,7 @@ def nodes_from_fragments(
     merge_history: np.ndarray,
     min_score: float = 0.0,
     max_score: float = 0.5,
+    raw_img: np.ndarray | None = None,
     flow_2d: np.ndarray | None = None,
     flow_3d: np.ndarray | None = None,
     size_threshold: int | None = None,
@@ -185,7 +186,7 @@ def nodes_from_fragments(
         if score >= min_score and graph is None:
             # get the initial fragments we want to populate the cand graph with
             graph = nodes_from_segmentation(
-                fragments, 
+                fragments, raw_img=raw_img,
                 flow_3d=flow_3d, flow_2d=flow_2d, 
                 size_threshold=size_threshold, 
                 tp=tp, scale=scale
@@ -203,7 +204,7 @@ def nodes_from_fragments(
             new_seg_only = np.zeros_like(fragments)
             new_seg_only[fragments == c] = c
             node_graph = nodes_from_segmentation(
-                new_seg_only, 
+                new_seg_only, raw_img=raw_img, 
                 flow_3d=flow_3d, flow_2d=flow_2d,
                 size_threshold=size_threshold, 
                 tp=tp, scale=scale

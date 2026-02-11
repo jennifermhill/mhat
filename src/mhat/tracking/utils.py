@@ -14,6 +14,7 @@ from line_profiler import profile
 
 def nodes_from_segmentation(
     segmentation: np.ndarray,
+    raw_img: np.ndarray | None = None,
     flow_3d: np.ndarray | None = None,
     flow_2d: np.ndarray | None = None,
     size_threshold: int | None = None,
@@ -52,6 +53,8 @@ def nodes_from_segmentation(
             continue
         node_id = int(regionprop.label)
         region = segmentation == node_id
+        region_raw = raw_img[region]
+        intensity = np.mean(region_raw)
         if flow_3d is not None:
             if flow_2d is not None:
                 flow = (np.mean(flow_3d[region][:, 2]), np.mean(flow_2d[region][:, 1]), np.mean(flow_2d[region][:, 0]))
@@ -66,6 +69,7 @@ def nodes_from_segmentation(
             "z": float(regionprop.centroid[0] * scale[1]),
             "label": node_id,
             "area": regionprop.area,
+            "intensity": intensity,
             "flow": flow
         }
         cand_graph.add_node(node_id, **attrs)
@@ -278,6 +282,21 @@ def add_area_diff_attr(cand_graph: motile.TrackGraph):
 
         area_diff = np.abs(area_u - area_v)/np.mean([area_u, area_v])
         cand_graph.edges[edge]["area_diff"] = area_diff
+
+
+def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
+    for edge in cand_graph.edges:
+        if cand_graph.is_hyperedge(edge):
+            us, vs = edge
+            intensity_u = sum(cand_graph.nodes[n]["intensity"] for n in us)
+            intensity_v = sum(cand_graph.nodes[n]["intensity"] for n in vs)
+        else:
+            u, v = edge
+            intensity_u = cand_graph.nodes[u]["intensity"]
+            intensity_v = cand_graph.nodes[v]["intensity"]
+
+        intensity_diff = np.abs(intensity_u - intensity_v)
+        cand_graph.edges[edge]["intensity_diff"] = intensity_diff
 
 
 @profile

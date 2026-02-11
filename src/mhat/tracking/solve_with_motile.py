@@ -26,15 +26,30 @@ def solve_with_motile(config, graph, exclusion_sets):
         name="drift",
     )
 
-    solver.add_cost(
-        motile.costs.EdgeSelection(
-            weight=config["area_weight"],
-            attribute="area_diff",
-            constant=config["area_constant"],
-        ),
-        name="area",
-    )
+    if config["area_weight"] != 0:
+        solver.add_cost(
+            motile.costs.EdgeSelection(
+                weight=config["area_weight"],
+                attribute="area_diff",
+                constant=config["area_constant"],
+            ),
+            name="area",
+        )
+    else:
+        print("Skipping area cost (weight=0)")
 
+    if config["intensity_weight"] != 0:
+        solver.add_cost(
+            motile.costs.EdgeSelection(
+                weight=config["intensity_weight"],
+                attribute="intensity_diff",
+                constant=config["intensity_constant"],
+            ),
+            name="intensity",
+        )
+    else:
+        print("Skipping intensity cost (weight=0)")
+        
     solver.add_cost(
         motile.costs.NodeSelection(
             weight=config["cohesion_weight"],

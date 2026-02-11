@@ -51,8 +51,9 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, output_dir: Path):
+def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, output_dir: Path):
 
+    raw_zarr_path = raw_dir
     seg_zarr_path = seg_dir / "data.zarr"
     flow_2d_zarr_path = flow_dir_2d / "flow.zarr" if flow_dir_2d is not None else None
     flow_3d_zarr_path = flow_dir_3d / "flow.zarr" if flow_dir_3d is not None else None
@@ -72,6 +73,7 @@ def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, ou
 
     max_edge_distance = config["max_edge_distance"]
 
+    raw_img = zarr.open(raw_zarr_path)[:, 0, ...]
     seg_zarr_root = zarr.open(seg_zarr_path)
     fragments = seg_zarr_root[seg_group][:]
     if flow_2d_zarr_path is not None:
@@ -94,7 +96,7 @@ def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, ou
         )
     else:
         flow_3d = None
-    print(f"Segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d.shape if flow_2d is not None else None}, flow_3d shape: {flow_3d.shape if flow_3d is not None else None}")
+    print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d.shape if flow_2d is not None else None}, flow_3d shape: {flow_3d.shape if flow_3d is not None else None}")
     axes = seg_zarr_root[seg_group].attrs.get("axes", None)
     if axes is not None:
         for axis in axes:
@@ -133,6 +135,7 @@ def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, ou
             merge_history[merge_history[:, 4] == timepoint],
             min_score=config["min_merge_score"],
             max_score=config["max_merge_score"],
+            raw_img=raw_img[timepoint],
             flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
             flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
             size_threshold=config["size_threshold"],
@@ -162,6 +165,7 @@ def run_tracking(config, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, ou
         print("No drift distance or flow provided; setting drift distances to zero.")
         utils.add_drift_dist_attr(track_graph, drift=0)
     utils.add_area_diff_attr(track_graph)
+    utils.add_intensity_diff_attr(track_graph)
 
     print("Solving tracking with motile...")
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets)
@@ -186,16 +190,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
+    raw_base_dir = Path(config["raw_base_dir"])
     input_base_dir = Path(config["input_base_dir"])
     output_base_dir = Path(config["output_base_dir"])
     dataset: str = config["dataset"]
     experiment: str = config["experiment"]
+    assert raw_base_dir.is_dir()
     assert input_base_dir.is_dir()
     assert output_base_dir.is_dir()
 
+    raw_dir = raw_base_dir / experiment / f"{dataset}.zarr"
+    print(f"Loading raw data from {raw_dir}")
+    assert raw_dir.is_dir(), f"Raw data directory {raw_dir} is missing"
+
     seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
     print(f"Loading segmentation data from {seg_dir}")
-    assert seg_dir.is_dir()
+    assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
 
     flow_result = config.get("flow_result", None)
     if flow_result is not None:
@@ -206,9 +216,9 @@ if __name__ == "__main__":
             flow_dir_2d = None
         else:
             print(f"Loading 2D optical flow data from {flow_dir_2d}")
-            assert flow_dir_2d.is_dir()
+            assert flow_dir_2d.is_dir(), f"2D optical flow data directory {flow_dir_2d} is missing"
         print(f"Loading 3D optical flow data from {flow_dir_3d}")
-        assert flow_dir_3d.is_dir()
+        assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
     else:
         flow_dir_2d = None
         flow_dir_3d = None
@@ -221,4 +231,4 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, seg_dir, flow_dir_2d, flow_dir_3d, output_dir)
+    run_tracking(config, raw_dir, seg_dir, flow_dir_2d, flow_dir_3d, output_dir)

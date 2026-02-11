@@ -1,4 +1,5 @@
 # IO
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 experiment = "NC281-Fl2mSiH2B"
@@ -8,24 +9,26 @@ seg_result = "2026-01-29_11-55-08"
 flow_result = "2026-01-29_11-55-59"
 
 # ILP params
-drift_distance = [3.0, 2.0, 6.0]
+drift_distance = [0.0, 3.0, 6.0]
 drift_weight = 100.0
-drift_constant = -10000.0
-area_weight = 5.0
-area_constant = -100.0
+drift_constant = -1000.0
+area_weight = 100.0
+area_constant = -200.0
+intensity_weight = 0.0
+intensity_constant = 0.0
 cohesion_weight = -300
-cohesion_constant = -1000
+cohesion_constant = -100
 adhesion_weight = -10
-adhesion_constant = -1000
+adhesion_constant = -100
 appear_constant = 50.0
-disappear_constant = 50.0
+disappear_constant = 400.0
 
 # cand graph creation params
 max_children = 3
 min_merge_score = 0.0
 max_merge_score = 0.5
 # max distance traveled between frames
-max_edge_distance = 35
+max_edge_distance = 20
 
 # fragments smaller than size_threshold will be ignored
-size_threshold = 20
+size_threshold = 25

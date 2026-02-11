@@ -58,7 +58,7 @@ def nodes_from_segmentation(
             else:
                 flow = (np.mean(flow_3d[region][:, 2]), np.mean(flow_3d[region][:, 1]), np.mean(flow_3d[region][:, 0]))
         else:
-            flow = None
+            flow = 0
         attrs = {
             "time": int(tp),
             "x": float(regionprop.centroid[2] * scale[3]),

@@ -31,7 +31,7 @@ def get_axes_metadata(zarr_root):
         ]
     return axes
 
-def generate_fragments(data_zarr: Path, output_root, seg_method="otsu"):
+def generate_fragments(data_zarr: Path, output_root, config):
     zarr_root = zarr.open(data_zarr, "r+")
     axes = get_axes_metadata(zarr_root)
 
@@ -44,6 +44,7 @@ def generate_fragments(data_zarr: Path, output_root, seg_method="otsu"):
     )
     output_root['fragments'].attrs["axes"] = axes
 
+    seg_method = config["seg_method"]
     if seg_method == 'cellpose':
         # Check for cuda availability
         if torch.cuda.is_available():
@@ -59,9 +60,9 @@ def generate_fragments(data_zarr: Path, output_root, seg_method="otsu"):
         if seg_method == 'cellpose':
             labels = segment_with_cellpose(frame, gpu=gpu)
         elif seg_method == 'voronoi_mean':
-            labels = voronoi_mean_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
+            labels = voronoi_mean_labeling(frame, spot_sigma=config["spot_sigma"], outline_sigma=config["outline_sigma"])
         else:
-            labels = voronoi_otsu_labeling(frame, spot_sigma=0.5, outline_sigma=0.5)
+            labels = voronoi_otsu_labeling(frame, spot_sigma=config["spot_sigma"], outline_sigma=config["outline_sigma"])
         
         if tp != 0:
             labels[labels != 0] += max_node_id
@@ -225,12 +226,12 @@ if __name__ == "__main__":
 
     output_root = zarr.open(output_dir / "data.zarr", "a")
     if "fragments" not in output_root or config["overwrite"]:
-        generate_fragments(data_dir, output_root, config["seg_method"])
+        generate_fragments(data_dir, output_root, config["seg_params"])
 
     if "affinities" not in output_root or config["overwrite"]:
         generate_fluorescent_affinities(data_dir, output_root)
 
-    threshold = [1]
+    threshold = config["merge_thresholds"]
 
     merge_history_file = output_dir / "merge_history.csv"
     get_segmentation(output_root, threshold, merge_history_file)

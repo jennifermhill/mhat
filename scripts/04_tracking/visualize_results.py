@@ -105,14 +105,6 @@ def main(config, compute: bool = False):
     else:
         print(f"Warning: 3D flow path {flow_3d_zarr_path} does not exist.")
 
-    if track_seg_zarr_path.exists():
-        track_seg = zarr.open(track_seg_zarr_path, mode='r')
-        track_seg = track_seg[:]
-        print(f"Tracked segmentation shape: {track_seg.shape}, dtype: {track_seg.dtype}")
-        viewer.add_labels(track_seg, name='track_seg', opacity=0.5, scale=scale)
-    else:
-        print(f"Warning: Track segmentation path {track_seg_zarr_path} does not exist.")
-
     # Load tracking data if it exists
     track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_tracks.zarr')
     gt_track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'correct_tracks.zarr')
@@ -144,8 +136,11 @@ def main(config, compute: bool = False):
             tracks_viewer = TracksViewer.get_instance(viewer)
             tracks_viewer.tracks_list.add_tracks(tracks, dataset)
             print(f"Successfully loaded tracks: {tracks}")
+            if tracks_viewer.tracking_layers.tracks_layer is not None:
+                tracks_viewer.tracking_layers.tracks_layer.tail_length = 4
+                tracks_viewer.tracking_layers.tracks_layer.tail_width = 1.0
+                tracks_viewer.tracking_layers.points_layer.visible = False
 
-            
         except Exception as e:
             print(f"Failed to load tracks: {e}")
     else:
@@ -175,15 +170,27 @@ def main(config, compute: bool = False):
             tracks_viewer.tracks_list.add_tracks(gt_tracks, "GT_" + dataset)
             print(f"Successfully loaded GT tracks: {gt_tracks}")
 
-            
+            if tracks_viewer.tracking_layers.tracks_layer is not None:
+                tracks_viewer.tracking_layers.tracks_layer.tail_length = 4
+                tracks_viewer.tracking_layers.tracks_layer.tail_width = 1.0
+                tracks_viewer.tracking_layers.points_layer.visible = False
+
         except Exception as e:
             print(f"Failed to load GT tracks: {e}")
     else:
         print("No ground truth tracks available.")
-            
+
+    if track_seg_zarr_path.exists():
+        track_seg = zarr.open(track_seg_zarr_path, mode='r')
+        track_seg = track_seg[:]
+        print(f"Tracked segmentation shape: {track_seg.shape}, dtype: {track_seg.dtype}")
+        viewer.add_labels(track_seg, name='track_seg', opacity=0.25, scale=scale)
+    else:
+        print(f"Warning: Track segmentation path {track_seg_zarr_path} does not exist.")
+      
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\03_nuclei\\2026-02-02_13-47-53\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\03_nuclei\\2026-02-13_13-45-36\\config.toml"
     track_config = toml.load(path_to_config)
     main(track_config, compute=True)

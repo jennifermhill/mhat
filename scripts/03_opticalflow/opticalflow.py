@@ -6,7 +6,6 @@ import datetime
 import dask.array as da
 import numpy as np
 import zarr
-import cv2
 from tqdm import tqdm
 
 from mhat.opticalflow.utils import rename_flow_uid, frame_average
@@ -85,6 +84,7 @@ if __name__ == "__main__":
 
         output_dir = output_base_dir / experiment / dataset / "opticalflow_2d" / exp_uid
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving 2D optical flow results to {output_dir}")
 
         config_filepath = output_dir / "config.toml"
         with open(config_filepath, 'w') as config_file:
@@ -99,6 +99,7 @@ if __name__ == "__main__":
         print("Calculating 3D optical flow...")
         output_dir = output_base_dir / experiment / dataset / "opticalflow_3d" / exp_uid
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving 3D optical flow results to {output_dir}")
 
         config_filepath = output_dir / "config.toml"
         with open(config_filepath, 'w') as config_file:
@@ -113,6 +114,7 @@ if __name__ == "__main__":
         print("Calculating 3D Lucas-Kanade optical flow...")
         output_dir = output_base_dir / experiment / dataset / "opticalflow_lucaskanade" / exp_uid
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving 3D Lucas-Kanade optical flow results to {output_dir}")
 
         config_filepath = output_dir / "config.toml"
         with open(config_filepath, 'w') as config_file:

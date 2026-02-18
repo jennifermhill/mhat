@@ -28,6 +28,8 @@ def main(raw_zarr_path, seg_zarr_path, compute=False):
         fragments = fragments.compute()
         segmentations = segmentations.compute()
 
+    affinities = 1.0 - affinities
+
     viewer = napari.Viewer()
     viewer.add_image(raw, name='raw', scale=scale)
     viewer.add_image(affinities, name='affinities', channel_axis=1, contrast_limits=[0, 1], scale=scale)
@@ -39,8 +41,8 @@ def main(raw_zarr_path, seg_zarr_path, compute=False):
 if __name__ == '__main__':
     # raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/NC281-Fl2mSiH2B/02_cells.zarr'
     # seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/NC281-Fl2mSiH2B/03_test_data/data.zarr'
-    raw_zarr_path = 'Y:\\jennifer\\mhat\\data\\dJFD001_iXon\\nuclei_noised.zarr'
-    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\dJFD001_iXon\\nuclei_noised\\2026-01-30_16-45-28\\data.zarr'
+    raw_zarr_path = 'Y:\\jennifer\\mhat\\data\\Fluo-C3DL-MDA231\\01_cells.zarr'
+    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\Fluo-C3DL-MDA231\\01_cells\\2026-02-18_16-09-11\\data.zarr'
     # raw_zarr_path = '/Volumes/sgrolab/jennifer/mhat/data/mixin63/02_test_data.zarr'
     # seg_zarr_path = '/Volumes/sgrolab/jennifer/mhat/experiments/segmentation/mixin63/03_test_data/data.zarr'
     main(raw_zarr_path, seg_zarr_path, compute=True)

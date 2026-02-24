@@ -134,10 +134,10 @@ def nodes_from_fragments(
     """Compute the nodes of a candidate graph from a set of fragments and a
     merge history.
     Also defines two costs on each node:
-        "cohesion": 1 - LC , where LC is the cost of the last merge used to
-            create this node, or 0 if the node is a fragment. (Higher is better)
-        "adhesion": NC, where NC is the cost of the next merge with this node
-            as a child, or 1 if the node is never merged with anything else
+        "cohesion": LC , where LC is the cost of the last merge used to
+            create this node. Cohesion is 0 if the node is a fragment. (Higher is better)
+        "adhesion": 1 - NC, where NC is the cost of the next merge with this node
+            as a child,. Adhesion is 1 if the node is never merged with anything else
             in the history. (Higher is better)
     Also calculates average flow in segment for each node if flow is provided.
         If both 2D and 3D flow are provided, uses 2D flow for XY motion and 
@@ -216,8 +216,8 @@ def nodes_from_fragments(
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)
 
     for node in graph.nodes():
-        cohesion_cost = 1 - last_costs.get(node, 1.0)
-        adhesion_cost = next_costs.get(node, 1.0)
+        cohesion_cost = last_costs.get(node, 0.0)
+        adhesion_cost = 1 - next_costs.get(node, 0.0)
         graph.nodes[node]["cohesion"] = cohesion_cost
         graph.nodes[node]["adhesion"] = adhesion_cost            
 

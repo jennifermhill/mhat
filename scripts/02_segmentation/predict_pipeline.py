@@ -204,7 +204,7 @@ def get_segmentation(zarr_path, threshold, outfile):
 
     segmentation, merge_history = next(generator)
 
-    fields = ["a", "b", "c", "score"]
+    fields = ["a", "b", "c", "cost"]
 
     with open(outfile, "w") as f:
         writer = csv.DictWriter(f, fieldnames=fields)

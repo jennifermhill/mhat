@@ -15,13 +15,12 @@ from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
 from mhat.tracking.tracks_io import save_tracks_to_csv
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
-
 def get_solution_seg(fragments, merge_history, solution_graph):
     solution_seg = np.zeros_like(fragments)
 
     merge_dict = {}
     for merge in merge_history:
-        a, b, c, score, tp = merge
+        a, b, c, cost, tp = merge
         a = int(a)
         b = int(b)
         c = int(c)
@@ -114,13 +113,13 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_d
     ]
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
-    merge_history = create_multihypo_graph.normalize_scores(merge_history)
+    merge_history = create_multihypo_graph.normalize_costs(merge_history)
     merge_history = create_multihypo_graph.renumber_merge_history(
         merge_history, max_node_id
     )
 
     # Save the normalized and renumbered merge history
-    fields = ["a", "b", "c", "score", "timepoint"]
+    fields = ["a", "b", "c", "cost", "timepoint"]
 
     with open(normalized_merge_history_csv_path, "w") as f:
         writer = csv.writer(f)
@@ -133,8 +132,8 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_d
         cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
             fragments[timepoint],
             merge_history[merge_history[:, 4] == timepoint],
-            min_score=config["min_merge_score"],
-            max_score=config["max_merge_score"],
+            min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
+            max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
             raw_img=raw_img[timepoint],
             flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
             flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
@@ -173,15 +172,31 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_d
     print("Saving results...")
 
     save_tracks_to_csv(solution_graph, output_filepath_csv)
-    # Save tracks to geff file format
-    geff.write(solution_graph, output_filepath_geff, axis_names=["time", "z", "y", "x"], axis_types=["time", "space", "space", "space"], axis_scales=scale)
+ 
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
     assign_tracklet_ids(solution_graph)
-    solution_seg = utils.relabel_segmentation(solution_graph, solution_seg)
+    # solution_seg = utils.relabel_segmentation(solution_graph, solution_seg)
     output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
     if axes is not None:
         output_zarr_root.attrs["axes"] = axes
     output_zarr_root[:] = solution_seg
+
+    # Save tracks to geff file format
+    metadata = geff.GeffMetadata(directed=True, 
+                                 related_objects=[{
+                                     "type": "labels", 
+                                     "path": "../pred_seg.zarr",
+                                     "label_prop": "label"
+                                 }],
+                                 node_props_metadata={},
+                                 edge_props_metadata={},
+                                 )
+    geff.write(solution_graph, 
+               output_filepath_geff, 
+               axis_names=["time", "z", "y", "x"], 
+               axis_types=["time", "space", "space", "space"], 
+               axis_scales=scale, 
+               metadata=metadata)
 
 
 if __name__ == "__main__":

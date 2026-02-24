@@ -17,7 +17,7 @@ def load_merge_history(merge_path: Path) -> np.ndarray:
 
     Returns:
         np.ndarray: The merge history as a nparray with shape (4, N) where
-            N is the number of merges. The columns are a, b, c, score.
+            N is the number of merges. The columns are a, b, c, cost.
     """
     merge_history = []
     with open(merge_path) as f:
@@ -26,29 +26,30 @@ def load_merge_history(merge_path: Path) -> np.ndarray:
             a = int(row["a"])
             b = int(row["b"])
             c = int(row["c"])
-            score = float(row["score"])
+            # Support both "cost" (new) and "score" (old) column names
+            cost = float(row.get("cost", row.get("score", 0.0)))
             timepoint = int(row["timepoint"])
-            merge_history.append([a, b, c, score, timepoint])
+            merge_history.append([a, b, c, cost, timepoint])
 
     merge_history = np.array(merge_history)
     return merge_history
 
 
-def normalize_scores(merge_history: np.ndarray) -> np.ndarray:
-    """Normalize the scores in the merge history to be between 0 and 1.
+def normalize_costs(merge_history: np.ndarray) -> np.ndarray:
+    """Normalize the costs in the merge history to be between 0 and 1.
 
     Args:
         merge_history (np.ndarray): The merge history array with shape (4, N)
-            where N is the number of merges. The columns are a, b, c, score.
+            where N is the number of merges. The columns are a, b, c, cost.
 
     Returns:
-        np.ndarray: The merge history with normalized scores.
+        np.ndarray: The merge history with normalized costs.
     """
-    scores = merge_history[:, 3]
-    min_score = np.min(scores)
-    max_score = np.max(scores)
-    normalized_scores = (scores - min_score) / (max_score - min_score)
-    merge_history[:, 3] = normalized_scores
+    costs = merge_history[:, 3]
+    min_cost = np.min(costs)
+    max_cost = np.max(costs)
+    normalized_costs = (costs - min_cost) / (max_cost - min_cost)
+    merge_history[:, 3] = normalized_costs
 
     return merge_history
 
@@ -59,7 +60,7 @@ def renumber_merge_history(merge_history: np.ndarray, max_node_id: int) -> np.nd
 
     Args:
         merge_history (np.ndarray): The merge history array with shape (4, N)
-            where N is the number of merges. The columns are a, b, c, score.
+            where N is the number of merges. The columns are a, b, c, cost.
         max_node_id (int): The maximum node id from the fragments used to
             generate the merge_history. This is not necessarily the max
             of the first three columns if there is an un-merged fragment with
@@ -122,8 +123,8 @@ def compute_conflicts(
 def nodes_from_fragments(
     fragments: np.ndarray,
     merge_history: np.ndarray,
-    min_score: float = 0.0,
-    max_score: float = 0.5,
+    min_cost: float = 0.0,
+    max_cost: float = 0.5,
     raw_img: np.ndarray | None = None,
     flow_2d: np.ndarray | None = None,
     flow_3d: np.ndarray | None = None,
@@ -132,10 +133,10 @@ def nodes_from_fragments(
 ) -> tuple[nx.DiGraph, list[tuple]]:
     """Compute the nodes of a candidate graph from a set of fragments and a
     merge history.
-    Also defines two scores on each node:
-        "cohesion": 1 - LS , where LS is the score of the last merge used to
+    Also defines two costs on each node:
+        "cohesion": 1 - LC , where LC is the cost of the last merge used to
             create this node, or 0 if the node is a fragment. (Higher is better)
-        "adhesion": NS, where NS is the score of the next merge with this node
+        "adhesion": NC, where NC is the cost of the next merge with this node
             as a child, or 1 if the node is never merged with anything else
             in the history. (Higher is better)
     Also calculates average flow in segment for each node if flow is provided.
@@ -146,13 +147,13 @@ def nodes_from_fragments(
         fragments (np.ndarray): An array of fragment labels to use to generate
             candidate detections.
         merge_history (np.ndarray): The merge history array with shape (4, N)
-            where N is the number of merges. The columns are a, b, c, score.
+            where N is the number of merges. The columns are a, b, c, cost.
             It must already be renumbered so all cs are unique, and must also
-            be sorted from lowest to highest score.
-        min_score (float, optional): Excludes candidates that are merged with a
-            score lower than min_score from the graph. Defaults to 0.0.
-        max_score (float, optional): Exclude candidates that are merged with a
-            score higher than max_score from the graph. Defaults to 0.5.
+            be sorted from lowest to highest cost.
+        min_cost (float, optional): Excludes candidates that are merged with a
+            cost lower than min_cost from the graph. Defaults to 0.0.
+        max_cost (float, optional): Exclude candidates that are merged with a
+            cost higher than max_cost from the graph. Defaults to 0.5.
         flow_2d (np.ndarray, optional): 2D optical flow array for the timepoint
             of the fragments. Defaults to None.
         flow_3d (np.ndarray, optional): 3D optical flow array for the timepoint
@@ -167,10 +168,10 @@ def nodes_from_fragments(
         the nodes added, and a list of exclusion sets for nodes in the graph
         (nodes that cannot be selected together).
     """
-    # create a dictionary from node_ids to last merge scores used to create the node
-    last_scores = {}
-    # create a dictionary from node_ids to next merge scores used to merge the node
-    next_scores = {}
+    # create a dictionary from node_ids to last merge costs used to create the node
+    last_costs = {}
+    # create a dictionary from node_ids to next merge costs used to merge the node
+    next_costs = {}
 
     fragments = fragments.copy()
 
@@ -178,12 +179,12 @@ def nodes_from_fragments(
     conflict_sets = {}
 
     for merge in merge_history:
-        a, b, c, score, tp = merge
+        a, b, c, cost, tp = merge
         a = int(a)
         b = int(b)
         c = int(c)
 
-        if score >= min_score and graph is None:
+        if cost >= min_cost and graph is None:
             # get the initial fragments we want to populate the cand graph with
             graph = nodes_from_segmentation(
                 fragments, raw_img=raw_img,
@@ -195,11 +196,11 @@ def nodes_from_fragments(
         # merge the fragments and add to history
         fragments[fragments == a] = c
         fragments[fragments == b] = c
-        last_scores[c] = score
-        next_scores[a] = score
-        next_scores[b] = score
+        last_costs[c] = cost
+        next_costs[a] = cost
+        next_costs[b] = cost
 
-        if score >= min_score and score < max_score:
+        if cost >= min_cost and cost < max_cost:
             # add the new node to the graph
             new_seg_only = np.zeros_like(fragments)
             new_seg_only[fragments == c] = c
@@ -215,10 +216,10 @@ def nodes_from_fragments(
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)
 
     for node in graph.nodes():
-        cohesion_score = 1 - last_scores.get(node, 1.0)
-        adhesion_score = next_scores.get(node, 1.0)
-        graph.nodes[node]["cohesion"] = cohesion_score
-        graph.nodes[node]["adhesion"] = adhesion_score            
+        cohesion_cost = 1 - last_costs.get(node, 1.0)
+        adhesion_cost = next_costs.get(node, 1.0)
+        graph.nodes[node]["cohesion"] = cohesion_cost
+        graph.nodes[node]["adhesion"] = adhesion_cost            
 
     exclusion_sets = []
 

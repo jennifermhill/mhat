@@ -16,7 +16,7 @@ def agglomerate(fragments: np.ndarray, merge_history: Path, threshold: float):
             waterz
         merge_history (Path): Result of running waterz on fragments with pretty
             high threshold
-        threshold (float): The score threshold to merge until. If it is bigger
+        threshold (float): The cost threshold to merge until. If it is bigger
             than the largest in the merge history, nothing more will merge.
 
     Returns:
@@ -29,8 +29,8 @@ def agglomerate(fragments: np.ndarray, merge_history: Path, threshold: float):
             a = int(row["a"])
             b = int(row["b"])
             c = int(row["c"])
-            score = float(row["score"])
-            if score <= threshold:
+            cost = float(row["cost"])
+            if cost <= threshold:
                 fragments[fragments == a] = c
                 fragments[fragments == b] = c
 

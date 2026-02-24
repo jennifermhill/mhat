@@ -11,4 +11,8 @@ merge_thresholds = [1.0]
 [seg_params]
 seg_method = "otsu"
 spot_sigma = 2.0
-outline_sigma = 2.0
+outline_sigma = 0.5
+
+[affinity_params]
+smoothing = [1.0, 1.0, 1.0]
+neighborhood = [[0,0,1], [0,1,0], [1,0,0]]

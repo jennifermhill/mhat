@@ -12,6 +12,7 @@ from scipy.ndimage import label
 # from scipy.ndimage.filters import maximum_filter
 # from scipy.ndimage.morphology import distance_transform_edt
 from skimage.segmentation import watershed
+from skimage.filters import gaussian
 
 from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, voronoi_mean_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
@@ -71,7 +72,7 @@ def generate_fragments(data_zarr: Path, output_root, config):
 
         output_root['fragments'][tp] = labels
 
-def generate_fluorescent_affinities(data_zarr: Path, output_root):
+def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
     zarr_root = zarr.open(data_zarr, "r+")
     axes = get_axes_metadata(zarr_root)
 
@@ -79,7 +80,7 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root):
 
     T, C, Z, Y, X = raw_data.shape
 
-    neighborhood = [[0, 0, 1], [0, 1, 0], [1, 0, 0]]
+    neighborhood = config["neighborhood"]
 
     output_root.create_dataset(
         "affinities", shape=(T, 3, Z, Y, X), chunks=(1, 1, 1, Y, X), dtype=np.float32, overwrite=True
@@ -90,14 +91,18 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root):
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
+        if config["smoothing"] != 0:
+            smoothing_sigma = tuple(config["smoothing"])
+            frame = gaussian(frame, sigma=smoothing_sigma) 
         affinities[tp] = compute_fluorescent_affinities(frame, neighborhood)
 
-    # Clip top and bottom 5% and normalize affinities to range [0, 1] and invert
-    affinities = np.clip(affinities, np.percentile(affinities, 5), np.percentile(affinities, 95))
+    # Normalize affinities to [0, 1] and invert
     max_val = np.max(affinities)
     min_val = np.min(affinities)
     if max_val > 0:
         affinities = (affinities - min_val) / (max_val - min_val)
+    
+    # affinities = 1.0 - affinities
 
     output_root['affinities'][:] = affinities
 
@@ -229,7 +234,7 @@ if __name__ == "__main__":
         generate_fragments(data_dir, output_root, config["seg_params"])
 
     if "affinities" not in output_root or config["overwrite"]:
-        generate_fluorescent_affinities(data_dir, output_root)
+        generate_fluorescent_affinities(data_dir, output_root, config["affinity_params"])
 
     threshold = config["merge_thresholds"]
 

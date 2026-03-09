@@ -5,21 +5,21 @@ output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 experiment = "Fluo-C3DL-MDA231"
 dataset = "01_cells"
 
-seg_result = "2026-02-20_11-31-01"
+seg_result = "2026-02-27_18-46-07"
 flow_result = "2026-02-17_15-55-00"
 
 # ILP params
 drift_distance = [0.0, 3.0, 6.0]
 drift_weight = 10.0
-drift_constant = -10.0
+drift_constant = 0.0
 area_weight = 0.0
 area_constant = 0.0
 intensity_weight = 0.0
 intensity_constant = 0.0
-cohesion_weight = 100
+cohesion_weight = 0.01
 cohesion_constant = 0
-adhesion_weight = -100
-adhesion_constant = 0
+adhesion_weight = 100
+adhesion_constant = -500
 appear_constant = 100.0
 disappear_constant = 100.0
 
@@ -31,4 +31,4 @@ max_merge_cost = 1.0
 max_edge_distance = 35
 
 # fragments smaller than size_threshold will be ignored
-size_threshold = 60
+size_threshold = 50

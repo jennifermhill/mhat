@@ -102,7 +102,7 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
     if max_val > 0:
         affinities = (affinities - min_val) / (max_val - min_val)
     
-    # affinities = 1.0 - affinities
+    affinities = 1.0 - affinities
 
     output_root['affinities'][:] = affinities
 
@@ -188,6 +188,7 @@ def get_segmentation(output_root, thresholds, outfile):
         output_root['segmentations'][t] = segmentation
         
         for row in merge_history:
+            row['cost'] = row.pop('score')  # Rename 'score' to 'cost'
             row['timepoint'] = t
             all_merge_history.append(row)
 

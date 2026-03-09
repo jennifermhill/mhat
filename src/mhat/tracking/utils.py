@@ -382,3 +382,24 @@ def to_nx_graph(graph, flatten_hyperedges: bool = True) -> nx.DiGraph:
 
     nx_graph.add_edges_from(edges_list)
     return nx_graph
+
+def to_ctc_format(solution_nx_graph: nx.DiGraph) -> list[tuple[int, int, int, int]]:
+    """Convert a solution graph into the format expected by the Cell Tracking Challenge
+    for evaluation.
+
+    Args:
+        solution_nx_graph (nx.DiGraph): A networkx DiGraph representing the solution tracks.
+    Returns:
+        list[tuple[int, int, int, int]]: A list of tuples representing the tracks in the format (track_id, first frame, last frame, parent_id).
+    """
+    ctc_tracks = []
+    # Make list of unique track_ids
+    track_ids = set(nx.get_node_attributes(solution_nx_graph, "track_id").values())
+    for track_id in track_ids:
+        track_nodes = [n for n, d in solution_nx_graph.nodes(data=True) if d.get("track_id") == track_id]
+        frames = [solution_nx_graph.nodes[n]["time"] for n in track_nodes]
+        first_frame = min(frames)
+        last_frame = max(frames)
+        parent_id = solution_nx_graph.nodes[track_nodes[0]].get("parent_id", 0)
+        ctc_tracks.append((track_id, first_frame, last_frame, parent_id))
+    return ctc_tracks

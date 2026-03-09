@@ -6,6 +6,7 @@ from pathlib import Path
 import motile
 import numpy as np
 import toml
+import tifffile as tiff
 import zarr
 import geff
 import networkx as nx
@@ -50,7 +51,7 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, output_dir: Path):
+def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, output_dir: Path, ctc_dir: Path):
 
     raw_zarr_path = raw_dir
     seg_zarr_path = seg_dir / "data.zarr"
@@ -149,7 +150,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_d
 
     utils.add_cand_edges(all_cand_graph, max_edge_distance, max_children=config["max_children"])
     print("Edges before hyperedges: ", all_cand_graph.number_of_edges())
-    all_cand_graph = utils.add_hyperedges(all_cand_graph, divisions=False, merges=False)
+    all_cand_graph = utils.add_hyperedges(all_cand_graph, divisions=True, merges=False)
     print("Edges after hyperedges: ", all_cand_graph.number_of_edges())
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph, img_shape_scaled)
@@ -197,6 +198,17 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_d
                axis_types=["time", "space", "space", "space"], 
                axis_scales=scale, 
                metadata=metadata)
+    
+    # Save solution seg to tiff in ctc folder for evaluation
+    for tp in range(solution_seg.shape[0]):
+        tp_seg = solution_seg[tp]
+        tp_seg_path = ctc_dir / f"track{tp:03d}.tif"
+        tiff.imwrite(tp_seg_path, tp_seg.astype(np.uint16))
+    ctc_tracks = utils.to_ctc_format(solution_graph)
+    ctc_tracks_path = ctc_dir / "res_track.txt"
+    with open(ctc_tracks_path, "w") as f:
+        for track in ctc_tracks:
+            f.write(" ".join(map(str, track)) + "\n")
 
 
 if __name__ == "__main__":
@@ -246,4 +258,7 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, raw_dir, seg_dir, flow_dir_2d, flow_dir_3d, output_dir)
+    ctc_dir = raw_base_dir.parent / "ctc" / "train" / experiment / "01_RES" 
+    ctc_dir.mkdir(parents=True, exist_ok=True)
+
+    run_tracking(config, raw_dir, seg_dir, flow_dir_2d, flow_dir_3d, output_dir, ctc_dir)

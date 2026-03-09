@@ -7,6 +7,7 @@
 /funtracks
 /motile_toolbox
 /motile_tracker
+/ctc
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

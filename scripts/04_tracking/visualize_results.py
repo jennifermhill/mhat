@@ -29,10 +29,10 @@ def main(config, compute: bool = False):
         flow_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/experiments/opticalflow")
         tracking_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking")
     else:
-        input_base_dir = Path("/Volumes/sgro/sgrolab/jennifer/mhat/data")
-        seg_base_dir = Path("/Volumes/sgro/sgrolab/jennifer/mhat/experiments/segmentation")
-        flow_base_dir = Path("/Volumes/sgro/sgrolab/jennifer/mhat/experiments/opticalflow")
-        tracking_base_dir = Path("/Volumes/sgro/sgrolab/jennifer/mhat/experiments/tracking")
+        input_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/data")
+        seg_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/experiments/segmentation")
+        flow_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/experiments/opticalflow")
+        tracking_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/experiments/tracking")
 
     raw_cells_zarr_path = Path(input_base_dir / experiment / f"{dataset}.zarr")
     frag_zarr_path = Path(seg_base_dir / experiment / dataset / seg_result / 'data.zarr')
@@ -85,25 +85,25 @@ def main(config, compute: bool = False):
     # else:
     #     print(f"Warning: Rocks segmentation path {rocks_seg_zarr_path} does not exist.")
 
-    if flow_2d_zarr_path.exists():
-        flow_2d = zarr.open(flow_2d_zarr_path, mode='r')
-        flow_2d = flow_2d['flow_frames_XY'][:, ...]
-        print(f"2D Flow shape: {flow_2d.shape}, dtype: {flow_2d.dtype}")
-        viewer.add_image(flow_2d, name='flow_2d', blending='additive', scale=scale)
-    else:
-        print(f"Warning: 2D flow path {flow_2d_zarr_path} does not exist.")
+    # if flow_2d_zarr_path.exists():
+    #     flow_2d = zarr.open(flow_2d_zarr_path, mode='r')
+    #     flow_2d = flow_2d['flow_frames_XY'][:, ...]
+    #     print(f"2D Flow shape: {flow_2d.shape}, dtype: {flow_2d.dtype}")
+    #     viewer.add_image(flow_2d, name='flow_2d', blending='additive', scale=scale)
+    # else:
+    #     print(f"Warning: 2D flow path {flow_2d_zarr_path} does not exist.")
 
-    if flow_3d_zarr_path.exists():
-        flow_3d = zarr.open(flow_3d_zarr_path, mode='r')
-        flow_3d_xy = flow_3d['flow_frames_XY'][:, ...]
-        print(f"3D Flow XY shape: {flow_3d_xy.shape}, dtype: {flow_3d_xy.dtype}")
-        viewer.add_image(flow_3d_xy, name='flow_3d_xy', blending='additive', scale=scale)
+    # if flow_3d_zarr_path.exists():
+    #     flow_3d = zarr.open(flow_3d_zarr_path, mode='r')
+    #     flow_3d_xy = flow_3d['flow_frames_XY'][:, ...]
+    #     print(f"3D Flow XY shape: {flow_3d_xy.shape}, dtype: {flow_3d_xy.dtype}")
+    #     viewer.add_image(flow_3d_xy, name='flow_3d_xy', blending='additive', scale=scale)
 
-        flow_3d_z = flow_3d['flow_frames_Z'][:, ...]
-        print(f"3D Flow Z shape: {flow_3d_z.shape}, dtype: {flow_3d_z.dtype}")
-        viewer.add_image(flow_3d_z, name='flow_3d_z', colormap='berlin', blending='additive', scale=scale)
-    else:
-        print(f"Warning: 3D flow path {flow_3d_zarr_path} does not exist.")
+    #     flow_3d_z = flow_3d['flow_frames_Z'][:, ...]
+    #     print(f"3D Flow Z shape: {flow_3d_z.shape}, dtype: {flow_3d_z.dtype}")
+    #     viewer.add_image(flow_3d_z, name='flow_3d_z', colormap='berlin', blending='additive', scale=scale)
+    # else:
+    #     print(f"Warning: 3D flow path {flow_3d_zarr_path} does not exist.")
 
     # Load tracking data if it exists
     track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_tracks.zarr')
@@ -123,13 +123,14 @@ def main(config, compute: bool = False):
                 "x": "x", 
                 "y": "y",
                 "z": "z",
-                "id": "label",
+                "id": "track_id",    # track_id stays constant across frames
+                "seg_id": "label",   # label is the unique segmentation ID at each timepoint
             }
             
             tracks = import_from_geff(
                 track_data_zarr_path,
                 name_map,
-                segmentation_path=None,
+                segmentation_path=track_seg_zarr_path,
                 scale=scale,
             )
             # Add tracks to the TracksViewer
@@ -162,7 +163,6 @@ def main(config, compute: bool = False):
             gt_tracks = import_from_geff(
                 gt_track_data_zarr_path,
                 name_map,
-                segmentation_path=None,
                 scale=scale,
             )
             # Add GT tracks to the TracksViewer
@@ -180,17 +180,18 @@ def main(config, compute: bool = False):
     else:
         print("No ground truth tracks available.")
 
-    if track_seg_zarr_path.exists():
-        track_seg = zarr.open(track_seg_zarr_path, mode='r')
-        track_seg = track_seg[:]
-        print(f"Tracked segmentation shape: {track_seg.shape}, dtype: {track_seg.dtype}")
-        viewer.add_labels(track_seg, name='track_seg', opacity=0.25, scale=scale)
-    else:
-        print(f"Warning: Track segmentation path {track_seg_zarr_path} does not exist.")
+    # if track_seg_zarr_path.exists():
+    #     track_seg = zarr.open(track_seg_zarr_path, mode='r')
+    #     track_seg = track_seg[:]
+    #     print(f"Tracked segmentation shape: {track_seg.shape}, dtype: {track_seg.dtype}")
+    #     viewer.add_labels(track_seg, name='track_seg', opacity=0.5, scale=scale)
+    # else:
+    #     print(f"Warning: Track segmentation path {track_seg_zarr_path} does not exist.")
       
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\03_nuclei\\2026-02-13_13-45-36\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\01_cells\\2026-03-02_17-49-39\\config.toml"
+    # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
     track_config = toml.load(path_to_config)
-    main(track_config, compute=True)
+    main(track_config, compute=False)

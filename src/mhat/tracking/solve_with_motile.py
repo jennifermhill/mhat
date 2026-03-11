@@ -1,5 +1,5 @@
 import motile
-import motile.variables
+from mhat.tracking.edge_pairs import CurvatureCost
 from mhat.tracking.utils import to_nx_graph
 
 
@@ -52,7 +52,19 @@ def solve_with_motile(config, graph, exclusion_sets):
         )
     else:
         print("Skipping intensity cost (weight=0)")
-        
+
+    if config["curvature_weight"] != 0:
+        solver.add_cost(
+            CurvatureCost(
+                weight=config["curvature_weight"],
+                position_attribute="centroid",
+                constant=config["curvature_constant"],
+            ),
+            name="curvature",
+        )
+    else:
+        print("Skipping curvature cost (weight=0)")
+
     solver.add_cost(
         motile.costs.NodeSelection(
             weight=config["cohesion_weight"],

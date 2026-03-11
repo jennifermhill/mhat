@@ -53,6 +53,9 @@ def nodes_from_segmentation(
             continue
         node_id = int(regionprop.label)
         region = segmentation == node_id
+        centroid = (float(regionprop.centroid[0] * scale[1]), 
+                    float(regionprop.centroid[1] * scale[2]), 
+                    float(regionprop.centroid[2] * scale[3]))
         region_raw = raw_img[region]
         intensity = np.mean(region_raw)
         if flow_3d is not None:
@@ -64,9 +67,10 @@ def nodes_from_segmentation(
             flow = 0
         attrs = {
             "time": int(tp),
-            "x": float(regionprop.centroid[2] * scale[3]),
-            "y": float(regionprop.centroid[1] * scale[2]),
-            "z": float(regionprop.centroid[0] * scale[1]),
+            "x": centroid[2],
+            "y": centroid[1],
+            "z": centroid[0],
+            "centroid": centroid,
             "label": node_id,
             "area": regionprop.area,
             "intensity": intensity,

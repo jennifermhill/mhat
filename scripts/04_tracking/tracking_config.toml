@@ -27,6 +27,8 @@ disappear_constant = 50.0
 
 # cand graph creation params
 max_children = 3
+merges = False
+divisions = False
 min_merge_cost = 0.0
 max_merge_cost = 1.0
 # max distance traveled between frames

@@ -11,13 +11,13 @@ flow_result = "2026-01-29_11-55-59"
 # ILP params
 drift_distance = [0.0, 3.0, 6.0]
 drift_weight = 100.0
-drift_constant = -1000.0
-area_weight = 0.0
-area_constant = 0.0
-intensity_weight = 0.0
-intensity_constant = 0.0
-curvature_weight = 5.0
-curvature_constant = -500.0
+drift_constant = -1500.0
+area_weight = 25.0
+area_constant = -400.0
+intensity_weight = 1.0
+intensity_constant = -4000.0
+curvature_weight = 50.0
+curvature_constant = -1000.0
 cohesion_weight = 500
 cohesion_constant = -450
 adhesion_weight = 100
@@ -27,8 +27,8 @@ disappear_constant = 50.0
 
 # cand graph creation params
 max_children = 3
-merges = False
-divisions = False
+merges = false
+divisions = false
 min_merge_cost = 0.0
 max_merge_cost = 1.0
 # max distance traveled between frames

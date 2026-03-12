@@ -28,7 +28,8 @@ def from_ctc_to_geff(
 ) -> None:
     """
     Convert a CTC file to a GEFF file.
-    Adapted from geff but modified to save with zarr extension and use "time" as frame key.
+    Adapted from geff but modified to save with zarr extension,  use "time" as frame key,
+    and track_id as the track node property.
 
     Args:
         ctc_path: The path to the CTC file.
@@ -66,7 +67,7 @@ def from_ctc_to_geff(
     edges = []
     node_props: dict[str, list[int | float]] = {
         "id": [],
-        "tracklet_id": [],
+        "track_id": [],
         "time": [],
         "x": [],
         "y": [],
@@ -113,7 +114,7 @@ def from_ctc_to_geff(
         for obj in regionprops(frame):
             tracklet_id = obj.label
             node_props["id"].append(node_id)
-            node_props["tracklet_id"].append(tracklet_id)
+            node_props["track_id"].append(tracklet_id)
             node_props["time"].append(t)
             # using y,x for 2d and z,y,x for 3d
             for c, v in zip(("x", "y", "z"), obj.centroid[::-1], strict=False):
@@ -177,7 +178,7 @@ def from_ctc_to_geff(
 
         if seg_path is not None:
             rel_path = os.path.relpath(seg_path, geff_path)
-            rel_objs = [RelatedObject(type="labels", path=rel_path, label_prop="tracklet_id")]
+            rel_objs = [RelatedObject(type="labels", path=rel_path, label_prop="track_id")]
 
     write_arrays(
         geff_store=geff_path,
@@ -194,7 +195,7 @@ def from_ctc_to_geff(
             directed=True,
             node_props_metadata={},
             edge_props_metadata={},
-            track_node_props={"tracklet": "tracklet_id"},
+            track_node_props={"tracklet": "track_id"},
             related_objects=rel_objs,
         ),
         zarr_format=zarr_format,

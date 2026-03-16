@@ -55,7 +55,7 @@ Some dependencies are installed from local checkouts in the repo root:
 
 - `./funtracks` — funtracks
 - `./motile_tracker` — motile-tracker
-- `./motile_toolbox` — motile-toolbox
+- `./geff` — geff
 
 ### Key Dependencies
 

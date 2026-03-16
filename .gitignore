@@ -5,8 +5,8 @@
 
 # Locally editable installed packages
 /funtracks
-/motile_toolbox
 /motile_tracker
+/geff
 /ctc
 
 # Byte-compiled / optimized / DLL files

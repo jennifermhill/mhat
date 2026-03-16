@@ -21,20 +21,21 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
         print(f"Warning: Predicted segmentation zarr not found at {pred_segmentation_path}")
         pred_segmentation = None
 
-        # Check for CTC metrics
+    (pred_graph, pred_metadata) = geff.read(pred_tracks_path)
+
+    # Check for CTC metrics
     if "ctc" in config.get("metrics", []):
-        # Check if gt has already been converted to geff format
         if not gt_tracks_path.is_dir():
-            # If not convert to geff format
             print(f"Converting GT tracks to geff format at {gt_tracks_path}")
+            axes = pred_metadata.axes
             from_ctc_to_geff(
                 ctc_path=gt_data_dir / "01_GT" / "TRA",
                 geff_path=gt_tracks_path,
                 segmentation_store=gt_data_dir / "correct_seg.zarr",
+                axes=axes,
             )
 
     (gt_graph, gt_metadata) = geff.read(gt_tracks_path)
-    (pred_graph, pred_metadata) = geff.read(pred_tracks_path)
 
     results = evaluate_tracking(
         config,

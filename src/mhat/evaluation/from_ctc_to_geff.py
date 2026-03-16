@@ -22,6 +22,7 @@ def from_ctc_to_geff(
     ctc_path: Path,
     geff_path: Path,
     segmentation_store: StoreLike | None = None,
+    axes: list[Axis] | None = None,
     tczyx: bool = False,
     overwrite: bool = False,
     zarr_format: Literal[2, 3] = 2,
@@ -36,6 +37,8 @@ def from_ctc_to_geff(
         geff_path: The path to the GEFF file.
         segmentation_store: The path or store to save the segmentation to.
                             If not provided, it won't be exported.
+        axes: The axes for the GEFF file. If not provided, it will be inferred from the data 
+              (assuming "time" is the first axis and "y", "x" are the spatial axes).
         tczyx: Expand data to make it (T, C, Z, Y, X) otherwise it's (T,) + Frame shape.
         overwrite: Whether to overwrite the GEFF file if it already exists.
         zarr_format (Literal[2, 3]): The zarr specification to use when writing the zarr.
@@ -112,9 +115,9 @@ def from_ctc_to_geff(
             segm_array[t] = frame[expand_dims]
 
         for obj in regionprops(frame):
-            tracklet_id = obj.label
+            tracklet_id = obj.label # Real seg_ids and tracklet_ids from man_track.txt
             node_props["id"].append(node_id)
-            node_props["track_id"].append(tracklet_id)
+            node_props["track_id"].append(tracklet_id) # TODO: Switch to ID and call ID something else?
             node_props["time"].append(t)
             # using y,x for 2d and z,y,x for 3d
             for c, v in zip(("x", "y", "z"), obj.centroid[::-1], strict=False):
@@ -148,13 +151,27 @@ def from_ctc_to_geff(
         # forward in time (parent -> child)
         edges.append((parent_node_id, child_node_id))
 
-    axis_names = [
-        Axis(name="time", type="time"),
-        Axis(name="y", type="space"),
-        Axis(name="x", type="space"),
-    ]
-    if "z" in node_props:
-        axis_names.insert(1, Axis(name="z", type="space"))
+    if axes is None:
+        axis_names = [
+            Axis(name="time", type="time"),
+            Axis(name="y", type="space"),
+            Axis(name="x", type="space"),
+        ]
+        scale = {"time": 1.0, "y": 1.0, "x": 1.0}
+        if "z" in node_props:
+            axis_names.insert(1, Axis(name="z", type="space"))
+            scale["z"] = 1.0
+    else:
+        axis_names = axes
+        scale = {a.name: a.scale for a in axes if a.scale is not None}
+
+    print(f"Scale: {scale}, Axes: {axis_names}")
+
+    for coord in ("x", "y", "z"):
+        if coord in node_props and coord in scale:
+            node_props[coord] = [
+                v * scale[coord] for v in node_props[coord]
+            ]
 
     node_ids = np.asarray(node_props.pop("id"), dtype="uint")
 
@@ -179,7 +196,8 @@ def from_ctc_to_geff(
         if seg_path is not None:
             rel_path = os.path.relpath(seg_path, geff_path)
             rel_objs = [RelatedObject(type="labels", path=rel_path, label_prop="track_id")]
-
+    print(f"Node IDs: {node_ids}")
+    print(f"Node properties: {node_props}")
     write_arrays(
         geff_store=geff_path,
         node_ids=node_ids,

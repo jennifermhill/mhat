@@ -172,6 +172,8 @@ def nodes_from_fragments(
     last_costs = {}
     # create a dictionary from node_ids to next merge costs used to merge the node
     next_costs = {}
+    # create a dictionary from node_ids to the number of leaf fragments merged
+    leaf_counts = {}
 
     fragments = fragments.copy()
 
@@ -199,6 +201,7 @@ def nodes_from_fragments(
         last_costs[c] = cost
         next_costs[a] = cost
         next_costs[b] = cost
+        leaf_counts[c] = leaf_counts.get(a, 1) + leaf_counts.get(b, 1)
 
         if cost >= min_cost and cost < max_cost:
             # add the new node to the graph
@@ -219,7 +222,8 @@ def nodes_from_fragments(
         cohesion_cost = last_costs.get(node, 0.0)
         adhesion_cost = 1 - next_costs.get(node, 0.5)
         graph.nodes[node]["cohesion"] = cohesion_cost
-        graph.nodes[node]["adhesion"] = adhesion_cost            
+        graph.nodes[node]["adhesion"] = adhesion_cost
+        graph.nodes[node]["num_leaves"] = leaf_counts.get(node, 1)
 
     exclusion_sets = []
 

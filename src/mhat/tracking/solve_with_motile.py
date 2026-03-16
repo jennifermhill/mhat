@@ -1,6 +1,6 @@
 import motile
 from mhat.tracking.edge_pairs import CurvatureCost
-from mhat.tracking.utils import to_nx_graph
+from mhat.tracking.utils import to_nx_graph, scale_by_leaves
 
 
 def solve_with_motile(config, graph, exclusion_sets):
@@ -93,6 +93,8 @@ def solve_with_motile(config, graph, exclusion_sets):
             constant=config["disappear_constant"], ignore_attribute="ignore_disappear"
         )
     )
+
+    scale_by_leaves(solver)
 
     solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))
 

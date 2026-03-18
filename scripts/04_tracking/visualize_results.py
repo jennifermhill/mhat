@@ -10,7 +10,7 @@ from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksView
 
 
 
-def main(config, compute: bool = False):
+def main(config, ground_truth: bool = False):
 
     experiment = config["experiment"]
     dataset = config["dataset"]
@@ -38,9 +38,8 @@ def main(config, compute: bool = False):
     frag_zarr_path = Path(seg_base_dir / experiment / dataset / seg_result / 'data.zarr')
     flow_2d_zarr_path = Path(flow_base_dir / experiment / dataset / "opticalflow_2d" / flow_result / "flow.zarr") 
     flow_3d_zarr_path = Path(flow_base_dir / experiment / dataset / "opticalflow_3d" / flow_result / "flow.zarr") 
-    track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_seg.zarr')
 
-    if all(path.exists() is False for path in [raw_cells_zarr_path, frag_zarr_path, flow_2d_zarr_path, flow_3d_zarr_path, track_seg_zarr_path]):
+    if all(path.exists() is False for path in [raw_cells_zarr_path, frag_zarr_path, flow_2d_zarr_path, flow_3d_zarr_path]):
         raise FileNotFoundError("None of the required data paths exist. Exiting.")
     
     viewer = napari.Viewer()
@@ -54,36 +53,20 @@ def main(config, compute: bool = False):
         else:
             scale = [1.0, 1.0, 1.0, 1.0]
         raw_cells = raw_cells[:, 0, ...]
-        print(f"Raw shape: {raw_cells.shape}, dtype: {raw_cells.dtype}")
+        print(f"Raw shape: {raw_cells.shape}, dtype: {raw_cells.dtype}, scale: {scale}")
         viewer.add_image(raw_cells, name='raw', colormap='gray', blending='additive', scale=scale)
     else:
         print(f"Warning: Raw cells path {raw_cells_zarr_path} does not exist.")
         print("Defaulting scale to [1.0, 1.0, 1.0, 1.0]")
         scale = [1.0, 1.0, 1.0, 1.0]
 
-    # if raw_rocks_zarr_path.exists():
-    #     raw_rocks = zarr.open(raw_rocks_zarr_path, mode='r')
-    #     raw_rocks = raw_rocks[:, 0, ...]
-    #     print(f"Rocks shape: {raw_rocks.shape}, dtype: {raw_rocks.dtype}")
-    #     viewer.add_image(raw_rocks, name='rocks', colormap='gray', blending='additive', scale=scale)
+    # if frag_zarr_path.exists():
+    #     fragments = zarr.open(frag_zarr_path, mode='r')
+    #     fragments = fragments['fragments'][:, ...]
+    #     print(f"Fragments shape: {fragments.shape}, dtype: {fragments.dtype}")
+    #     viewer.add_labels(fragments, name='fragments', scale=scale)
     # else:
-    #     print(f"Warning: Raw rocks path {raw_rocks_zarr_path} does not exist.")
-
-    if frag_zarr_path.exists():
-        fragments = zarr.open(frag_zarr_path, mode='r')
-        fragments = fragments['fragments'][:, ...]
-        print(f"Fragments shape: {fragments.shape}, dtype: {fragments.dtype}")
-        viewer.add_labels(fragments, name='fragments', scale=scale)
-    else:
-        print(f"Warning: Fragments path {frag_zarr_path} does not exist.")
-
-    # if rocks_seg_zarr_path.exists():
-    #     rocks_seg = zarr.open(rocks_seg_zarr_path, mode='r')
-    #     rocks_seg = rocks_seg['segmentations'][:, ...]
-    #     print(f"Rocks segmentation shape: {rocks_seg.shape}, dtype: {rocks_seg.dtype}")
-    #     viewer.add_labels(rocks_seg, name='rocks_seg', opacity=0.5, scale=scale)
-    # else:
-    #     print(f"Warning: Rocks segmentation path {rocks_seg_zarr_path} does not exist.")
+    #     print(f"Warning: Fragments path {frag_zarr_path} does not exist.")
 
     # if flow_2d_zarr_path.exists():
     #     flow_2d = zarr.open(flow_2d_zarr_path, mode='r')
@@ -106,8 +89,16 @@ def main(config, compute: bool = False):
     #     print(f"Warning: 3D flow path {flow_3d_zarr_path} does not exist.")
 
     # Load tracking data if it exists
-    track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_tracks.zarr')
-    gt_track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'correct_tracks.zarr')
+    if ground_truth:
+        print("Visualizing ground truth tracks.")
+        track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_tracks.zarr')
+        track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_seg.zarr')
+    else:
+        print("Visualizing predicted tracks.")
+        track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_tracks.zarr')
+        track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_seg.zarr')
+    if not track_seg_zarr_path.exists():
+        track_seg_zarr_path = None
 
     # Add the MainApp widget first
     widget = MainApp(viewer)
@@ -124,74 +115,34 @@ def main(config, compute: bool = False):
                 "y": "y",
                 "z": "z",
                 "id": "track_id",    # track_id stays constant across frames
-                "seg_id": "label",   # label is the unique segmentation ID at each timepoint
             }
-            
+
             tracks = import_from_geff(
                 track_data_zarr_path,
                 name_map,
                 segmentation_path=track_seg_zarr_path,
                 scale=scale,
             )
+
             # Add tracks to the TracksViewer
             tracks_viewer = TracksViewer.get_instance(viewer)
             tracks_viewer.tracks_list.add_tracks(tracks, dataset)
             print(f"Successfully loaded tracks: {tracks}")
             if tracks_viewer.tracking_layers.tracks_layer is not None:
                 tracks_viewer.tracking_layers.tracks_layer.tail_length = 4
-                tracks_viewer.tracking_layers.tracks_layer.tail_width = 1.0
+                tracks_viewer.tracking_layers.tracks_layer.tail_width = 2.0
                 tracks_viewer.tracking_layers.points_layer.visible = False
 
         except Exception as e:
             print(f"Failed to load tracks: {e}")
     else:
         print(f"Warning: Track data path {track_data_zarr_path} does not exist.")
-
-    if gt_track_data_zarr_path.exists():
-        print(f"Loading GT tracks from {gt_track_data_zarr_path}")
-        
-        # Load GT tracks using import_from_geff
-        try:
-            name_map = {
-                "time": "time",
-                "x": "x", 
-                "y": "y",
-                "z": "z",
-                "id": "track_id",
-            }
-            
-            gt_tracks = import_from_geff(
-                gt_track_data_zarr_path,
-                name_map,
-                scale=scale,
-            )
-            # Add GT tracks to the TracksViewer
-            tracks_viewer = TracksViewer.get_instance(viewer)
-            tracks_viewer.tracks_list.add_tracks(gt_tracks, "GT_" + dataset)
-            print(f"Successfully loaded GT tracks: {gt_tracks}")
-
-            if tracks_viewer.tracking_layers.tracks_layer is not None:
-                tracks_viewer.tracking_layers.tracks_layer.tail_length = 4
-                tracks_viewer.tracking_layers.tracks_layer.tail_width = 1.0
-                tracks_viewer.tracking_layers.points_layer.visible = False
-
-        except Exception as e:
-            print(f"Failed to load GT tracks: {e}")
-    else:
-        print("No ground truth tracks available.")
-
-    # if track_seg_zarr_path.exists():
-    #     track_seg = zarr.open(track_seg_zarr_path, mode='r')
-    #     track_seg = track_seg[:]
-    #     print(f"Tracked segmentation shape: {track_seg.shape}, dtype: {track_seg.dtype}")
-    #     viewer.add_labels(track_seg, name='track_seg', opacity=0.5, scale=scale)
-    # else:
-    #     print(f"Warning: Track segmentation path {track_seg_zarr_path} does not exist.")
       
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\01_cells\\2026-03-02_17-49-39\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\01_cells\\2026-03-16_16-23-04\\config.toml"
+    # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\03_nuclei\\2026-03-11_17-40-24\\config.toml"
     # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
     track_config = toml.load(path_to_config)
-    main(track_config, compute=False)
+    main(track_config, ground_truth=True)

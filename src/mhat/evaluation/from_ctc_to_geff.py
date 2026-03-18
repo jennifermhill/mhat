@@ -77,7 +77,7 @@ def from_ctc_to_geff(
     }
 
     segm_array = None
-    node_id = 0
+    node_id = 1
 
     sorted_files = sorted(ctc_path.glob("*.tif"))
     n_1_padding: tuple[int, ...] = ()
@@ -165,8 +165,6 @@ def from_ctc_to_geff(
         axis_names = axes
         scale = {a.name: a.scale for a in axes if a.scale is not None}
 
-    print(f"Scale: {scale}, Axes: {axis_names}")
-
     for coord in ("x", "y", "z"):
         if coord in node_props and coord in scale:
             node_props[coord] = [
@@ -196,8 +194,6 @@ def from_ctc_to_geff(
         if seg_path is not None:
             rel_path = os.path.relpath(seg_path, geff_path)
             rel_objs = [RelatedObject(type="labels", path=rel_path, label_prop="track_id")]
-    print(f"Node IDs: {node_ids}")
-    print(f"Node properties: {node_props}")
     write_arrays(
         geff_store=geff_path,
         node_ids=node_ids,

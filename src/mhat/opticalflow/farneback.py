@@ -11,7 +11,7 @@ from mhat.opticalflow.utils import enhance_contrast_AHE
 def compute_farneback_flow_2d(config, zarr_img, output_zarr):
     T, Z, Y, X = zarr_img.shape
 
-    # Check if Y or X dims are odd, and pad if so
+    # Check if Y, or X dims are odd, and pad if so
     pad_y = 0
     pad_x = 0
     if Y % 2 != 0:
@@ -20,7 +20,6 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
         pad_x = 1
     if pad_y != 0 or pad_x != 0:
         zarr_img = da.pad(zarr_img, ((0,0),(0,0),(0,pad_y),(0,pad_x)), mode='edge')
-        T, Z, Y, X = zarr_img.shape
 
     ds_factor = config.get('downsample_factor', 1)
 
@@ -82,9 +81,12 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
             
             # Unpad if necessary
             if pad_y != 0 or pad_x != 0:
-                flow = flow[:Y - pad_y, :X - pad_x, :]
+                flow = flow[:Y, :X, :]
 
             output_zarr['flow_raw'][i-1, z_slice, ...] = flow.astype(np.float32)
+
+    # Add empty flow for the last frame (since we compute flow between pairs of frames)
+    output_zarr['flow_raw'][-1, ...] = np.zeros((Z, Y, X, 2), dtype=np.float32)
 
     return output_zarr['flow_raw']  # return the computed flow dataset
 
@@ -181,5 +183,9 @@ def compute_farneback_flow_3d(config, zarr_img, output_zarr):
 
         output_zarr['flow_raw'][i-1] = flow.astype(np.float32)
         output_zarr['confidence'][i-1] = confidence_np.astype(np.float32)
+
+    # Add empty flow and confidence for the last frame (since we compute flow between pairs of frames)
+    output_zarr['flow_raw'][-1] = np.zeros((Z, Y, X, 3), dtype=np.float32)
+    output_zarr['confidence'][-1] = np.zeros((Z, Y, X), dtype=np.float32)
 
     return output_zarr['flow_raw']

@@ -137,12 +137,21 @@ def main(config, ground_truth: bool = False):
             print(f"Failed to load tracks: {e}")
     else:
         print(f"Warning: Track data path {track_data_zarr_path} does not exist.")
+
+    # Check for matching cell segmentation in tracking result
+    cell_seg_path = track_data_zarr_path.parent / "pred_cell_seg.zarr"
+    if cell_seg_path.exists():
+        print(f"Found associated cell segmentation at {cell_seg_path}, adding to viewer...")
+        cell_seg = zarr.open(cell_seg_path, mode='r')[:]
+        viewer.add_labels(cell_seg, name='predicted_cell_segmentation', scale=scale)
+    else:
+        print(f"No associated cell segmentation found at {cell_seg_path}.")
       
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\01_cells\\2026-03-16_16-23-04\\config.toml"
-    # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\03_nuclei\\2026-03-11_17-40-24\\config.toml"
+    # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\01_cells\\2026-03-16_16-23-04\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\02_nuclei\\2026-03-24_16-47-30\\config.toml"
     # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
     track_config = toml.load(path_to_config)
-    main(track_config, ground_truth=True)
+    main(track_config, ground_truth=False)

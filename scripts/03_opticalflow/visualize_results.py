@@ -4,7 +4,6 @@ import toml
 import napari
 import zarr
 import dask.array as da
-from mhat.opticalflow.visualization import generate_flow_frames
 
 def main(config, compute: bool = False):
     experiment = config["experiment"]
@@ -40,6 +39,8 @@ def main(config, compute: bool = False):
 
         path_to_flow_frames_2d = path_to_2d / "flow_frames_XY"
         if not path_to_flow_frames_2d.exists(): 
+            from mhat.opticalflow.visualization import generate_flow_frames
+
             print(f"Flow frames path does not exist. Creating at: {path_to_2d / 'flow_frames_XY'}")
             flow_zarr = zarr.open(path_to_2d, mode='a')
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
@@ -58,6 +59,8 @@ def main(config, compute: bool = False):
 
         path_to_flow_frames_3d_XY = path_to_3d / "flow_frames_XY"
         if not path_to_flow_frames_3d_XY.exists(): 
+            from mhat.opticalflow.visualization import generate_flow_frames
+
             print(f"Flow frames path does not exist. Creating at: {path_to_3d / 'flow_frames_XY'}")
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
         flow_frames_3d_XY = da.from_zarr(path_to_flow_frames_3d_XY)
@@ -88,6 +91,8 @@ def main(config, compute: bool = False):
 
         path_to_flow_frames_lk = path_to_lk / "flow_frames_XY"
         if not path_to_flow_frames_lk.exists(): 
+            from mhat.opticalflow.visualization import generate_flow_frames
+            
             print(f"Flow frames path does not exist. Creating at: {path_to_lk / 'flow_frames_XY'}")
             flow_zarr = zarr.open(path_to_lk, mode='a')
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)

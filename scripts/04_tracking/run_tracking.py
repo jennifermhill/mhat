@@ -217,7 +217,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         # TODO: Also try saving as related objects in geff format instead of separate zarr
         cell_seg_zarr_path = output_dir / "pred_cell_seg.zarr"
         # TODO: Might need to remove this if it gets properly added as a related object
-        solution_seg = utils.map_seg_to_track_ids(solution_graph, solution_seg)
+        cell_seg = utils.map_seg_to_track_ids(solution_graph, cell_seg)
         output_cell_zarr_root = zarr.open(cell_seg_zarr_path, mode="a", shape=cell_seg.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
         if axes is not None:
             output_cell_zarr_root.attrs["axes"] = axes

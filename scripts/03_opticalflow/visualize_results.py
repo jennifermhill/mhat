@@ -4,7 +4,6 @@ import toml
 import napari
 import zarr
 import dask.array as da
-from mhat.opticalflow.visualization import generate_flow_frames
 
 def main(config, compute: bool = False):
     experiment = config["experiment"]
@@ -40,6 +39,7 @@ def main(config, compute: bool = False):
 
         path_to_flow_frames_2d = path_to_2d / "flow_frames_XY"
         if not path_to_flow_frames_2d.exists(): 
+            from mhat.opticalflow.visualization import generate_flow_frames
             print(f"Flow frames path does not exist. Creating at: {path_to_2d / 'flow_frames_XY'}")
             flow_zarr = zarr.open(path_to_2d, mode='a')
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
@@ -88,6 +88,7 @@ def main(config, compute: bool = False):
 
         path_to_flow_frames_lk = path_to_lk / "flow_frames_XY"
         if not path_to_flow_frames_lk.exists(): 
+            from mhat.opticalflow.visualization import generate_flow_frames
             print(f"Flow frames path does not exist. Creating at: {path_to_lk / 'flow_frames_XY'}")
             flow_zarr = zarr.open(path_to_lk, mode='a')
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
@@ -105,6 +106,6 @@ def main(config, compute: bool = False):
 
 
 if __name__ == "__main__":
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\Fluo-C3DL-MDA231\\01_cells\\opticalflow_2d\\2026-02-17_15-55-00\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-Fl2mSiH2B\\03_nuclei\\opticalflow_lucaskanade\\2026-03-24_17-16-56\\config.toml"
     config = toml.load(path_to_config)
     main(config, compute=True)

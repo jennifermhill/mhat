@@ -133,12 +133,13 @@ def nodes_from_fragments(
 ) -> tuple[nx.DiGraph, list[tuple]]:
     """Compute the nodes of a candidate graph from a set of fragments and a
     merge history.
-    Also defines two costs on each node:
-        "cohesion": LC , where LC is the cost of the last merge used to
-            create this node. Cohesion is 0 if the node is a fragment. (Higher is better)
-        "adhesion": 1 - NC, where NC is the cost of the next merge with this node
-            as a child,. Adhesion is 0.5 if the node is never merged with anything else
-            in the history. (Higher is better)
+    Also defines two scores on each node:
+        "cohesion": 1 - LC, where LC is the normalized cost of the last merge
+            used to create this node. Low previous merge cost → high cohesion.
+            Fragments (no merge) get cohesion = 1. (Higher is more favorable)
+        "adhesion": NC, where NC is the normalized cost of the next merge with
+            this node as a child. High next merge cost → high adhesion.
+            Top-level merges (no next merge) get adhesion = 1. (Higher is more favorable)
     Also calculates average flow in segment for each node if flow is provided.
         If both 2D and 3D flow are provided, uses 2D flow for XY motion and 
         3D flow for Z motion.
@@ -219,10 +220,10 @@ def nodes_from_fragments(
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)
 
     for node in graph.nodes():
-        cohesion_cost = last_costs.get(node, 0.0)
-        adhesion_cost = 1 - next_costs.get(node, 0.5)
-        graph.nodes[node]["cohesion"] = cohesion_cost
-        graph.nodes[node]["adhesion"] = adhesion_cost
+        cohesion = 1 - last_costs.get(node, 0.0)
+        adhesion = next_costs.get(node, 1.0)
+        graph.nodes[node]["cohesion"] = cohesion
+        graph.nodes[node]["adhesion"] = adhesion
         graph.nodes[node]["num_leaves"] = leaf_counts.get(node, 1)
 
     exclusion_sets = []

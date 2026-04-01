@@ -51,7 +51,7 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path, ctc_dir: Path):
+def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path):
 
     raw_zarr_path = raw_dir
     seg_zarr_path = seg_dir / "data.zarr"
@@ -248,4 +248,4 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, ctc_dir)
+    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir)

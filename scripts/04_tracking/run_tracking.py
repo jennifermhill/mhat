@@ -16,6 +16,7 @@ from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
 from mhat.tracking.tracks_io import save_tracks_to_csv
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
+
 def get_solution_seg(fragments, merge_history, solution_graph):
     solution_seg = np.zeros_like(fragments)
 
@@ -51,18 +52,16 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_dir_3d: Path, output_dir: Path, ctc_dir: Path):
+def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path):
 
     raw_zarr_path = raw_dir
     seg_zarr_path = seg_dir / "data.zarr"
-    flow_2d_zarr_path = flow_dir_2d / "flow.zarr" if flow_dir_2d is not None else None
-    flow_3d_zarr_path = flow_dir_3d / "flow.zarr" if flow_dir_3d is not None else None
+    flow_2d_zarr_path = flow_dirs["2d"] / "flow.zarr" if flow_dirs["2d"] is not None else None
+    flow_3d_zarr_path = flow_dirs["3d"] / "flow.zarr" if flow_dirs["3d"] is not None else None
     output_seg_path = output_dir / "pred_seg.zarr"
     merge_history_csv_path = seg_dir / "merge_history.csv"
     normalized_merge_history_csv_path = output_dir / "normalized_merge_history.csv"
     config_filepath = output_dir / "config.toml"
-    output_filepath_csv = output_dir / "pred_tracks.csv"
-    output_filepath_graphml = output_dir / "pred_tracks.graphml"
     output_filepath_geff = output_dir / "pred_tracks.zarr"
 
     with open(config_filepath, "w") as config_file:
@@ -167,12 +166,16 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_d
     utils.add_area_diff_attr(track_graph)
     utils.add_intensity_diff_attr(track_graph)
 
+    # Save candidate edge list for analysis
+    cand_edges_path = output_dir / "candidate_edges.npy"
+    cand_edge_list = np.array([(e[0], e[1]) for e in track_graph.edges], dtype=np.int64)
+    np.save(cand_edges_path, cand_edge_list)
+    print(f"Saved {len(cand_edge_list)} candidate edges to {cand_edges_path}")
+
     print("Solving tracking with motile...")
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets)
 
     print("Saving results...")
-
-    save_tracks_to_csv(solution_graph, output_filepath_csv)
  
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
     assign_tracklet_ids(solution_graph)
@@ -192,12 +195,13 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dir_2d: Path, flow_d
                                  node_props_metadata={},
                                  edge_props_metadata={},
                                  )
-    geff.write(solution_graph, 
-               output_filepath_geff, 
-               axis_names=["time", "z", "y", "x"], 
-               axis_types=["time", "space", "space", "space"], 
-               axis_scales=scale, 
-               metadata=metadata)
+    geff.write(solution_graph,
+               output_filepath_geff,
+               axis_names=["time", "z", "y", "x"],
+               axis_types=["time", "space", "space", "space"],
+               axis_scales=scale,
+               metadata=metadata,
+               overwrite=True)
     
 
 if __name__ == "__main__":
@@ -225,29 +229,31 @@ if __name__ == "__main__":
 
     flow_result = config.get("flow_result", None)
     if flow_result is not None:
-        flow_dir_2d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / config["flow_result"]
-        flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / config["flow_result"]
-        if not flow_dir_2d.is_dir():
-            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
+        if config["use_lk"]:
+            flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_lucaskanade" / flow_result
+            assert flow_dir_3d.is_dir(), f"Optical flow directory {flow_dir_3d} is missing"
             flow_dir_2d = None
         else:
-            print(f"Loading 2D optical flow data from {flow_dir_2d}")
-            assert flow_dir_2d.is_dir(), f"2D optical flow data directory {flow_dir_2d} is missing"
-        print(f"Loading 3D optical flow data from {flow_dir_3d}")
-        assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
+            flow_dir_2d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / config["flow_result"]
+            flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / config["flow_result"]
+            if not flow_dir_2d.is_dir():
+                print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
+                flow_dir_2d = None
+            else:
+                print(f"Loading 2D optical flow data from {flow_dir_2d}")
+                assert flow_dir_2d.is_dir(), f"2D optical flow data directory {flow_dir_2d} is missing"
+            print(f"Loading 3D optical flow data from {flow_dir_3d}")
+            assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
+        flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
     else:
-        flow_dir_2d = None
-        flow_dir_3d = None
+        flow_dirs = {"2d": None, "3d": None}
 
     current_datetime = datetime.datetime.now()
     exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
     config["exp_uid"] = exp_uid
 
-    output_dir = output_base_dir / "tracking" / experiment / dataset / exp_uid
+    output_dir = output_base_dir / "tracking" / experiment / dataset / "test_run"
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    ctc_dir = raw_base_dir.parent / "ctc" / "train" / experiment / dataset / exp_uid / "01_RES"
-    ctc_dir.mkdir(parents=True, exist_ok=True)
-
-    run_tracking(config, raw_dir, seg_dir, flow_dir_2d, flow_dir_3d, output_dir, ctc_dir)
+    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir)

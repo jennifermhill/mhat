@@ -1,4 +1,5 @@
 import json
+import shutil
 import argparse
 from pathlib import Path
 
@@ -14,12 +15,6 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
 
     gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
     pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
-    pred_segmentation_path = pred_data_dir / "pred_seg.zarr"
-    if pred_segmentation_path.is_dir():
-        pred_segmentation = zarr.open(pred_segmentation_path)
-    else:
-        print(f"Warning: Predicted segmentation zarr not found at {pred_segmentation_path}")
-        pred_segmentation = None
 
     (pred_graph, pred_metadata) = geff.read(pred_tracks_path)
 
@@ -35,14 +30,10 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
                 axes=axes,
             )
 
-    (gt_graph, gt_metadata) = geff.read(gt_tracks_path)
-
     results = evaluate_tracking(
         config,
-        gt_graph, 
-        pred_graph, 
-        gt_segmentation=None,
-        pred_segmentation=None,
+        gt_data_dir,
+        pred_data_dir,
     )
 
     track_metrics = {}
@@ -70,7 +61,7 @@ if __name__ == "__main__":
     gt_data_dir = input_base_dir / "tracking" / experiment / dataset
     assert gt_data_dir.is_dir(), f"GT data dir {gt_data_dir} is missing"
 
-    pred_data_dir = input_base_dir / "tracking" / experiment / dataset / config["track_result"]
+    pred_data_dir = input_base_dir / "tracking" / experiment / dataset / "test_run"
     assert pred_data_dir.is_dir(), f"Pred data dir {pred_data_dir} is missing"
 
     output_dir = output_base_dir / "evaluation" / experiment / dataset / config["track_result"]
@@ -80,3 +71,7 @@ if __name__ == "__main__":
     tracksfile = output_dir / "track_metrics.json"
     with open(tracksfile, 'w') as f:
         json.dump(track_metrics, f)
+
+    tracking_config = pred_data_dir / "config.toml"
+    if tracking_config.is_file():
+        shutil.copy2(tracking_config, output_dir / "tracking_config.toml")

@@ -14,7 +14,7 @@ def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
     nuclei and granules with high signal intensity on low-intensity background.
 
     Args:
-        image (np.ndarrray): _description_
+        image (np.ndarrray): Input image.
         spot_sigma (float, optional): Controls how close detected cells can be by
             smoothing before detecting local maxima to use as watershed seeds.
             Defaults to 2.

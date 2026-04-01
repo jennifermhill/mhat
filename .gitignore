@@ -1,5 +1,6 @@
 *.png
 *.ipynb
+/.claude
 /data
 /experiments
 

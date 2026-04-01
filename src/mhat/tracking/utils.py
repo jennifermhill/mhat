@@ -123,9 +123,7 @@ def add_cand_edges(
         max_edge_distance (float): Maximum distance that objects can travel between
             frames. All nodes within this distance in adjacent frames will by connected
             with a candidate edge.
-        node_frame_dict (dict[int, list[Any]] | None, optional): A mapping from frames
-            to node ids. If not provided, it will be computed from cand_graph. Defaults
-            to None.
+        max_children (int): Maximum number of candidate edges per node to the next frame.
     """
     node_frame_dict = _compute_node_frame_dict(cand_graph)
 
@@ -178,25 +176,10 @@ def relabel_segmentation(
             id with shape (t,1,[z],y,x)
     """
     tracked_masks = np.zeros_like(segmentation)
-    id_counter = 1
-    parent_nodes = [n for (n, d) in solution_nx_graph.out_degree() if d > 1]
-    child_nodes = [n for (n, d) in solution_nx_graph.in_degree() if d > 1]
-    soln_copy = solution_nx_graph.copy()
-    for parent_node in parent_nodes:
-        out_edges = solution_nx_graph.out_edges(parent_node)
-        soln_copy.remove_edges_from(out_edges)
-    for child_node in child_nodes:
-        in_edges = solution_nx_graph.in_edges(child_node)
-        for in_edge in in_edges:
-            if soln_copy.has_edge(in_edge[0], in_edge[1]):
-                soln_copy.remove_edge(in_edge[0], in_edge[1])
-    for node_set in nx.weakly_connected_components(soln_copy):
-        for node in node_set:
-            time_frame = solution_nx_graph.nodes[node]["time"]
-            previous_seg_id = node
-            previous_seg_mask = segmentation[time_frame] == previous_seg_id
-            tracked_masks[time_frame][previous_seg_mask] = id_counter
-        id_counter += 1
+    for node, data in solution_nx_graph.nodes(data=True):
+        time_frame = data["time"]
+        track_id = data["track_id"]
+        tracked_masks[time_frame][segmentation[time_frame] == node] = track_id
     return tracked_masks
 
 

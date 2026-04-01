@@ -1,0 +1,22 @@
+# IO
+input_base_dir = "Y:\\jennifer\\mhat\\experiments\\"
+output_base_dir = "Y:\\jennifer\\mhat\\experiments\\"
+experiment = "NC281-Fl2mSiH2B"
+dataset = "03_nuclei"
+flow_result = "3d"
+exp_uid = "2026-03-24_17-16-56"
+
+# Metadata
+xy_scale = 0.65
+z_scale = 2.110045248868777
+t_scale = 1
+
+# Thresholding
+confidence_percentile = 85
+
+# Visualization
+z_slice = 2
+gap = 3
+
+# Movie settings
+fps = 5

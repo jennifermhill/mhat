@@ -14,6 +14,7 @@ def main(config, ground_truth: bool = False):
 
     experiment = config["experiment"]
     dataset = config["dataset"]
+    dataset_fl2 = dataset.replace("nuclei", "cells") if "nuclei" in dataset else None
     exp_uid = config["exp_uid"]
     seg_result = config["seg_result"]
     flow_result = config.get("flow_result", "")
@@ -35,6 +36,7 @@ def main(config, ground_truth: bool = False):
         tracking_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/experiments/tracking")
 
     raw_cells_zarr_path = Path(input_base_dir / experiment / f"{dataset}.zarr")
+    raw_cells_fl2_zarr_path = Path(input_base_dir / experiment / f"{dataset_fl2}.zarr") if dataset_fl2 else None
     frag_zarr_path = Path(seg_base_dir / experiment / dataset / seg_result / 'data.zarr')
     flow_2d_zarr_path = Path(flow_base_dir / experiment / dataset / "opticalflow_2d" / flow_result / "flow.zarr") 
     flow_3d_zarr_path = Path(flow_base_dir / experiment / dataset / "opticalflow_3d" / flow_result / "flow.zarr") 
@@ -59,6 +61,12 @@ def main(config, ground_truth: bool = False):
         print(f"Warning: Raw cells path {raw_cells_zarr_path} does not exist.")
         print("Defaulting scale to [1.0, 1.0, 1.0, 1.0]")
         scale = [1.0, 1.0, 1.0, 1.0]
+
+    if raw_cells_fl2_zarr_path and raw_cells_fl2_zarr_path.exists():
+        raw_cells_fl2 = zarr.open(raw_cells_fl2_zarr_path, mode='r')
+        raw_cells_fl2 = raw_cells_fl2[:, 0, ...]
+        print(f"Raw FL2 shape: {raw_cells_fl2.shape}, dtype: {raw_cells_fl2.dtype}")
+        viewer.add_image(raw_cells_fl2, name='raw_FL2', colormap='magenta', blending='additive', scale=scale)
 
     # if frag_zarr_path.exists():
     #     fragments = zarr.open(frag_zarr_path, mode='r')
@@ -92,13 +100,13 @@ def main(config, ground_truth: bool = False):
     if ground_truth:
         print("Visualizing ground truth tracks.")
         track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_tracks.zarr')
-        track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_seg.zarr')
     else:
         print("Visualizing predicted tracks.")
         track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_tracks.zarr')
         track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_seg.zarr')
     if not track_seg_zarr_path.exists():
         track_seg_zarr_path = None
+    gt_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_seg.zarr')
 
     # Add the MainApp widget first
     widget = MainApp(viewer)
@@ -133,6 +141,11 @@ def main(config, ground_truth: bool = False):
                 tracks_viewer.tracking_layers.tracks_layer.tail_width = 2.0
                 tracks_viewer.tracking_layers.points_layer.visible = False
 
+            if gt_seg_zarr_path.exists():
+                gt_seg = zarr.open(gt_seg_zarr_path, mode='r')
+                print(f"Successfully loaded segmentation for tracks from {track_seg_zarr_path}")
+                viewer.add_labels(gt_seg[:, ...], name='GT Segmentation', opacity=0.5, scale=scale)
+
         except Exception as e:
             print(f"Failed to load tracks: {e}")
     else:
@@ -141,8 +154,8 @@ def main(config, ground_truth: bool = False):
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\01_cells\\2026-03-16_16-23-04\\config.toml"
-    # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\03_nuclei\\2026-03-11_17-40-24\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-sparse-label\\01_nuclei_denoised\\2026-04-01_12-00-51\\config.toml"
+    # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\02_nuclei\\2026-03-24_17-02-10\\config.toml"
     # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
     track_config = toml.load(path_to_config)
-    main(track_config, ground_truth=True)
+    main(track_config, ground_truth=False)

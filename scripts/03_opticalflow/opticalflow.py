@@ -31,15 +31,28 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
     output_zarr = zarr.open(output_dir / 'flow.zarr', 'w')
 
     if do_3d:
-        output_zarr.create_dataset('flow_raw', shape=(T-1, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
-        output_zarr.create_dataset('confidence', shape=(T-1, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
+        output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
+        output_zarr.create_dataset('confidence', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
         flow_function = compute_farneback_flow_3d
     elif do_lk:
-        output_zarr.create_dataset('flow_raw', shape=(T-1, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
+        output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
+        output_zarr.create_dataset('confidence', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
         flow_function = compute_lucaskanade_flow_3d
     else:
-        output_zarr.create_dataset('flow_raw', shape=(T-1, Z, Y, X, 2), chunks=(1, 1, Y, X, 2), dtype=np.float32)
+        output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 2), chunks=(1, 1, Y, X, 2), dtype=np.float32)
         flow_function = compute_farneback_flow_2d
+
+    flow = flow_function(config, zarr_img, output_zarr)
+    
+    frame_averaging = config['hyperparams'].get('frame_averaging', 0)
+    if frame_averaging > 0:
+        frame_average(flow_zarr=output_zarr, frame_avg=frame_averaging)
+
+    generate_flow_frames(flow_zarr=output_zarr, color_wheel=True)
+
+    if do_3d or do_lk:
+        output_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
+        output_zarr['flow_frames_Z'][:] = flow[..., 2]
 
     flow = flow_function(config, zarr_img, output_zarr)
     

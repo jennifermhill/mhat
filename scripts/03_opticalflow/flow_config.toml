@@ -45,17 +45,10 @@ frame_averaging = 3
 
 # lucas kanade parameters
 [lucaskanade]
-do_lucaskanade = true
-pyr_scale = 0.8
-levels = 3
-winsize = 9
-iterations = 8
-tau = 1.5
-alpha = 1.5
-filter_type = "gaussian"
-presmoothing = 0.1
+do_lucaskanade = false
+xyz_sig = 5
+z_sig = 1
+w_sig = 8
+t_sig = 1
 [lucaskanade.hyperparams]
-enhance_contrast = true
-temporal_smoothing = true
-temporal_smoothing_sigma = 0.7
-frame_averaging = 3
+enhance_contrast = false

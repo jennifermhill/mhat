@@ -61,9 +61,13 @@ def nodes_from_segmentation(
         intensity = np.mean(region_raw)
         if flow_3d is not None:
             if flow_2d is not None:
-                flow = (np.mean(flow_3d[region][:, 2]), np.mean(flow_2d[region][:, 1]), np.mean(flow_2d[region][:, 0]))
+                flow = (float(np.mean(flow_3d[region][:, 2]) * scale[1]),
+                        float(np.mean(flow_2d[region][:, 1]) * scale[2]),
+                        float(np.mean(flow_2d[region][:, 0]) * scale[3]))
             else:
-                flow = (np.mean(flow_3d[region][:, 2]), np.mean(flow_3d[region][:, 1]), np.mean(flow_3d[region][:, 0]))
+                flow = (float(np.mean(flow_3d[region][:, 2]) * scale[1]),
+                        float(np.mean(flow_3d[region][:, 1]) * scale[2]),
+                        float(np.mean(flow_3d[region][:, 0]) * scale[3]))
         else:
             flow = 0
         attrs = {

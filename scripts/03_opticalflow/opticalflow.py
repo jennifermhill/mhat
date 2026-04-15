@@ -31,7 +31,6 @@ def get_axes_metadata(zarr_root):
 
 def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = False, do_lk: bool = False):
     '''
-    # TODO: add axes scale to .zattrs metadata
     config: dictionary of configuration parameters
     zarr_path: path to zarr directory containing .zarray
     output_dir: directory to save output optical flow zarr

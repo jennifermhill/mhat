@@ -51,7 +51,41 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path):
+def segment_cells_from_nuclei(raw_cell_img, solution_seg):
+    # Use watershed to segment cells from nuclei centroids as seeds
+    from skimage.segmentation import watershed
+    from skimage.measure import regionprops
+    from skimage.filters import gaussian
+    from skimage.filters import threshold_otsu
+
+    cell_seg = np.zeros_like(solution_seg)
+    for t in range(solution_seg.shape[0]):
+        cell_img = raw_cell_img[t]
+        nuclei_labels_img = solution_seg[t]
+
+        nuclei_props = regionprops(nuclei_labels_img)
+        centroids = np.array([prop.centroid for prop in nuclei_props]).astype(int)
+        labels = np.array([prop.label for prop in nuclei_props])
+
+        # Blur and threshold the raw cell image to get a binary mask
+        blurred = gaussian(cell_img, sigma=1)
+        threshold = threshold_otsu(blurred)
+        binary_mask = blurred > threshold
+
+        # Build marker array from centroids, dropping any outside the mask
+        markers = np.zeros_like(nuclei_labels_img)
+        for centroid, label in zip(centroids, labels):
+            coord = tuple(centroid)
+            if binary_mask[coord]:
+                markers[coord] = label
+
+        # Expand evenly from seeds (Voronoi partition within mask)
+        cell_seg[t] = watershed(np.zeros_like(cell_img), markers, mask=binary_mask)
+
+    return cell_seg
+
+
+def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path, raw_cell_dir: Path = None):
 
     raw_zarr_path = raw_dir
     seg_zarr_path = seg_dir / "data.zarr"
@@ -169,10 +203,27 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets)
 
     print("Saving results...")
- 
+
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
+ 
     assign_tracklet_ids(solution_graph)
-    # solution_seg = utils.relabel_segmentation(solution_graph, solution_seg)
+
+    # Check for associated cell channel in data_dir
+    if raw_cell_dir is not None:
+        raw_cell_img = zarr.open(raw_cell_dir)[:, 0, ...]
+        cell_seg = segment_cells_from_nuclei(raw_cell_img, solution_seg)
+        utils.add_camp_signal_attr(solution_graph, raw_cell_img, cell_seg)
+        # Save the cell segmentation as well
+        # TODO: Also try saving as related objects in geff format instead of separate zarr
+        cell_seg_zarr_path = output_dir / "pred_cell_seg.zarr"
+        # TODO: Might need to remove this if it gets properly added as a related object
+        cell_seg = utils.map_seg_to_track_ids(solution_graph, cell_seg)
+        output_cell_zarr_root = zarr.open(cell_seg_zarr_path, mode="a", shape=cell_seg.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
+        if axes is not None:
+            output_cell_zarr_root.attrs["axes"] = axes
+        output_cell_zarr_root[:] = cell_seg
+
+
     output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
     if axes is not None:
         output_zarr_root.attrs["axes"] = axes
@@ -218,6 +269,17 @@ if __name__ == "__main__":
     seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
     print(f"Loading segmentation data from {seg_dir}")
     assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
+    if "nuclei" in dataset.lower():
+        # Check for associated cell channel in data_dir
+        raw_cell_dir = raw_dir.parent / f"{dataset.replace('nuclei', 'cells')}.zarr"
+        if raw_cell_dir.is_dir():
+            print(f"Found associated cell channel data at {raw_cell_dir}, will calculate cell features...")
+        else:
+            raw_cell_dir = None
+    else:
+        raw_cell_dir = None
+    if raw_cell_dir is None:
+        print("No associated cell channel data found.")
 
     flow_result = config.get("flow_result", None)
     if flow_result is not None:
@@ -248,4 +310,4 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir)
+    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, raw_cell_dir)

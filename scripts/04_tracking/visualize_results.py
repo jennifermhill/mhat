@@ -150,6 +150,15 @@ def main(config, ground_truth: bool = False):
             print(f"Failed to load tracks: {e}")
     else:
         print(f"Warning: Track data path {track_data_zarr_path} does not exist.")
+
+    # Check for matching cell segmentation in tracking result
+    cell_seg_path = track_data_zarr_path.parent / "pred_cell_seg.zarr"
+    if cell_seg_path.exists():
+        print(f"Found associated cell segmentation at {cell_seg_path}, adding to viewer...")
+        cell_seg = zarr.open(cell_seg_path, mode='r')[:]
+        viewer.add_labels(cell_seg, name='predicted_cell_segmentation', scale=scale)
+    else:
+        print(f"No associated cell segmentation found at {cell_seg_path}.")
       
     napari.run()
 

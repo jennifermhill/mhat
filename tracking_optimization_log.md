@@ -728,3 +728,326 @@ Verdict: Slightly worse — too much edge encouragement.
 Hypothesis: "Higher appear cost discourages track fragmentation"
 TRA: 0.880, DET: 0.884, LNK: 0.853, fp: 102, fn: 29, fn_edges: 48
 Verdict: Identical — appear/disappear has no effect in [150, 300] range.
+
+---
+
+## Post Cohesion/Adhesion Fix Optimization (2026-04-03)
+
+New segmentation (seg_result=2026-04-03_11-09-49) with fixed cohesion/adhesion calculations (commit 4eae562). With the new code, positive cohesion_weight encourages merged fragments and negative adhesion_weight encourages standalone confidence. Previous cellpose best (coh=-4000, adh=0) no longer applies.
+
+Base config: drift_w=57, drift_c=-2000, area_w=1730, area_c=-1500, coh=2000, appear/disappear=200. Exploring adhesion_weight and cohesion_weight.
+
+### PF-B1R1: coh=2000, adh=-1200
+exp_uid: 2026-04-03_11-21-08
+Hypothesis: "Strong adhesion encouragement with moderate cohesion, post cohesion/adhesion fix"
+TRA: 0.872, DET: 0.883, LNK: 0.797, fp: 92, fn: 26, ns: 15, fn_edges: 66
+Verdict: High DET but LNK suffers — ns=15 is concerning, suggests too many node swaps.
+
+### PF-B1R2: coh=2000, adh=-800
+exp_uid: 2026-04-03_11-25-46
+Hypothesis: "Moderate adhesion may balance DET and LNK better"
+TRA: 0.879, DET: 0.887, LNK: 0.824, fp: 93, fn: 27, ns: 10, fn_edges: 57
+Verdict: Strong result — good balance of DET and LNK.
+
+### PF-B1R3: coh=2000, adh=-500
+exp_uid: 2026-04-03_11-28-58
+Hypothesis: "Weaker adhesion — does it help LNK further?"
+TRA: 0.875, DET: 0.881, LNK: 0.833, fp: 99, fn: 30, ns: 7, fn_edges: 54
+Verdict: LNK improves but DET drops — adhesion encourages good node selection.
+
+### PF-B1R4: coh=3000, adh=-1200
+exp_uid: 2026-04-03_11-32-04
+Hypothesis: "Stronger cohesion with strong adhesion"
+TRA: 0.847, DET: 0.858, LNK: 0.768, fp: 68, fn: 36, ns: 18, fn_edges: 76
+Verdict: Falsified — coh=3000 is too strong. fp drops but fn and ns spike, LNK tanks.
+
+### PF-B1R5: coh=3000, adh=-800
+exp_uid: 2026-04-03_11-34-59
+Hypothesis: "Stronger cohesion with moderate adhesion"
+TRA: 0.775, DET: 0.782, LNK: 0.723, fp: 54, fn: 68, ns: 12, fn_edges: 91
+Verdict: Falsified — coh=3000 without strong adhesion is much worse. Massive fn increase.
+
+### PF-B2R1: coh=2000, adh=-1000
+exp_uid: 2026-04-03_11-37-48
+Hypothesis: "Split the difference between adh=-800 and adh=-1200 for optimal balance"
+TRA: 0.879, DET: 0.887, LNK: 0.821, fp: 95, fn: 26, ns: 11, fn_edges: 58
+Verdict: **Best overall** — ties adh=-800 on TRA/DET, slightly lower LNK but fewer fp and fn.
+
+### PF-B2R2: coh=2000, adh=-900
+exp_uid: 2026-04-03_11-42-59
+Hypothesis: "Fine-tuning adhesion between -800 and -1000"
+TRA: 0.879, DET: 0.887, LNK: 0.824, fp: 93, fn: 27, ns: 10, fn_edges: 57
+Verdict: Identical to adh=-800 — solution quantized in [-800, -900] range.
+
+### PF-B2R3: coh=2000, adh=-700
+exp_uid: 2026-04-03_11-45-58
+Hypothesis: "Slightly weaker adhesion"
+TRA: 0.873, DET: 0.879, LNK: 0.827, fp: 100, fn: 30, ns: 8, fn_edges: 56
+Verdict: Slightly worse TRA/DET — adh=-700 not strong enough.
+
+### PF-B2R4: coh=2000, adh=-600
+exp_uid: 2026-04-03_11-48-53
+Hypothesis: "Even weaker adhesion"
+TRA: 0.875, DET: 0.881, LNK: 0.833, fp: 99, fn: 30, ns: 7, fn_edges: 54
+Verdict: Same as adh=-500 — LNK peaks but DET drops.
+
+### PF-B2R5: coh=2000, adh=-650
+exp_uid: 2026-04-03_11-51-45
+Hypothesis: "Fine grid between -600 and -700"
+TRA: 0.875, DET: 0.881, LNK: 0.833, fp: 98, fn: 30, ns: 7, fn_edges: 54
+Verdict: Identical to adh=-600 — quantized.
+
+### PF-B3R1: coh=2000, adh=-750
+exp_uid: 2026-04-03_11-54-38
+Hypothesis: "Fine grid between -700 and -800"
+TRA: 0.873, DET: 0.880, LNK: 0.815, fp: 95, fn: 29, ns: 10, fn_edges: 60
+Verdict: Slightly worse — transition zone between two quantized solutions.
+
+### PF-B3R2: coh=2000, adh=-800, appear/disappear=300
+exp_uid: 2026-04-03_12-02-43
+Hypothesis: "Higher appear/disappear with best adhesion"
+TRA: 0.879, DET: 0.887, LNK: 0.824, fp: 93, fn: 27, ns: 10, fn_edges: 57
+Verdict: Identical to appear=200 — appear/disappear insensitive (consistent with prior finding).
+
+### PF-B3R3: drift_w=75, adh=-800
+exp_uid: 2026-04-03_12-05-47
+Hypothesis: "Higher drift weight may improve edge discrimination"
+TRA: 0.877, DET: 0.884, LNK: 0.824, fp: 91, fn: 28, ns: 10, fn_edges: 57
+Verdict: Marginal — slightly fewer fp but lower TRA. drift_w insensitive in [57, 75].
+
+### PF-B3R4: area_w=1000, adh=-800
+exp_uid: 2026-04-03_12-08-54
+Hypothesis: "Lower area weight"
+TRA: 0.874, DET: 0.881, LNK: 0.824, fp: 97, fn: 29, ns: 9, fn_edges: 57
+Verdict: Slightly worse — area_w=1730 is better than 1000.
+
+### PF-B3R5: area_w=2500, adh=-800
+exp_uid: 2026-04-03_12-11-58
+Hypothesis: "Higher area weight for more edge discrimination"
+TRA: 0.870, DET: 0.877, LNK: 0.820, fp: 89, fn: 31, ns: 10, fn_edges: 59
+Verdict: Worse — area_w=2500 over-penalizes area differences.
+
+### PF-B3R6: coh=2000, adh=-800, appear/disappear=300 (rerun)
+exp_uid: 2026-04-03_12-15-03
+Hypothesis: "Confirmation run of best config"
+TRA: 0.879, DET: 0.887, LNK: 0.824, fp: 93, fn: 27, ns: 10, fn_edges: 57
+Verdict: Confirmed — reproducible result.
+
+---
+
+## Negative Cohesion + Negative Adhesion Exploration (2026-04-13 to 2026-04-15)
+
+Hypothesis: With new cohesion/adhesion semantics, both should be negative to encourage selecting nodes at the correct segmentation level (both "higher = more favorable" metrics). Tested negative-both approach extensively.
+
+Starting from positive-coh best (coh=2000, adh=-1000, TRA=0.879, fp=95). Fixed other params to best: drift_w=57, drift_c=-2000, area_w=1730, area_c=-1500, appear/disappear=200.
+
+### NC-B1R1: coh=1800 (from prior positive-coh best)
+exp_uid: 2026-04-13_10-45-53
+TRA: 0.879, DET: 0.887, LNK: 0.821, fp: 97, fn: 26, ns: 11, fn_edges: 58
+Verdict: Identical to baseline — cohesion insensitive in [1800, 2000].
+
+### NC-B1R2: coh=1600
+exp_uid: 2026-04-13_10-49-07
+TRA: 0.878, DET: 0.885, LNK: 0.833, fp: 105, fn: 27, ns: 9, fn_edges: 54
+Verdict: Different regime — LNK jumps, DET drops.
+
+### NC-B1R3: coh=1500
+exp_uid: 2026-04-13_10-52-17
+TRA: 0.878, DET: 0.884, LNK: 0.833, fp: 107, fn: 27, ns: 9, fn_edges: 54
+Verdict: Same as coh=1600, quantized.
+
+### NC-B2R1: coh=-3000, coh_c=1500, adh=-1500, adh_c=200 (grid search)
+exp_uid: 2026-04-13_11-06-09
+Hypothesis: "Negative cohesion + negative adhesion to encourage correct fragment level"
+TRA: 0.852, DET: 0.857, LNK: 0.818, fp: 167, fn: 34, ns: 3, fn_edges: 59
+Verdict: Falsified — fp explodes. Both negative encourages too many nodes.
+
+### NC-B2R2: coh=-5000, coh_c=3000, adh=-1500, adh_c=200
+exp_uid: 2026-04-13_11-09-02
+TRA: 0.851, DET: 0.856, LNK: 0.815, fp: 169, fn: 34, ns: 3, fn_edges: 60
+Verdict: Falsified — same issue.
+
+### NC-B2R3: coh=-7000, coh_c=5000, adh=-1500, adh_c=200
+exp_uid: 2026-04-13_11-11-52
+TRA: 0.843, DET: 0.848, LNK: 0.806, fp: 177, fn: 36, ns: 3, fn_edges: 63
+Verdict: Falsified — stronger negative cohesion worse.
+
+### NC-B2R4: coh=-3000, coh_c=1500, adh=-2500, adh_c=1000
+exp_uid: 2026-04-13_11-14-42
+TRA: 0.850, DET: 0.857, LNK: 0.797, fp: 155, fn: 32, ns: 9, fn_edges: 66
+Verdict: Falsified.
+
+### NC-B3R1: coh=-500, adh=-500 (simple, no constants)
+exp_uid: 2026-04-13_11-20-56
+Hypothesis: "Maybe constants were causing the issue; test simple negative weights"
+TRA: 0.864, DET: 0.869, LNK: 0.827, fp: 148, fn: 31, ns: 4, fn_edges: 56
+Verdict: Better than grid but still worse — fp too high.
+
+### NC-B3R2: coh=-10, adh=-1000 (100x ratio: adhesion dominates)
+exp_uid: 2026-04-13_11-26-14
+Hypothesis: "Since we want merges, adhesion should be ~100x stronger than cohesion"
+TRA: 0.866, DET: 0.872, LNK: 0.824, fp: 137, fn: 30, ns: 6, fn_edges: 57
+Verdict: Improved but still worse than positive-coh baseline.
+
+### NC-B3R3: coh=-10, adh=-2000
+exp_uid: 2026-04-13_11-30-21
+TRA: 0.872, DET: 0.881, LNK: 0.806, fp: 117, fn: 25, ns: 13, fn_edges: 63
+Verdict: Better — adhesion scaling helps.
+
+### NC-B3R4: coh=-10, adh=-2500
+Hypothesis: "Try stronger adhesion"
+TRA: (worse, rejected by user without logging)
+Verdict: Falsified — overshoot.
+
+### NC-B3R5: coh=-10, adh=-2250
+exp_uid: 2026-04-13_11-44-18
+TRA: 0.866, DET: 0.877, LNK: 0.788, fp: 117, fn: 25, ns: 16, fn_edges: 69
+Verdict: Worse — ns spikes past adh=-2000.
+
+### NC-B3R6: coh=-10, adh=-1500
+exp_uid: 2026-04-13_11-48-30
+TRA: 0.865, DET: 0.873, LNK: 0.806, fp: 126, fn: 28, ns: 11, fn_edges: 63
+Verdict: Worse — adh=-2000 is the peak.
+
+### NC-B4R1: coh=-50, adh=-2000
+exp_uid: 2026-04-13_11-52-34
+TRA: 0.872, DET: 0.881, LNK: 0.806, fp: 117, fn: 25, ns: 13, fn_edges: 63
+Verdict: Identical — cohesion still too weak.
+
+### NC-B4R2: coh=-100, adh=-2000
+exp_uid: 2026-04-13_11-55-25
+TRA: 0.872, DET: 0.881, LNK: 0.806, fp: 117, fn: 25, ns: 13, fn_edges: 63
+Verdict: Identical.
+
+### NC-B4R3: coh=-200, adh=-2000
+exp_uid: 2026-04-13_11-58-22
+TRA: 0.874, DET: 0.883, LNK: 0.812, fp: 117, fn: 25, ns: 12, fn_edges: 61
+Verdict: **Best negative-coh config** — first improvement, ns drops 13→12.
+
+### NC-B4R4: coh=-500, adh=-2000
+exp_uid: 2026-04-13_12-01-25
+TRA: 0.863, DET: 0.872, LNK: 0.797, fp: 125, fn: 28, ns: 12, fn_edges: 66
+Verdict: Worse — coh overshoots past -200.
+
+### NC-B5R1-R4: positive adhesion_constant sweep (adh_c=500, 1000, 1500, 1800)
+exp_uids: 2026-04-13_12-05-27 through 2026-04-13_12-14-01
+Hypothesis: "Positive adh_c shifts cost up, may reduce fp by discouraging low-adh nodes"
+TRA: ~0.874 (insensitive); fp moved from 117→115 at adh_c=1800
+Verdict: Adhesion constant very insensitive in [0, 1500].
+
+### NC-B6R1-R3: appear/disappear sweep at 300, 500, 1000
+exp_uids: 2026-04-13_13-01-28, 2026-04-13_13-04-26, 2026-04-13_13-07-24
+TRA: 0.874 (all identical)
+Verdict: appear/disappear insensitive in [200, 1000]. Consistent with all prior findings.
+
+### NC-B6R4-R7: area sweep (area_w=2500, 1000; area_c=-2000, -1000)
+exp_uids: 2026-04-13_13-10-26, 2026-04-13_13-13-19, 2026-04-13_13-16-13, 2026-04-13_13-19-06
+TRA: 0.864-0.868 (all worse than area_w=1730, area_c=-1500)
+Verdict: Current area params already optimal.
+
+### NC-B7R1-R5: drift sweep (drift_w=40, 80, 100; drift_c=-1500, -2500)
+exp_uids: 2026-04-13_13-24-26 through 2026-04-13_13-36-02
+TRA: 0.863-0.873 (all worse than drift_w=57, drift_c=-2000)
+Verdict: Current drift params already optimal.
+
+### Session Summary
+
+The negative-cohesion/negative-adhesion approach never caught up to the positive-cohesion best:
+- **Positive-coh best:** TRA=0.879, DET=0.887, LNK=0.821, fp=95, fn=26, ns=11 (coh=2000, adh=-1000)
+- **Best negative-coh:** TRA=0.874, DET=0.883, LNK=0.812, fp=117, fn=25, ns=12 (coh=-200, adh=-2000)
+
+Key finding: positive cohesion + negative adhesion creates a push-pull that discriminates better than both-negative. With both negative, the ILP over-selects nodes (fp=117+ vs 95). Positive cohesion actively discourages fragments while negative adhesion encourages good merges — this gives tighter node selection.
+
+Other parameters (drift, area, appear/disappear) were confirmed optimal at their previous values.
+
+---
+
+## Intensity Cost Exploration (2026-04-15)
+
+Starting from PF-B2R1 baseline (coh=2000, adh=-1000, drift_w=57, drift_c=-2000, area_w=1730, area_c=-1500, appear/disappear=200, no intensity/curvature).
+
+Graph stats: intensity_diff mean=207.3, std=211. Target cost std ~900 → weight ≈ 4.
+
+### INT-B1R1: intensity_w=4, intensity_c=-1000
+exp_uid: 2026-04-15_09-42-38
+Hypothesis: "Intensity calibrated to cost_std ~900 will help LNK by discriminating unlikely edges"
+TRA: 0.881, DET: 0.886, LNK: 0.845, fp: 101, fn: 28, ns: 7, fn_edges: 50
+Verdict: **NEW BEST** — LNK jumps 0.821→0.845, ns drops 11→7, fn_edges drops 58→50. fp went up slightly (95→101).
+
+### INT-B1R2: intensity_w=6, intensity_c=-1500
+exp_uid: 2026-04-15_09-47-48
+TRA: 0.872, DET: 0.879, LNK: 0.820, fp: 104, fn: 30, ns: 7, fn_edges: 57
+Verdict: Too strong — degrades all metrics.
+
+### INT-B1R3: intensity_w=3, intensity_c=-800
+exp_uid: 2026-04-15_09-50-50
+TRA: 0.880, DET: 0.885, LNK: 0.845, fp: 103, fn: 28, ns: 7, fn_edges: 50
+Verdict: Nearly identical to R1 — solution quantized.
+
+### INT-B1R4: intensity_w=5, intensity_c=-1200
+exp_uid: 2026-04-15_09-53-45
+TRA: 0.879, DET: 0.886, LNK: 0.829, fp: 101, fn: 28, ns: 7, fn_edges: 54
+Verdict: Slightly worse — LNK drops.
+
+### INT-B1R5/R6: intensity_w=4, intensity_c=-1100/-900
+exp_uids: 2026-04-15_09-56-55, 2026-04-15_10-00-05
+TRA: 0.881 (identical to R1)
+Verdict: Intensity constant insensitive in [-1100, -900] at w=4.
+
+### INT-B2R1: R1 + adh=-800 (attempt to reduce fp)
+exp_uid: 2026-04-15_10-05-30
+Hypothesis: "Weaker adhesion reduced fp=93 in prior runs; may help with intensity active"
+TRA: 0.874, DET: 0.879, LNK: 0.836, fp: 104, fn: 30, ns: 7, fn_edges: 53
+Verdict: Falsified — fp went up not down. adh=-1000 is optimal with intensity.
+
+### INT-B2R2: R1 + drift_w=75 (attempt to reduce fp)
+exp_uid: 2026-04-15_10-08-28
+Hypothesis: "Higher drift_w=75 gave fp=91 in prior runs; may help with intensity active"
+TRA: 0.879, DET: 0.884, LNK: 0.839, fp: 101, fn: 28, ns: 8, fn_edges: 52
+Verdict: Inconclusive — fp unchanged.
+
+### INT-B2R3: R1 + coh=2500 (attempt to reduce fp)
+exp_uid: 2026-04-15_10-11-20
+Hypothesis: "Stronger cohesion penalizes fragments more aggressively"
+TRA: 0.862, DET: 0.873, LNK: 0.784, fp: 82, fn: 31, ns: 14, fn_edges: 70
+Verdict: fp drops dramatically (101→82) but LNK tanks and ns spikes. Trade-off regime.
+
+### INT-B2R4: R1 + coh=2200
+exp_uid: 2026-04-15_10-14-37
+TRA: 0.875, DET: 0.880, LNK: 0.836, fp: 101, fn: 30, ns: 7, fn_edges: 53
+Verdict: Same regime as coh=2000 — quantized.
+
+### INT-B2R5: R1 + coh=2300
+exp_uid: 2026-04-15_10-18-04
+TRA: 0.877, DET: 0.885, LNK: 0.824, fp: 85, fn: 29, ns: 9, fn_edges: 57
+Verdict: Interesting intermediate — fp drops 101→85, but LNK drops 0.845→0.824 and fn_edges goes up.
+
+### Session Summary
+
+**New overall best:** INT-B1R1 (coh=2000, adh=-1000, int_w=4, int_c=-1000) — exp_uid: 2026-04-15_09-42-38
+- TRA=0.881, DET=0.886, LNK=0.845, fp=101, fn=28, ns=7
+
+Key findings:
+- **Intensity calibrated to cost_std~900 significantly improves LNK** (+0.024) and reduces ns (11→7) and fn_edges (58→50)
+- Intensity cost is quantized: w∈[3,4], c∈[-1100,-800] all give identical results
+- **DET-vs-LNK trade-off re-emerges with cohesion_weight**: coh=2300 reduces fp (101→85) but drops LNK. coh=2500 degrades further.
+- Weaker adhesion and higher drift_w did NOT reduce fp when combined with intensity.
+
+### FN Edge Analysis (2026-04-15) on INT-B1R1 (exp_uid: 2026-04-15_10-29-15, reproduction of R1 config)
+
+Only 4 FN edges remaining. TP vs FN edge attributes:
+- **drift_dist**: FN mean=35 vs TP mean=6 (strong discrimination)
+- **area_diff**: FN mean=0.69 vs TP mean=0.14 (strong discrimination)
+- **intensity_diff**: FN mean=125 vs TP mean=114 (**no discrimination** — intensity can't rescue these)
+- **flow magnitude**: FN mean=1.4 vs TP mean=1.0 (weak discrimination)
+
+3 of 4 FN edges: source or target node not selected (so no substitute). Only 1 FN was "rejected by ILP" — the substitute had much lower drift (12 vs 24) and area_diff (0.37 vs 1.33).
+
+### FN Node Analysis (2026-04-15)
+
+FN node classification (28 total):
+- **Segmentation misses** (no candidate within 20px of GT): 7
+- **Solver misses** (candidate exists but not selected): 8
+- **Matcher misses** (selected but not matched to GT): 13
+
+Segmentation misses all concentrated in tracks 25 and 30, suggesting systematic segmentation failures on specific cells.

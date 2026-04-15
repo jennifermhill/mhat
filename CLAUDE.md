@@ -179,6 +179,7 @@ All pipeline commands must be run in the `mhat-sandbox` conda environment using 
 **Log entry format** (append to `tracking_optimization_log.md`):
 ```
 ### B{batch}R{run}: [param change description]
+exp_uid: <from experiments/tracking/<experiment>/<dataset>/test_run/config.toml>
 Hypothesis: "[specific testable prediction]"
 TRA: X, DET: X, LNK: X, fp: X, fn: X, fn_edges: X
 Verdict: [supported/falsified/inconclusive] — [one line explanation]
@@ -254,6 +255,7 @@ Same general approach as Fluo-C3DL-MDA231 (coordinate-wise search, 5 runs per ba
 **Log entry format** (append to `nc281_optimization_log.md`):
 ```
 ### B{batch}R{run}: [param change description]
+exp_uid: <from experiments/tracking/<experiment>/<dataset>/test_run/config.toml>
 Hypothesis: "[specific testable prediction]"
 TE: X, TF_mean: X, Node_Recall: X, Edge_Recall: X
 Verdict: [supported/falsified/inconclusive] — [one line explanation]

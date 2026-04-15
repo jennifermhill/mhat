@@ -150,7 +150,7 @@ Segmentation switched to cellpose (seg_result=2026-03-26_12-21-33). Farneback fl
 - **Intensity provides no meaningful signal** at calibrated weight (w=1.9).
 - **The DET-vs-LNK trade-off is milder with cellpose** — coh=-4000 gives BOTH best DET (0.884) and best LNK (0.853). With old segmentation, best DET and best LNK required different configs.
 
-### Cellpose Current Best Config
+### Cellpose Current Best Config (pre-fix, seg=2026-03-26_12-21-33)
 
 ```toml
 drift_weight = 57.0
@@ -169,9 +169,91 @@ appear_constant = 200.0
 disappear_constant = 200.0
 ```
 
-### Cellpose Open Questions
+### Cellpose Open Questions (pre-fix)
 
 - **Optimization has plateaued.** 4 out of 5 Batch 5 runs gave identical results. The ILP solution is quantized and very stable.
 - **Remaining errors: fp=102, fn=29, fn_edges=48.** These likely represent a segmentation floor — the 102 fp_nodes may be small cellpose fragments that don't correspond to GT objects.
-- **Would intensity help at higher weight?** With old segmentation, intensity_w=20 (cost std≈1857) was needed. For cellpose, intensity_diff has std=481.7 → w≈4 for cost std≈900. Could try w=4-10 range.
-- **Adhesion was never tested with cellpose.** Given cohesion is the only strong lever, adhesion may also have signal at calibrated weight (~7000).
+
+---
+
+## Post Cohesion/Adhesion Fix Optimization (2026-04-03)
+
+Cohesion/adhesion calculation fixed (commit 4eae562). New segmentation (seg_result=2026-04-03_11-09-49). With new code: positive cohesion_weight encourages merged fragments, negative adhesion_weight encourages standalone confidence. 16 runs across 3 batches.
+
+### Post-Fix Results Comparison Table
+
+| Run | Config summary | TRA | DET | LNK | fp | fn | ns | Notes |
+|-----|---------------|-----|-----|-----|----|----|-----|-------|
+| PF-B1R1 | coh=2000, adh=-1200 | 0.872 | 0.883 | 0.797 | 92 | 26 | 15 | High ns, LNK suffers |
+| PF-B1R2 | coh=2000, adh=-800 | 0.879 | 0.887 | 0.824 | 93 | 27 | 10 | Strong balance |
+| PF-B1R3 | coh=2000, adh=-500 | 0.875 | 0.881 | 0.833 | 99 | 30 | 7 | Best LNK but DET drops |
+| PF-B1R4 | coh=3000, adh=-1200 | 0.847 | 0.858 | 0.768 | 68 | 36 | 18 | coh too strong |
+| PF-B1R5 | coh=3000, adh=-800 | 0.775 | 0.782 | 0.723 | 54 | 68 | 12 | Much worse |
+| **PF-B2R1** | **coh=2000, adh=-1000** | **0.879** | **0.887** | **0.821** | **95** | **26** | **11** | **Best TRA/DET, lowest fn** |
+| PF-B2R2 | coh=2000, adh=-900 | 0.879 | 0.887 | 0.824 | 93 | 27 | 10 | Same as adh=-800 |
+| PF-B2R3 | coh=2000, adh=-700 | 0.873 | 0.879 | 0.827 | 100 | 30 | 8 | DET drops |
+| PF-B2R4 | coh=2000, adh=-600 | 0.875 | 0.881 | 0.833 | 99 | 30 | 7 | Same as adh=-500 |
+| PF-B2R5 | coh=2000, adh=-650 | 0.875 | 0.881 | 0.833 | 98 | 30 | 7 | Quantized |
+| PF-B3R1 | coh=2000, adh=-750 | 0.873 | 0.880 | 0.815 | 95 | 29 | 10 | Transition zone |
+| PF-B3R2 | adh=-800, appear=300 | 0.879 | 0.887 | 0.824 | 93 | 27 | 10 | appear insensitive |
+| PF-B3R3 | drift_w=75 | 0.877 | 0.884 | 0.824 | 91 | 28 | 10 | drift_w insensitive |
+| PF-B3R4 | area_w=1000 | 0.874 | 0.881 | 0.824 | 97 | 29 | 9 | Worse |
+| PF-B3R5 | area_w=2500 | 0.870 | 0.877 | 0.820 | 89 | 31 | 10 | Over-penalizes |
+| PF-B3R6 | adh=-800, appear=300 (rerun) | 0.879 | 0.887 | 0.824 | 93 | 27 | 10 | Confirmed |
+
+### Post-Fix Established Principles
+
+- **cohesion_weight=2000 is optimal.** At 3000, fn and ns spike dramatically — too much merged-fragment preference.
+- **adhesion_weight has a DET-vs-LNK trade-off.** Stronger adhesion (adh=-800 to -1000) improves DET/TRA but slightly hurts LNK. Weaker adhesion (adh=-500 to -600) improves LNK but drops DET.
+- **Two quantized solution regimes:** adh ∈ [-800, -900] gives one solution (TRA=0.879, LNK=0.824); adh ∈ [-500, -650] gives another (TRA=0.875, LNK=0.833). adh=-1000 is a third regime (TRA=0.879, LNK=0.821).
+- **drift_weight insensitive in [57, 75].** Consistent with pre-fix finding.
+- **area_weight=1730 remains optimal.** 1000 too low, 2500 too high.
+- **appear/disappear insensitive in [200, 300].** Consistent with all prior findings.
+
+### Post-Fix Current Best Config (with intensity, 2026-04-15)
+
+Best overall: INT-B1R1 (exp_uid: 2026-04-15_09-42-38)
+- TRA=0.881, DET=0.886, LNK=0.845, fp=101, fn=28, ns=7
+
+```toml
+# seg_result = "2026-04-03_11-09-49"
+drift_weight = 57.0
+drift_constant = -2000.0
+area_weight = 1730.0
+area_constant = -1500.0
+intensity_weight = 4.0
+intensity_constant = -1000.0
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = 2000.0
+cohesion_constant = 0.0
+adhesion_weight = -1000.0
+adhesion_constant = 0.0
+appear_constant = 200.0
+disappear_constant = 200.0
+```
+
+Prior best (no intensity): PF-B2R1 (exp_uid: 2026-04-03_11-37-48)
+- TRA=0.879, DET=0.887, LNK=0.821, fp=95, fn=26, ns=11
+
+### Post-Fix Open Questions
+
+- **Would intensity help now?** Not tested post-fix. intensity_diff std≈481 on old cellpose seg — recalibrate for new seg.
+- **Curvature not tested post-fix.** Previously hurt DET when cohesion active.
+- **Is the DET-vs-LNK trade-off addressable?** adh=-1000 and adh=-800 give same TRA but different fp/fn/LNK balance. May need edge-cost adjustments to improve LNK without sacrificing DET.
+
+### Negative-Both Cohesion/Adhesion Exploration (2026-04-13 to 2026-04-15)
+
+**Tested but falsified:** "Since both cohesion and adhesion measure confidence (higher=better), both should have negative weights to encourage correct node selection."
+
+30+ runs tested across negative-both configurations. Best achieved: TRA=0.874, DET=0.883, fp=117 (coh=-200, adh=-2000). Never beat positive-coh baseline (TRA=0.879, fp=95).
+
+**Why it fails:** With both negative, the ILP over-selects nodes because average cohesion and adhesion costs are both strongly negative (encouraging). The positive-cohesion approach works because cohesion *actively discourages* fragments (positive cost) while adhesion *encourages* good merges (negative cost) — this push-pull gives better discrimination.
+
+**Confirmed optimal at current best config (seg=2026-04-03_11-09-49):**
+- drift_w=57, drift_c=-2000: any deviation worse
+- area_w=1730, area_c=-1500: any deviation worse
+- appear/disappear=200: insensitive in [200, 1000]
+- adhesion_constant: insensitive in [0, 1500]
+
+**Remaining untested:** intensity (need to calibrate for new seg, std≈211), curvature (previously hurt DET).

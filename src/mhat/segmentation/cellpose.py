@@ -20,7 +20,10 @@ def segment_with_cellpose(image: np.ndarray, gpu: bool = False) -> np.ndarray:
     # Run Cellpose segmentation
     masks, _, _ = model.eval(image, z_axis=0,
                              channel_axis=1, batch_size=32,
-                             do_3D=False, stitch_threshold=0.2)
+                             flow_threshold=0.4, cellprob_threshold=-3.0,
+                             do_3D=True,
+                             #  stitch_threshold=0.2
+                             )
     masks = masks.astype(np.uint32)
 
     return masks

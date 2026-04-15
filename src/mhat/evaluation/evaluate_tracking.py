@@ -8,6 +8,8 @@ from traccuracy import TrackingGraph, run_metrics
 import traccuracy.matchers as matchers
 import traccuracy.metrics as metrics
 
+from traccuracy.matchers._compute_overlap import get_labels_with_overlap, graph_bbox_and_labels
+
 from funtracks.import_export import import_from_geff
 
 metrics_dict = {
@@ -53,6 +55,74 @@ def remap_seg_to_track_ids(geff_path, graph, segmentation):
         if mask.any():
             remapped[t][mask] = new_track_id
     return remapped
+
+
+def compute_seg_metric(gt_graph, pred_graph):
+    """Compute CTC SEG: average Jaccard index of matched reference objects.
+
+    For each GT label, finds the predicted label with IoGT > 0.5 (the CTC
+    detection criterion). If matched, computes the Jaccard similarity index
+    (IoU) for that pair. Unmatched GT labels contribute J=0. SEG is the
+    mean of all J values across all GT labels in all frames.
+    """
+    gt_label_key = gt_graph.label_key
+    pred_label_key = pred_graph.label_key
+    mask_gt = gt_graph.segmentation
+    mask_pred = pred_graph.segmentation
+
+    total_jaccard = 0.0
+    total_gt_labels = 0
+
+    for t in range(gt_graph.start_frame, gt_graph.end_frame):
+        i = t - gt_graph.start_frame
+        gt_frame = mask_gt[i]
+        pred_frame = mask_pred[i]
+        gt_frame_nodes = gt_graph.nodes_by_frame[t]
+        pred_frame_nodes = pred_graph.nodes_by_frame[t]
+
+        gt_boxes, gt_labels = graph_bbox_and_labels(
+            gt_graph.graph, gt_frame_nodes, gt_label_key)
+        pred_boxes, pred_labels = graph_bbox_and_labels(
+            pred_graph.graph, pred_frame_nodes, pred_label_key)
+
+        # Get IoGT overlaps to determine matches (CTC detection criterion)
+        iogt_overlaps = get_labels_with_overlap(
+            gt_frame, pred_frame,
+            gt_boxes=gt_boxes, res_boxes=pred_boxes,
+            gt_labels=gt_labels, res_labels=pred_labels,
+            overlap="iogt",
+        )
+
+        # For each GT label, find the pred label with IoGT > 0.5
+        # (at most one can satisfy this per the CTC spec)
+        matched = {}  # gt_label -> pred_label
+        for gt_lab, pred_lab, iogt in iogt_overlaps:
+            if iogt > 0.5:
+                matched[gt_lab] = pred_lab
+
+        # Get IoU overlaps for the matched pairs
+        iou_overlaps = get_labels_with_overlap(
+            gt_frame, pred_frame,
+            gt_boxes=gt_boxes, res_boxes=pred_boxes,
+            gt_labels=gt_labels, res_labels=pred_labels,
+            overlap="iou",
+        )
+
+        # Index IoU by (gt_label, pred_label)
+        iou_map = {}
+        for gt_lab, pred_lab, iou in iou_overlaps:
+            iou_map[(gt_lab, pred_lab)] = iou
+
+        # Compute Jaccard for each GT label
+        gt_labels_set = {gt_graph.graph.nodes[n][gt_label_key]
+                         for n in gt_frame_nodes}
+        for lab in gt_labels_set:
+            if lab in matched:
+                total_jaccard += iou_map.get((lab, matched[lab]), 0.0)
+            # else: unmatched, contributes J=0
+            total_gt_labels += 1
+
+    return total_jaccard / total_gt_labels if total_gt_labels > 0 else 0.0
 
 
 def evaluate_tracking(
@@ -153,5 +223,12 @@ def evaluate_tracking(
         matcher=matcher_fn(**kwargs),
         metrics=[metrics_dict[m]() for m in metrics],
     )
+
+    if "ctc" in metrics and gt_seg is not None and pred_seg is not None:
+        seg_score = compute_seg_metric(gt_graph, pred_graph)
+        for r in results:
+            if r["metric"]["name"] == "CTCMetrics":
+                r["results"]["SEG"] = seg_score
+                break
 
     return results

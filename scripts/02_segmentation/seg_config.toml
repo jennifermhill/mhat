@@ -1,6 +1,6 @@
 # IO
-input_base_dir = "C:/Users/hillj/Documents/mhat/data/"
-output_base_dir = "C:/Users/hillj/Documents/mhat/experiments/segmentation/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
 experiment = "NC281-Fl2mSiH2B"
 dataset = "03_nuclei"
 
@@ -18,4 +18,4 @@ smoothing = 0
 neighborhood = [[0,0,1], [0,1,0], [1,0,0]]
 
 [waterz_params]
-scoring_function = "random"
+# scoring_function = "random"

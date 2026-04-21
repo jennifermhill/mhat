@@ -177,7 +177,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params):
 
         # TODO: Implement as dict to look up scoring function from config
         score_func = waterz_params.get("scoring_function", None)
-        if score_func is "random":
+        if score_func == "random":
             score_func = "Random<RegionGraphType>"
         else:
             score_func = "OneMinus<MeanAffinity<RegionGraphType, ScoreValue>>"

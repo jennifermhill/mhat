@@ -180,7 +180,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params):
         if score_func is "random":
             score_func = "Random<RegionGraphType>"
         else:
-            score_func = "MeanAffinity<RegionGraphType, AffinityGraphType>"
+            score_func = "OneMinus<MeanAffinity<RegionGraphType, ScoreValue>>"
         
         generator = waterz.agglomerate(
             affs=ws_affs,

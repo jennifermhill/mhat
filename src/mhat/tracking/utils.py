@@ -18,6 +18,9 @@ def nodes_from_segmentation(
     raw_img: np.ndarray | None = None,
     flow_3d: np.ndarray | None = None,
     flow_2d: np.ndarray | None = None,
+    confidence_3d: np.ndarray | None = None,
+    z_flow_conf_threshold: float | None = None,
+    z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
     tp: int = 0,
     scale: list[float] = [1.0, 1.0, 1.0, 1.0]
@@ -33,6 +36,22 @@ def nodes_from_segmentation(
 
         flow_2d (np.ndarray | None, optional): A numpy array with 2D flow vectors
             for each pixel in the segmentation. Defaults to None.
+
+        confidence_3d (np.ndarray | None, optional): A per-pixel confidence array
+            corresponding to flow_3d (shape matches flow_3d without the vector axis).
+            If provided with z_flow_conf_threshold, Z flow is computed only over
+            pixels whose |confidence| exceeds the threshold. Nodes with too few
+            passing pixels are marked as z_flow_reliable=False and their drift cost
+            is computed in XY only.
+
+        z_flow_conf_threshold (float | None, optional): Threshold on |confidence|
+            for including a pixel's Z flow in the node average. If None, all in-region
+            pixels are included (current default behavior). Defaults to None.
+
+        z_flow_min_pass_pixels (int, optional): Minimum number of pixels within a
+            node's region that must pass the confidence threshold for the Z flow
+            average to be trusted. Below this, the node is marked z_flow_reliable=False.
+            Defaults to 10.
 
         size_threshold (int): A minimum area for candidate nodes. Nodes smaller
             than this area will not be added to the graph.
@@ -54,20 +73,37 @@ def nodes_from_segmentation(
             continue
         node_id = int(regionprop.label)
         region = segmentation == node_id
-        centroid = (float(regionprop.centroid[0] * scale[1]), 
-                    float(regionprop.centroid[1] * scale[2]), 
+        centroid = (float(regionprop.centroid[0] * scale[1]),
+                    float(regionprop.centroid[1] * scale[2]),
                     float(regionprop.centroid[2] * scale[3]))
         region_raw = raw_img[region]
         intensity = np.mean(region_raw)
+        z_flow_reliable = True
         if flow_3d is not None:
             # Optical flow is stored in pixel units; scale to world units to match
             # the voxel-scaled centroids above so drift_dist computations are consistent.
+            # Z component of flow can be filtered by confidence: only in-region pixels
+            # whose |confidence| exceeds z_flow_conf_threshold contribute to the average.
+            vz_pixels = flow_3d[region][:, 2]
+            if confidence_3d is not None and z_flow_conf_threshold is not None:
+                conf_pixels = np.abs(confidence_3d[region])
+                conf_mask = conf_pixels > z_flow_conf_threshold
+                n_passing = int(np.sum(conf_mask))
+                if n_passing >= z_flow_min_pass_pixels:
+                    flow_z = float(np.mean(vz_pixels[conf_mask]) * scale[1])
+                else:
+                    # Too few high-confidence pixels — mark Z unreliable.
+                    # Store 0 as a placeholder; add_flow_dist_attr will skip Z for this node.
+                    flow_z = 0.0
+                    z_flow_reliable = False
+            else:
+                flow_z = float(np.mean(vz_pixels) * scale[1])
             if flow_2d is not None:
-                flow = (float(np.mean(flow_3d[region][:, 2]) * scale[1]),
+                flow = (flow_z,
                         float(np.mean(flow_2d[region][:, 1]) * scale[2]),
                         float(np.mean(flow_2d[region][:, 0]) * scale[3]))
             else:
-                flow = (float(np.mean(flow_3d[region][:, 2]) * scale[1]),
+                flow = (flow_z,
                         float(np.mean(flow_3d[region][:, 1]) * scale[2]),
                         float(np.mean(flow_3d[region][:, 0]) * scale[3]))
         else:
@@ -81,7 +117,8 @@ def nodes_from_segmentation(
             "label": node_id,
             "area": regionprop.area,
             "intensity": intensity,
-            "flow": flow
+            "flow": flow,
+            "z_flow_reliable": z_flow_reliable,
         }
         cand_graph.add_node(node_id, **attrs)
 
@@ -250,6 +287,10 @@ def add_flow_dist_attr(cand_graph: motile.TrackGraph):
                 (sum(cand_graph.nodes[n]["y"] for n in vs)) / len(vs),
                 (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
             ])
+            # Source is reliable only if all source nodes are reliable.
+            z_reliable = all(
+                cand_graph.nodes[n].get("z_flow_reliable", True) for n in us
+            )
         else:
             u, v = edge
             node_u = cand_graph.nodes[u]
@@ -257,9 +298,17 @@ def add_flow_dist_attr(cand_graph: motile.TrackGraph):
             flow_u = node_u["flow"]
             pos_u = np.array([node_u["z"], node_u["y"], node_u["x"]])
             pos_v = np.array([node_v["z"], node_v["y"], node_v["x"]])
+            z_reliable = node_u.get("z_flow_reliable", True)
 
-        # Apply flow to pos_u and compute distance
-        flow_dist = linalg.norm(pos_u + np.array(flow_u) - pos_v)
+        # Apply flow to pos_u and compute distance. When Z flow is unreliable
+        # for this source, drop the Z component from both position and flow so
+        # drift_dist reflects XY motion only (not penalizing the edge for Z
+        # prediction error we can't estimate).
+        predicted = pos_u + np.array(flow_u)
+        if z_reliable:
+            flow_dist = linalg.norm(predicted - pos_v)
+        else:
+            flow_dist = linalg.norm(predicted[1:] - pos_v[1:])
         cand_graph.edges[edge]["drift_dist"] = flow_dist
 
 

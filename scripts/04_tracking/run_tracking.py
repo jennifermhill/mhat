@@ -93,8 +93,18 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
             [flow_3d, np.zeros((1, *flow_3d[0].shape), dtype=flow_3d.dtype)],
             axis=0,
         )
+        # Try to load the per-pixel confidence array from the same zarr (optional).
+        if "confidence" in flow_3d_zarr_root:
+            confidence_3d = flow_3d_zarr_root["confidence"][:]
+            confidence_3d = np.concatenate(
+                [confidence_3d, np.zeros((1, *confidence_3d[0].shape), dtype=confidence_3d.dtype)],
+                axis=0,
+            )
+        else:
+            confidence_3d = None
     else:
         flow_3d = None
+        confidence_3d = None
     print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d.shape if flow_2d is not None else None}, flow_3d shape: {flow_3d.shape if flow_3d is not None else None}")
     axes = seg_zarr_root[seg_group].attrs.get("axes", None)
     if axes is not None:
@@ -127,6 +137,14 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         for row in merge_history:
             writer.writerow(row)
 
+    z_flow_conf_threshold = config.get("z_flow_conf_threshold", None)
+    z_flow_min_pass_pixels = config.get("z_flow_min_pass_pixels", 10)
+    if confidence_3d is not None and z_flow_conf_threshold is not None:
+        print(
+            f"Confidence-based Z flow filtering enabled: threshold={z_flow_conf_threshold}, "
+            f"min passing pixels={z_flow_min_pass_pixels}"
+        )
+
     for timepoint in range(img_shape[0]):
         print(f"Processing timepoint {timepoint}")
         cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
@@ -137,6 +155,9 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
             raw_img=raw_img[timepoint],
             flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
             flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
+            confidence_3d=confidence_3d[timepoint] if confidence_3d is not None else None,
+            z_flow_conf_threshold=z_flow_conf_threshold,
+            z_flow_min_pass_pixels=z_flow_min_pass_pixels,
             size_threshold=config["size_threshold"],
             scale=scale,
         )
@@ -146,6 +167,17 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         else:
             all_cand_graph = nx.compose(all_cand_graph, cand_graph)
             all_exclusion_sets.extend(exclusion_sets)
+
+    if confidence_3d is not None and z_flow_conf_threshold is not None:
+        n_total = all_cand_graph.number_of_nodes()
+        n_unreliable = sum(
+            1 for _, d in all_cand_graph.nodes(data=True)
+            if not d.get("z_flow_reliable", True)
+        )
+        print(
+            f"Z flow reliability: {n_unreliable}/{n_total} nodes flagged unreliable "
+            f"({100 * n_unreliable / n_total:.1f}%) — these use XY-only drift_dist"
+        )
 
     utils.add_cand_edges(all_cand_graph, max_edge_distance, max_children=config["max_children"])
     print("Edges before hyperedges: ", all_cand_graph.number_of_edges())

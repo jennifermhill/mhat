@@ -151,7 +151,7 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
 
 #     return fragments
 
-def get_segmentation(output_root, thresholds, outfile):
+def get_segmentation(output_root, thresholds, outfile, waterz_params):
     affinities = output_root["affinities"][:].astype(np.float32)
     fragments = output_root["fragments"][:]
 
@@ -174,12 +174,19 @@ def get_segmentation(output_root, thresholds, outfile):
         affinities_3d = affinities[t]  # Shape: (3, Z, Y, X)
 
         ws_affs = affinities_3d.astype(np.float32)
+
+        # TODO: Implement as dict to look up scoring function from config
+        score_func = waterz_params.get("scoring_function", None)
+        if score_func is "random":
+            score_func = "Random<RegionGraphType>"
+        else:
+            score_func = "MeanAffinity<RegionGraphType, AffinityGraphType>"
         
         generator = waterz.agglomerate(
             affs=ws_affs,
             fragments=fragments_3d,
             thresholds=thresholds,
-            # scoring_function="ContactArea<RegionGraphType>",
+            scoring_function=score_func,
             return_merge_history=True,
         )
 
@@ -240,4 +247,4 @@ if __name__ == "__main__":
     threshold = config["merge_thresholds"]
 
     merge_history_file = output_dir / "merge_history.csv"
-    get_segmentation(output_root, threshold, merge_history_file)
+    get_segmentation(output_root, threshold, merge_history_file, config["waterz_params"])

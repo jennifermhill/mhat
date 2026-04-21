@@ -128,6 +128,9 @@ def nodes_from_fragments(
     raw_img: np.ndarray | None = None,
     flow_2d: np.ndarray | None = None,
     flow_3d: np.ndarray | None = None,
+    confidence_3d: np.ndarray | None = None,
+    z_flow_conf_threshold: float | None = None,
+    z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
     scale: list[float] = [1.0, 1.0, 1.0, 1.0],
 ) -> tuple[nx.DiGraph, list[tuple]]:
@@ -191,8 +194,11 @@ def nodes_from_fragments(
             # get the initial fragments we want to populate the cand graph with
             graph = nodes_from_segmentation(
                 fragments, raw_img=raw_img,
-                flow_3d=flow_3d, flow_2d=flow_2d, 
-                size_threshold=size_threshold, 
+                flow_3d=flow_3d, flow_2d=flow_2d,
+                confidence_3d=confidence_3d,
+                z_flow_conf_threshold=z_flow_conf_threshold,
+                z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+                size_threshold=size_threshold,
                 tp=tp, scale=scale
             )
 
@@ -209,9 +215,12 @@ def nodes_from_fragments(
             new_seg_only = np.zeros_like(fragments)
             new_seg_only[fragments == c] = c
             node_graph = nodes_from_segmentation(
-                new_seg_only, raw_img=raw_img, 
+                new_seg_only, raw_img=raw_img,
                 flow_3d=flow_3d, flow_2d=flow_2d,
-                size_threshold=size_threshold, 
+                confidence_3d=confidence_3d,
+                z_flow_conf_threshold=z_flow_conf_threshold,
+                z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+                size_threshold=size_threshold,
                 tp=tp, scale=scale
             )
             graph.add_nodes_from(node_graph.nodes(data=True))

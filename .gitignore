@@ -3,6 +3,9 @@
 /data
 /experiments
 
+# Claude files
+/.claude
+
 # Locally editable installed packages
 /funtracks
 /motile_tracker

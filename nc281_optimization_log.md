@@ -351,3 +351,170 @@ Verdict: Supported — NEW BEST ER (0.861) and lowest FN edges (64). Same TE/TF 
 Hypothesis: "Does plateau continue beyond -1000?"
 TE: 0.668, TF: 0.723, Node_Recall: 1.000, Edge_Recall: 0.857, FN_Edges: 66
 Verdict: Falsified — TE drops. -1250 is past the plateau. Sweet spot is -750 to -1000.
+
+---
+
+## Flow Unit-Fix Re-optimization (2026-04-15)
+
+**Context:** Fixed a unit mismatch in `src/mhat/tracking/utils.py:62-68` — optical flow was saved in pixel units but node centroids were world-unit scaled, so `drift_dist = norm(pos_u + flow_u - pos_v)` was mixing units. Fix: scale flow by voxel size at node attachment.
+
+**NC281 voxel scale:** Z=2.110, Y=0.650, X=0.650 μm. Z/XY ratio ≈ 3.25.
+
+**Post-fix graph stats vs pre-fix:**
+- drift_dist mean: 8.462 → **6.451** (-24%)
+- drift_dist std: 5.132 → **4.198** (-18%)
+- At drift_w=25, cost std: 128 → 105
+
+The fix **significantly** affects NC281 — cells in 03_nuclei have meaningful Z motion, so the previously-under-scaled Z flow now correctly predicts Z displacement, reducing drift_dist residuals.
+
+### UFIX-Baseline: pre-fix best config applied post-fix
+exp_uid: 2026-04-15_11-57-47
+Config: drift_w=25, drift_c=-1000, coh_w=-500, coh_c=450, appear/disappear=50
+TE: 0.6443, TF: 0.6722, Node_Recall: 1.000, Edge_Recall: 0.8308, FN_Edges: 78
+Verdict: Regression — pre-fix best was TE=0.692, TF=0.744. Old optimum no longer optimal after drift_dist distribution shift.
+
+### UFIX-B1R1: drift_w=30
+exp_uid: 2026-04-15_12-04-23
+Hypothesis: "Scale drift_w up ~20% to match pre-fix cost std (~128)."
+TE: 0.6551, TF: 0.6883, Node_Recall: 1.000, Edge_Recall: 0.8351, FN_Edges: 76
+Verdict: Supported — partial recovery (+0.011 TE). Still below pre-fix best.
+
+### UFIX-B1R2: drift_w=35
+exp_uid: 2026-04-15_12-09-31
+Hypothesis: "Further drift_w increase continues recovery."
+TE: 0.6551, TF: 0.6893, Node_Recall: 1.000, Edge_Recall: 0.8373, FN_Edges: 75
+Verdict: Inconclusive — TE identical to B1R1; marginal TF/ER gain. Plateau reached.
+
+### UFIX-B1R3: drift_c=-750
+exp_uid: 2026-04-15_12-14-39
+Hypothesis: "Proportional drift_c decrease to match smaller drift_dist distribution."
+TE: 0.6529, TF: 0.6861, Node_Recall: 1.000, Edge_Recall: 0.8351, FN_Edges: 76
+Verdict: Falsified — slightly worse than keeping drift_c=-1000. Constant shift alone insufficient.
+
+### UFIX-B1R4: drift_w=30, drift_c=-750
+exp_uid: 2026-04-15_12-19-46
+Hypothesis: "Combined weight + constant adjustment."
+TE: 0.6551, TF: 0.6893, Node_Recall: 1.000, Edge_Recall: 0.8373, FN_Edges: 75
+Verdict: Supported — same plateau as B1R2. drift_c ∈ [-1000, -750] insensitive at drift_w=30.
+
+### UFIX-B1R5: drift_c=-1250
+exp_uid: 2026-04-15_12-24-57
+Hypothesis: "Stronger encouragement — maybe exploits more-trustworthy drift."
+TE: 0.6421, TF: 0.6715, Node_Recall: 1.000, Edge_Recall: 0.8351, FN_Edges: 76
+Verdict: Falsified — drops back to baseline level. -1250 is past the plateau (same direction as pre-fix).
+
+### Batch Summary
+
+| Run | drift_w | drift_c | TE | TF | ER | FN |
+|-----|---------|---------|-----|-----|-----|-----|
+| Pre-fix best (NC8-R4) | 25 | -1000 | 0.692 | 0.744 | 0.861 | 64 |
+| UFIX-Baseline | 25 | -1000 | 0.6443 | 0.6722 | 0.8308 | 78 |
+| **UFIX-B1R1** | **30** | **-1000** | **0.6551** | 0.6883 | 0.8351 | 76 |
+| **UFIX-B1R2** | **35** | **-1000** | **0.6551** | **0.6893** | **0.8373** | 75 |
+| UFIX-B1R3 | 25 | -750 | 0.6529 | 0.6861 | 0.8351 | 76 |
+| **UFIX-B1R4** | **30** | **-750** | **0.6551** | **0.6893** | **0.8373** | **75** |
+| UFIX-B1R5 | 25 | -1250 | 0.6421 | 0.6715 | 0.8351 | 76 |
+
+### Conclusions
+
+- **New drift plateau:** drift_w ∈ [30, 35], drift_c ∈ [-1000, -750]. Previously drift_w=25 was optimal.
+- **Partial recovery only:** +0.011 TE from baseline, still -0.037 below pre-fix best (0.655 vs 0.692).
+- **drift_w increase mirrors distribution shift:** drift_dist std shrank 18%, and optimal drift_w grew ~20-40%.
+- **Full recovery likely needs cohesion re-optimization.** Cohesion was tuned (coh_w=-500, coh_c=450) against the old drift distribution. Now that drift is ~24% smaller in mean, the cost-balance between cohesion (node cost) and drift (edge cost) has shifted — cohesion may be over- or under-weighted relative to the new drift regime.
+- **ER improvement is small but consistent:** FN edges 78 → 75 (-3). Drift improvements mostly help linking, not detection.
+
+---
+
+## Flow Unit-Fix Re-optimization Batch 2: Cohesion sweep (2026-04-15)
+
+Base config: drift_w=30, drift_c=-1000 (B1 best), post-fix flow units.
+
+### UFIX-B2R1: coh_c=400
+exp_uid: 2026-04-15_12-55-06
+Hypothesis: "Shift cohesion cost mean slightly negative — encourage more node selection."
+TE: 0.6529, TF: 0.6852, Node_Recall: 1.000, Edge_Recall: 0.8308, FN_Edges: 78
+Verdict: Falsified — slight regression in all metrics.
+
+### UFIX-B2R2: coh_c=500
+exp_uid: 2026-04-15_13-00-27
+Hypothesis: "Shift cost mean slightly positive — discourage more."
+TE: 0.6551, TF: 0.6883, Node_Recall: 1.000, Edge_Recall: 0.8373, FN_Edges: 75
+Verdict: Supported — ties B1 best TE, matches best ER/FN. Plateau extends.
+
+### UFIX-B2R3: cohesion off (coh_w=0, coh_c=0)
+exp_uid: 2026-04-15_13-05-37
+Hypothesis: "Cohesion provides little value at this operating point — test if disabling helps."
+TE: 0.6529, TF: 0.6871, Node_Recall: 1.000, Edge_Recall: 0.8330, FN_Edges: 77
+Verdict: Falsified — marginal regression. Cohesion contributes small but real value.
+
+### UFIX-B2R4: coh_w=-1000, coh_c=900 (scale up 2×)
+exp_uid: 2026-04-15_13-10-55
+Hypothesis: "Scale up cohesion cost std for more discrimination while keeping cost mean near zero."
+TE: 0.6508, TF: 0.6778, Node_Recall: 1.000, Edge_Recall: 0.8330, FN_Edges: 77
+Verdict: Falsified — worst of batch. Scaling up actively hurts.
+
+### UFIX-B2R5: coh_w=-250, coh_c=225 (scale down 2×)
+exp_uid: 2026-04-15_13-16-12
+Hypothesis: "Scale down cohesion — test if even weaker is fine."
+TE: 0.6551, TF: 0.6883, Node_Recall: 1.000, Edge_Recall: 0.8351, FN_Edges: 76
+Verdict: Supported — ties B1 best. Cohesion magnitude insensitive in [-250, -500].
+
+### Batch 2 Summary
+
+| Run | coh_w | coh_c | TE | TF | ER | FN |
+|-----|-------|-------|-----|-----|-----|-----|
+| B1 best | -500 | 450 | 0.6551 | 0.6883 | 0.8351 | 76 |
+| B2R1 | -500 | 400 | 0.6529 | 0.6852 | 0.8308 | 78 |
+| **B2R2** | **-500** | **500** | **0.6551** | **0.6883** | **0.8373** | **75** |
+| B2R3 | 0 | 0 | 0.6529 | 0.6871 | 0.8330 | 77 |
+| B2R4 | -1000 | 900 | 0.6508 | 0.6778 | 0.8330 | 77 |
+| B2R5 | -250 | 225 | 0.6551 | 0.6883 | 0.8351 | 76 |
+
+### Conclusions
+
+- **TE plateau at 0.6551 is robust** — unchanged across 5 cohesion variants spanning off, scale-up, scale-down, and constant shifts.
+- **Post-fix best config:** drift_w=30, drift_c=-1000, coh_w=-500, coh_c=500 (B2R2, tied with B1R2/B1R4). TE=0.6551, TF=0.6893, ER=0.8373, FN=75.
+- **Gap vs pre-fix (0.692) is not closable via cohesion tuning.** Cohesion has very low attribute spread (std 0.098) — cost std stays <200 regardless of weight, so it can't strongly influence node selection.
+- **Hypothesis for residual gap:** the pre-fix "optimum" may have been partially lucky — the buggy drift_dist values happened to reward GT-aligned edge selection in this dataset. Post-fix drift is physically correct but selects a different (still valid) subset of edges. This is an artifact of sparse GT making TE sensitive to which specific edges the solver picks, not a tuning failure.
+- **Node Recall stays at 1.000 throughout** — no detection regression at any setting.
+
+### Remaining untested
+
+- adhesion with new drift regime (pre-fix always harmful)
+- appear/disappear (pre-fix: insensitive <100, harmful 150+)
+- area/intensity (pre-fix always harmful)
+- curvature (pre-fix always harmful)
+
+---
+
+## Confidence-Based Z Flow Filtering (2026-04-15)
+
+**Context:** Flow diagnostics showed 3D Farneback/LK XY signal is uncorrelated with 2D Farneback (Pearson 0.04/0.26) and Z signal is small/noisy on thin (4-slice) volumes. Rather than attenuating Z uniformly, use per-pixel confidence to drop Z flow contribution where it's unreliable.
+
+**Implementation:** `src/mhat/tracking/utils.py` nodes_from_segmentation now accepts confidence_3d + z_flow_conf_threshold. For each node region, |confidence| is thresholded; if <z_flow_min_pass_pixels (default 10) pass, the node is flagged z_flow_reliable=False. add_flow_dist_attr then uses XY-only drift_dist (dropping both position Z and flow Z from the norm) for edges where the source is unreliable.
+
+### Threshold Sweep (base: drift_w=30, drift_c=-1000, coh_w=-500, coh_c=500)
+
+| Run | Threshold | % unreliable | TE | TF | ER | FN |
+|-----|-----------|--------------|-----|-----|-----|-----|
+| Baseline | off | 0% | 0.6551 | 0.6893 | 0.8373 | 75 |
+| TH-high | 3e-5 (p75 in-region) | 41.0% | 0.6312 | 0.6623 | 0.8286 | 79 |
+| TH-mid-hi | 1e-4 (p90 in-region) | 69.2% | 0.6508 | 0.6835 | 0.8373 | 75 |
+| TH-mid | 5e-6 | 21.2% | 0.6551 | 0.7016 | 0.8351 | 76 |
+| TH-low | 1e-6 | 11.4% | 0.6573 | 0.7033 | 0.8373 | 75 |
+| TH-zero | 0.0 (excl exact zeros) | 3.2% | 0.6594 | 0.6924 | 0.8395 | 74 |
+| **TH-optimal** | **1e-7** | **5.3%** | **0.6616** | **0.7057** | **0.8416** | **73** |
+| TH-optimal + drift_w=25 | 1e-7 | 5.3% | 0.6508 | 0.6900 | 0.8351 | 76 |
+
+### Conclusions
+
+- **Sweet spot: threshold=1e-7, flagging ~5% of nodes as Z-unreliable.** This is the first post-fix config to improve on the un-filtered baseline.
+- **Very aggressive filtering (≥40% unreliable) hurts** — going too far removes signal. The useful Z flow information comes from far more than just the most-confident nodes.
+- **Monotonic-then-reversal pattern**: too lenient = baseline, light filtering = best, aggressive = worse than baseline, very aggressive = intermediate.
+- **Best post-fix config**: TE=0.6616, TF=0.7057, ER=0.8416, FN=73. Gap vs pre-fix (0.692) closed from -0.037 to -0.030.
+- **drift_w still optimal at 30**, not 25 (pre-fix value). Confidence filtering doesn't restore the pre-fix drift regime.
+- **TF improvement is most dramatic** (+0.017 over baseline) — filtering particularly helps track continuity/coverage.
+
+### Interpretation
+
+The ~5% of nodes with near-zero confidence across their entire region were contributing pure noise in Z. Removing them prevents that noise from corrupting drift_dist for those edges, without over-filtering the many nodes where Z flow has real signal. This is different from the pre-fix regime where Z flow was uniformly attenuated — here we keep full-physical Z flow where it's trustworthy and drop it entirely where it's not.

@@ -1,28 +1,87 @@
 # NC281-Fl2mSiH2B Tracking Optimization Memory
 
-## Current Best Config (cost balance strategy, 2026-04-01)
+## Post-Fix Current Best (2026-04-15, flow unit fix + confidence filter)
 
-**TE: 0.692, TF: 0.744, Edge Recall: 0.861, FN Edges: 64**
+**TE: 0.6616, TF: 0.7057, Edge Recall: 0.8416, FN Edges: 73**
 
 ```toml
-drift_weight = 25.0
+drift_weight = 30.0
 drift_constant = -1000.0
-area_weight = 0.0
-area_constant = 0.0
-intensity_weight = 0.0
-intensity_constant = 0.0
-curvature_weight = 0.0
-curvature_constant = 0.0
 cohesion_weight = -500.0
-cohesion_constant = 450.0
-adhesion_weight = 0.0
-adhesion_constant = 0.0
+cohesion_constant = 500.0
 appear_constant = 50.0
 disappear_constant = 50.0
+
+# Confidence-based Z flow filtering
+z_flow_conf_threshold = 1.0e-7   # ~5% of nodes flagged unreliable
+z_flow_min_pass_pixels = 10
 ```
+
+**Gap vs pre-fix best (0.692 vs 0.6616, -0.030) partially closed via confidence filtering.** Light filtering (~5% unreliable) is the sweet spot.
+
+### Previous Post-Fix Best (no confidence filter, 2026-04-15)
+
+TE=0.6551, TF=0.6893, ER=0.8373, FN=75 (drift_w=30, drift_c=-1000, coh_w=-500, coh_c=500)
+
+## Pre-Fix Best Config (archived for reference)
+
+**TE: 0.692, TF: 0.744, Edge Recall: 0.861, FN Edges: 64** (NC8-R4)
+Same as above but with drift_weight = 25.0.
 
 Previous best (drift_c=-2000): TE=0.690, TF=0.734, ER=0.852, FN=68.
 Old best (pre-semantics change): TE=0.703, TF=0.738 with coh_w=500, coh_c=-450 (old code).
+
+## Flow Unit Fix Impact (2026-04-15)
+
+Voxel scale: Z=2.11, Y=X=0.65 μm (Z/XY ≈ 3.25).
+
+Pre-fix graph stats: drift_dist mean=8.462, std=5.132
+Post-fix graph stats: drift_dist mean=6.451, std=4.198
+
+NC281 cells move meaningfully in Z, so Z-flow rescaling materially affected drift_dist — unlike MDA231 which was a no-op.
+
+### Post-Fix Batch 1 Results (6 runs)
+
+| Run | drift_w | drift_c | TE | TF | ER | FN |
+|-----|---------|---------|-----|-----|-----|-----|
+| UFIX-Baseline | 25 | -1000 | 0.6443 | 0.6722 | 0.8308 | 78 |
+| **UFIX-B1R1** | **30** | **-1000** | **0.6551** | 0.6883 | 0.8351 | 76 |
+| UFIX-B1R2 | 35 | -1000 | 0.6551 | 0.6893 | 0.8373 | 75 |
+| UFIX-B1R3 | 25 | -750 | 0.6529 | 0.6861 | 0.8351 | 76 |
+| UFIX-B1R4 | 30 | -750 | 0.6551 | 0.6893 | 0.8373 | 75 |
+| UFIX-B1R5 | 25 | -1250 | 0.6421 | 0.6715 | 0.8351 | 76 |
+
+### Post-Fix Principles
+
+- **New drift plateau: drift_w ∈ [30, 35], drift_c ∈ [-1000, -750].** Previously drift_w=25 was optimal.
+- drift_w=25 now too low — drift_dist std shrank 18%, so need higher weight for same discrimination.
+- drift_c=-1250 too strong (same direction as pre-fix — plateau boundary shifted little).
+- TE plateau at 0.6551 after drift re-opt. Still 0.037 below pre-fix best.
+
+### Post-Fix Batch 2 (cohesion sweep) Results
+
+| Run | coh_w | coh_c | TE | TF | ER | FN |
+|-----|-------|-------|-----|-----|-----|-----|
+| B1 best | -500 | 450 | 0.6551 | 0.6883 | 0.8351 | 76 |
+| B2R1 | -500 | 400 | 0.6529 | 0.6852 | 0.8308 | 78 |
+| **B2R2** | **-500** | **500** | **0.6551** | **0.6893** | **0.8373** | **75** |
+| B2R3 | 0 | 0 | 0.6529 | 0.6871 | 0.8330 | 77 |
+| B2R4 | -1000 | 900 | 0.6508 | 0.6778 | 0.8330 | 77 |
+| B2R5 | -250 | 225 | 0.6551 | 0.6883 | 0.8351 | 76 |
+
+### Confirmed Principles (post-fix)
+
+- **TE plateau at 0.6551 is robust** — unchanged across 5 cohesion variants and 3 different drift_w/drift_c combinations.
+- **Cohesion magnitude insensitive** in [-250, -500] when cost mean near zero.
+- **coh_c=500 marginally better than 450** (FN_Edges 76 → 75).
+- **Scaling cohesion up (coh_w=-1000) actively hurts** — dropped TE to 0.6508.
+- **Cohesion off is slightly worse** than tuned — contributes small but real value.
+
+### Open Questions
+
+- **Gap vs pre-fix (-0.037 TE) likely structural, not tuning-addressable.** Hypothesis: old optimum was partially lucky — buggy drift_dist inflated Z distances, happening to reward GT-aligned edges in this dataset. Post-fix drift is physically correct but selects a different valid subset. Sparse GT makes TE sensitive to which specific edges are chosen.
+- **Remaining untested**: adhesion under new drift regime (always harmful pre-fix), appear/disappear fine-tuning, area/intensity/curvature (all harmful pre-fix).
+- Could a different matcher threshold help? threshold=10 was tuned pre-fix.
 
 ## Results Comparison Table
 

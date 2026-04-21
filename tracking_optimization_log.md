@@ -1051,3 +1051,80 @@ FN node classification (28 total):
 - **Matcher misses** (selected but not matched to GT): 13
 
 Segmentation misses all concentrated in tracks 25 and 30, suggesting systematic segmentation failures on specific cells.
+
+---
+
+## Flow Unit-Fix Re-optimization (2026-04-15)
+
+**Context:** Fixed a unit mismatch in `src/mhat/tracking/utils.py:62-68` — optical flow was saved/attached in pixel units, but node centroids were world-unit scaled. `drift_dist = norm(pos_u + flow_u - pos_v)` was mixing units, distorted in the anisotropic Z axis (MDA231 scale = Z:6.0, Y:1.242, X:1.242 μm). Fix: scale flow by voxel size at node attachment.
+
+**Post-fix baseline (same config as INT-B1R1):**
+- drift_dist stats: mean=18.378 (was 18.602), std=16.254 (was 15.753) — 3% wider
+- Cost std: 926.5 (was 898) — still in the ~900 regime
+- exp_uid: 2026-04-15_11-27-55
+- TRA: 0.8808, DET: 0.8857, LNK: 0.8449, fp: 101, fn: 28, ns: 7, fn_edges: 50 — **identical to pre-fix best**
+
+MDA231 cells move predominantly in XY, so Z-flow rescaling has minimal impact on drift_dist distribution.
+
+### UFIX-B1R1: drift_w=50
+exp_uid: 2026-04-15_11-34-31
+Hypothesis: "Slightly lower drift_w compensates for marginally wider drift_dist."
+TRA: 0.8796, DET: 0.8857, LNK: 0.8348, fp: 101, fn: 28, ns: 7, fn_edges: 52
+Verdict: falsified — drops into lower-LNK regime.
+
+### UFIX-B1R2: drift_w=65
+exp_uid: 2026-04-15_11-37-36
+Hypothesis: "Slightly higher drift_w stays in the optimal regime."
+TRA: 0.8808, DET: 0.8857, LNK: 0.8449, fp: 101, fn: 28, ns: 7, fn_edges: 50
+Verdict: supported — identical to baseline. Upper drift_w bound ≥65.
+
+### UFIX-B1R3: drift_w=40
+exp_uid: 2026-04-15_11-40-47
+Hypothesis: "The old Farneback pre-cellpose optimal might be revived by Z-aware drift."
+TRA: 0.8796, DET: 0.8857, LNK: 0.8348, fp: 101, fn: 28, ns: 7, fn_edges: 52
+Verdict: falsified — same lower regime as B1R1.
+
+### UFIX-B1R4: drift_c=-2200
+exp_uid: 2026-04-15_11-43-51
+Hypothesis: "Stronger edge encouragement may exploit more-trustworthy drift values."
+TRA: 0.8803, DET: 0.8852, LNK: 0.8449, fp: 103, fn: 28, ns: 7, fn_edges: 50
+Verdict: falsified — small DET regression from +2 fp.
+
+### UFIX-B1R5: drift_c=-1800
+exp_uid: 2026-04-15_11-46-57
+Hypothesis: "Weaker edge encouragement as control for R4."
+TRA: 0.8808, DET: 0.8857, LNK: 0.8449, fp: 101, fn: 28, ns: 7, fn_edges: 50
+Verdict: supported — identical to baseline. Lower drift_c bound ≤-1800.
+
+### Batch Summary
+
+| Run | drift_w | drift_c | TRA | DET | LNK | fp | fn | ns | Regime |
+|-----|---------|---------|-----|-----|-----|-----|-----|-----|---------|
+| Baseline | 57 | -2000 | 0.8808 | 0.8857 | 0.8449 | 101 | 28 | 7 | A (best) |
+| B1R1 | 50 | -2000 | 0.8796 | 0.8857 | 0.8348 | 101 | 28 | 7 | B |
+| B1R2 | 65 | -2000 | 0.8808 | 0.8857 | 0.8449 | 101 | 28 | 7 | A |
+| B1R3 | 40 | -2000 | 0.8796 | 0.8857 | 0.8348 | 101 | 28 | 7 | B |
+| B1R4 | 57 | -2200 | 0.8803 | 0.8852 | 0.8449 | 103 | 28 | 7 | A' (fp +2) |
+| B1R5 | 57 | -1800 | 0.8808 | 0.8857 | 0.8449 | 101 | 28 | 7 | A |
+
+**Conclusions:**
+- Flow unit fix is a no-op for MDA231 at the optimal config. Cells move predominantly in XY.
+- drift_w=57, drift_c=-2000 remain optimal. Insensitive region: drift_w ∈ [57, 65], drift_c ∈ [-2000, -1800].
+- Two quantized regimes: drift_w ≥ 57 → optimal (TRA=0.8808); drift_w ≤ 50 → slight LNK drop (TRA=0.8796).
+- The fix's real benefit is expected on NC281 (cells with meaningful Z motion) — untested here.
+
+---
+
+## Confidence-Based Z Flow Filtering Test (2026-04-16)
+
+After implementing confidence-based Z filtering (NC281 found +0.007 TE benefit), confirmed it's a no-op on MDA231 as expected.
+
+MDA231 |confidence| in-region distribution: range [0, 320], p25=0, p50=0.002, p75=0.016. Very different scale from NC281 ([0, 0.012]).
+
+| Run | threshold | % unreliable | TRA | DET | LNK | fp | fn | ns |
+|-----|-----------|--------------|-----|-----|-----|-----|-----|-----|
+| Baseline (no filter) | off | 0% | 0.8808 | 0.8857 | 0.8449 | 101 | 28 | 7 |
+| Filter @ 0 | 0.0 | 8.6% | 0.8808 | 0.8857 | 0.8449 | 101 | 28 | 7 |
+| Filter @ 0.01 | 0.01 | 13.7% | 0.8808 | 0.8857 | 0.8449 | 101 | 28 | 7 |
+
+**Identical metrics across all runs** — Z motion is so small on MDA231 that dropping Z-flow contribution for some nodes doesn't change which edges the ILP selects. Filter is safely a no-op here.

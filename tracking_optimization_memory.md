@@ -257,3 +257,36 @@ Prior best (no intensity): PF-B2R1 (exp_uid: 2026-04-03_11-37-48)
 - adhesion_constant: insensitive in [0, 1500]
 
 **Remaining untested:** intensity (need to calibrate for new seg, std≈211), curvature (previously hurt DET).
+
+---
+
+## Flow Unit-Fix Re-optimization (2026-04-15)
+
+**Fix:** Optical flow is now scaled by voxel size at node attachment (`src/mhat/tracking/utils.py:62-68`). Pre-fix, `drift_dist = norm(pos_u + flow_u - pos_v)` mixed world-unit positions with pixel-unit flow — distorted in anisotropic Z.
+
+**MDA231 voxel scale:** Z=6.0, Y=1.242, X=1.242 μm.
+
+**Impact on MDA231:** negligible. drift_dist stats shifted mean 18.60→18.38, std 15.75→16.25. Cost std stayed ~900. Metrics at optimal config unchanged (TRA=0.8808, DET=0.8857, LNK=0.8449, fp=101, fn=28, ns=7).
+
+**Reason:** Cells in MDA231 move predominantly in XY. Z flow magnitudes are small, so scaling them by 6× barely affects drift_dist.
+
+### Drift Re-optimization Results (6 runs)
+
+| Run | drift_w | drift_c | TRA | DET | LNK | fp |
+|-----|---------|---------|-----|-----|-----|-----|
+| **Baseline** | 57 | -2000 | 0.8808 | 0.8857 | 0.8449 | 101 |
+| B1R1 | 50 | -2000 | 0.8796 | 0.8857 | 0.8348 | 101 |
+| B1R2 | 65 | -2000 | 0.8808 | 0.8857 | 0.8449 | 101 |
+| B1R3 | 40 | -2000 | 0.8796 | 0.8857 | 0.8348 | 101 |
+| B1R4 | 57 | -2200 | 0.8803 | 0.8852 | 0.8449 | 103 |
+| B1R5 | 57 | -1800 | 0.8808 | 0.8857 | 0.8449 | 101 |
+
+### Post-Fix Confirmed Principles
+
+- drift_w=57, drift_c=-2000 remain optimal (no change from pre-fix).
+- Two quantized regimes: drift_w ∈ [57, 65] → optimal; drift_w ∈ [40, 50] → slight LNK drop (0.8449→0.8348, fn_edges 50→52).
+- drift_c insensitive in [-2000, -1800]; -2200 adds 2 fp.
+
+### Open Question
+
+- **NC281 likely has more Z motion** — the fix should have a real impact there. Separate re-optimization needed for NC281.

@@ -83,7 +83,7 @@ def report_graph_statistics(config, track_graph):
     print("=" * 100 + "\n")
 
 
-def add_costs(solver, config, force_all=False):
+def add_costs(solver, config, force_all=False, no_merges=False):
     """Add ILP cost terms to the solver.
 
     Two inclusion regimes, selected by `force_all`:
@@ -111,6 +111,10 @@ def add_costs(solver, config, force_all=False):
       offset and is never added on this path.
 
     Appear/disappear costs are always added on both paths.
+
+    `no_merges=True` force-skips cohesion/adhesion on every path: in no-merge mode
+    the segmentation has no merge hierarchy, so those node attributes are never
+    computed and referencing them would fail.
     """
     def _include(ablate_key, weight_key, const_key):
         """Decide whether to add a feature cost under the active regime."""
@@ -180,8 +184,13 @@ def add_costs(solver, config, force_all=False):
         print("Skipping curvature cost")
 
     # cohesion/adhesion share a single fit-time exclusion flag, but on the runtime
-    # path each is included independently by its own weight/constant.
-    if force_all:
+    # path each is included independently by its own weight/constant. In no-merge
+    # mode the segmentation has no merge hierarchy, so the cohesion/adhesion node
+    # attributes are never computed -- skip both regardless of weights/flags.
+    if no_merges:
+        add_cohesion = add_adhesion = False
+        print("Skipping cohesion/adhesion costs (no-merge mode)")
+    elif force_all:
         add_cohesion = add_adhesion = not config.get("ablate_cohesion_adhesion", False)
     else:
         add_cohesion = config.get("cohesion_weight", 0) != 0 or config.get("cohesion_constant", 0) != 0
@@ -223,7 +232,7 @@ def add_costs(solver, config, force_all=False):
     )
 
 
-def solve_with_motile(config, graph, exclusion_sets):
+def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
     """Set up and solve the network flow problem.
 
     Args:
@@ -237,7 +246,7 @@ def solve_with_motile(config, graph, exclusion_sets):
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(1))
 
-    add_costs(solver, config)
+    add_costs(solver, config, no_merges=no_merges)
 
     report_graph_statistics(config, graph)
 

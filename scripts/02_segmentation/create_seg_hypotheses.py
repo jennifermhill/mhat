@@ -246,7 +246,14 @@ if __name__ == "__main__":
     if "affinities" not in output_root or config["overwrite"]:
         generate_fluorescent_affinities(data_dir, output_root, config["affinity_params"])
 
-    threshold = config["merge_thresholds"]
-
     merge_history_file = output_dir / "merge_history.csv"
-    get_segmentation(output_root, threshold, merge_history_file)
+
+    if config.get("skip_merges", False):
+        print("Skipping waterz agglomeration (skip_merges=True). Writing empty merge history.")
+        fields = ["a", "b", "c", "cost", "timepoint"]
+        with open(merge_history_file, "w") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+    else:
+        threshold = config["merge_thresholds"]
+        get_segmentation(output_root, threshold, merge_history_file, config["waterz_params"])

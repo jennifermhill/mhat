@@ -31,7 +31,10 @@ def load_merge_history(merge_path: Path) -> np.ndarray:
             timepoint = int(row["timepoint"])
             merge_history.append([a, b, c, cost, timepoint])
 
-    merge_history = np.array(merge_history)
+    if len(merge_history) == 0:
+        merge_history = np.empty((0, 5))
+    else:
+        merge_history = np.array(merge_history)
     return merge_history
 
 

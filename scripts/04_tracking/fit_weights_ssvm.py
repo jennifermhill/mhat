@@ -272,6 +272,14 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
         config, raw_dir, seg_dir, flow_dirs
     )
 
+    # Mirror run_tracking.py: a segmentation with no merge history (e.g. cellpose
+    # in skip-merges mode) is fit in no-merge mode, where cohesion/adhesion node
+    # attributes don't exist and must be skipped (see add_costs).
+    no_merges = len(merge_history) == 0
+    if no_merges:
+        print("No merge history found. Fitting in no-merge (fragments-only) mode; "
+              "cohesion/adhesion costs will be skipped.")
+
     print("Loading GT...")
     gt_graph, gt_seg = load_gt(gt_data_dir, scale)
 
@@ -295,7 +303,7 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
     # force_all=True: weights/constants start at 0 here, so the runtime
     # "0 weight + 0 constant = ablated" rule would skip every cost and leave
     # nothing to fit. Add every feature cost except those excluded via ablate_*.
-    add_costs(solver, config, force_all=True)
+    add_costs(solver, config, force_all=True, no_merges=no_merges)
     # ExclusiveNodes must be added before fit_weights — the loss-augmented ILP
     # in SoftMarginLoss copies solver.constraints at construction time.
     solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))

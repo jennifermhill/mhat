@@ -192,19 +192,33 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     ]
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
-    merge_history = create_multihypo_graph.normalize_costs(merge_history)
-    merge_history = create_multihypo_graph.renumber_merge_history(
-        merge_history, max_node_id
-    )
+    no_merges = len(merge_history) == 0
 
-    # Save the normalized and renumbered merge history
-    fields = ["a", "b", "c", "cost", "timepoint"]
+    if no_merges:
+        print("No merge history found. Running in no-merge (fragments-only) mode.")
+        # Warn if cohesion/adhesion config is nonzero
+        coh_adh_keys = ["cohesion_weight", "cohesion_constant", "adhesion_weight", "adhesion_constant"]
+        if any(config.get(k, 0.0) != 0.0 for k in coh_adh_keys):
+            print("Warning: cohesion/adhesion weights/constants are nonzero but will be ignored in no-merge mode")
+        # Write empty normalized merge history for consistency
+        fields = ["a", "b", "c", "cost", "timepoint"]
+        with open(normalized_merge_history_csv_path, "w") as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
+    else:
+        merge_history = create_multihypo_graph.normalize_costs(merge_history)
+        merge_history = create_multihypo_graph.renumber_merge_history(
+            merge_history, max_node_id
+        )
 
-    with open(normalized_merge_history_csv_path, "w") as f:
-        writer = csv.writer(f)
-        writer.writerow(fields)
-        for row in merge_history:
-            writer.writerow(row)
+        # Save the normalized and renumbered merge history
+        fields = ["a", "b", "c", "cost", "timepoint"]
+
+        with open(normalized_merge_history_csv_path, "w") as f:
+            writer = csv.writer(f)
+            writer.writerow(fields)
+            for row in merge_history:
+                writer.writerow(row)
 
     z_flow_conf_threshold = config.get("z_flow_conf_threshold", None)
     z_flow_min_pass_pixels = config.get("z_flow_min_pass_pixels", 10)
@@ -216,20 +230,37 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
 
     for timepoint in range(img_shape[0]):
         print(f"Processing timepoint {timepoint}")
-        cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
-            fragments[timepoint],
-            merge_history[merge_history[:, 4] == timepoint],
-            min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
-            max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
-            raw_img=raw_img[timepoint],
-            flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
-            flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
-            confidence_3d=confidence_3d[timepoint] if confidence_3d is not None else None,
-            z_flow_conf_threshold=z_flow_conf_threshold,
-            z_flow_min_pass_pixels=z_flow_min_pass_pixels,
-            size_threshold=config["size_threshold"],
-            scale=scale,
-        )
+        if no_merges:
+            cand_graph = utils.nodes_from_segmentation(
+                fragments[timepoint],
+                raw_img=raw_img[timepoint],
+                flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
+                flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
+                confidence_3d=confidence_3d[timepoint] if confidence_3d is not None else None,
+                z_flow_conf_threshold=z_flow_conf_threshold,
+                z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+                size_threshold=config["size_threshold"],
+                tp=timepoint,
+                scale=scale,
+            )
+            for node in cand_graph.nodes():
+                cand_graph.nodes[node]["num_leaves"] = 1
+            exclusion_sets = []
+        else:
+            cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
+                fragments[timepoint],
+                merge_history[merge_history[:, 4] == timepoint],
+                min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
+                max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
+                raw_img=raw_img[timepoint],
+                flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
+                flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
+                confidence_3d=confidence_3d[timepoint] if confidence_3d is not None else None,
+                z_flow_conf_threshold=z_flow_conf_threshold,
+                z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+                size_threshold=config["size_threshold"],
+                scale=scale,
+            )
         if timepoint == 0:
             all_cand_graph = cand_graph
             all_exclusion_sets = exclusion_sets
@@ -276,7 +307,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     print(f"Saved {len(cand_edge_list)} candidate edges to {cand_edges_path}")
 
     print("Solving tracking with motile...")
-    solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets)
+    solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets, no_merges=no_merges)
 
     if solution_graph is None:
         print("No solution graph (stats_only mode); skipping result save.")

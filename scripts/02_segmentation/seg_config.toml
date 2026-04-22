@@ -6,6 +6,7 @@ dataset = "03_nuclei"
 
 overwrite = false
 merge_thresholds = [1.0]
+skip_merges = true
 
 # segmentation parameters
 [seg_params]

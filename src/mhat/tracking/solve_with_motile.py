@@ -81,7 +81,7 @@ def report_graph_statistics(config, track_graph):
     print("=" * 100 + "\n")
 
 
-def solve_with_motile(config, graph, exclusion_sets):
+def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
     """Set up and solve the network flow problem.
 
     Args:
@@ -143,23 +143,26 @@ def solve_with_motile(config, graph, exclusion_sets):
     else:
         print("Skipping curvature cost (weight=0)")
 
-    solver.add_cost(
-        motile.costs.NodeSelection(
-            weight=config["cohesion_weight"],
-            attribute="cohesion",
-            constant=config["cohesion_constant"],
-        ),
-        name="cohesion",
-    )
+    if no_merges:
+        print("Skipping cohesion/adhesion costs (no-merge mode)")
+    else:
+        solver.add_cost(
+            motile.costs.NodeSelection(
+                weight=config["cohesion_weight"],
+                attribute="cohesion",
+                constant=config["cohesion_constant"],
+            ),
+            name="cohesion",
+        )
 
-    solver.add_cost(
-        motile.costs.NodeSelection(
-            weight=config["adhesion_weight"],
-            attribute="adhesion",
-            constant=config["adhesion_constant"],
-        ),
-        name="adhesion",
-    )
+        solver.add_cost(
+            motile.costs.NodeSelection(
+                weight=config["adhesion_weight"],
+                attribute="adhesion",
+                constant=config["adhesion_constant"],
+            ),
+            name="adhesion",
+        )
 
     solver.add_cost(
         motile.costs.Appear(

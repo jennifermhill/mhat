@@ -14,6 +14,12 @@ seg_method = "cellpose"
 spot_sigma = 3.0
 outline_sigma = 0.5
 
+[seg_params.cellpose_params]
+flow_threshold = 0.4
+cellprob_threshold = -3.0
+batch_size = 32
+do_3D = true
+
 [affinity_params]
 smoothing = [1, 1, 1]
 neighborhood = [[0,0,1], [0,1,0], [1,0,0]]

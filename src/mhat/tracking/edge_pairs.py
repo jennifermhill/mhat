@@ -13,9 +13,11 @@ class EdgePairs(motile.variables.Variable):
           (in_edge, out_edge)
           # for each node
           for node in solver.graph.nodes
-          # for each pair of incoming and outgoing edge
+          # for each pair of incoming and outgoing edge (simple edges only)
           for in_edge in solver.graph.prev_edges[node]
+          if isinstance(in_edge[0], (int, np.integer))
           for out_edge in solver.graph.next_edges[node]
+          if isinstance(out_edge[0], (int, np.integer))
       ]
 
       return edge_pairs

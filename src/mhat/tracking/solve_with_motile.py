@@ -19,18 +19,20 @@ def report_graph_statistics(config, track_graph):
                 node_attrs[attr][0].append(data[attr])
                 node_attrs[attr][1].append(num_leaves)
 
-    # Collect edge attributes
+    # Collect edge attributes (simple edges only, skip hyperedges)
     edge_attrs = {"drift_dist": [], "area_diff": [], "intensity_diff": []}
     for edge_key, data in track_graph.edges.items():
+        if not isinstance(edge_key[0], (int, np.integer)):
+            continue
         for attr in edge_attrs:
             if attr in data:
                 edge_attrs[attr].append(data[attr])
 
-    # Compute curvature values from edge pairs
+    # Compute curvature values from edge pairs (simple edges only)
     curvature_values = []
     for node in track_graph.nodes:
-        in_edges = list(track_graph.prev_edges[node])
-        out_edges = list(track_graph.next_edges[node])
+        in_edges = [e for e in track_graph.prev_edges[node] if isinstance(e[0], (int, np.integer))]
+        out_edges = [e for e in track_graph.next_edges[node] if isinstance(e[0], (int, np.integer))]
         for in_edge in in_edges:
             in_offset = np.array(track_graph.nodes[in_edge[1]]["centroid"]) - np.array(track_graph.nodes[in_edge[0]]["centroid"])
             for out_edge in out_edges:
@@ -175,7 +177,33 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
         )
     )
 
-    scale_by_leaves(solver)
+    if config.get("skip_scale_by_leaves", False):
+        print("Skipping scale_by_leaves (ablation flag set)")
+    else:
+        scale_by_leaves(solver)
+
+    # Sanity check: if coh/adh ablation is active, verify post-scaling costs
+    # are uniform (std ≈ 0) for each attribute independently.
+    if config.get("ablate_cohesion_adhesion", False):
+        for attr, w_key, c_key in [
+            ("cohesion", "cohesion_weight", "cohesion_constant"),
+            ("adhesion", "adhesion_weight", "adhesion_constant"),
+        ]:
+            weight = config.get(w_key, 0.0)
+            constant = config.get(c_key, 0.0)
+            scaled_costs = []
+            for node_id, data in graph.nodes.items():
+                if attr in data:
+                    nl = data.get("num_leaves", 1)
+                    scaled_costs.append((weight * data[attr] + constant) * nl)
+            if scaled_costs:
+                std = np.std(scaled_costs)
+                assert std < 1e-6, (
+                    f"ABLATION SANITY CHECK FAILED: {attr} cost std={std:.6f} "
+                    f"after scale_by_leaves (expected ~0)"
+                )
+                print(f"ABLATION SANITY CHECK: {attr} cost std={std:.2e} after "
+                      f"scaling (OK)")
 
     report_graph_statistics(config, graph)
 

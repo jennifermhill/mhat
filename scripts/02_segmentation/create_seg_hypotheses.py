@@ -175,10 +175,16 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params):
 
         ws_affs = affinities_3d.astype(np.float32)
 
-        # TODO: Implement as dict to look up scoring function from config
         score_func = waterz_params.get("scoring_function", None)
         if score_func == "random":
             score_func = "Random<RegionGraphType>"
+        elif score_func == "symmetric":
+            score_func = (
+                "Divide<"
+                "Subtract<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>,"
+                "Add<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>"
+                ">"
+            )
         else:
             score_func = "OneMinus<MeanAffinity<RegionGraphType, ScoreValue>>"
         

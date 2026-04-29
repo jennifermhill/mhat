@@ -1,22 +1,22 @@
 # IO
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
-experiment = "NC281-Fl2mSiH2B"
-dataset = "03_nuclei"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
 
 overwrite = false
 merge_thresholds = [1.0]
-skip_merges = true
+skip_merges = false
 
 # segmentation parameters
 [seg_params]
-seg_method = "otsu"
-spot_sigma = 0.5
+seg_method = "cellpose"
+spot_sigma = 3.0
 outline_sigma = 0.5
 
 [affinity_params]
-smoothing = 0
+smoothing = [1, 1, 1]
 neighborhood = [[0,0,1], [0,1,0], [1,0,0]]
 
 [waterz_params]
-# scoring_function = "random"
+scoring_function = "symmetric"

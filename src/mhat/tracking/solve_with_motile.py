@@ -97,7 +97,7 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(1))
 
-    if config["drift_weight"] != 0:
+    if config["drift_weight"] != 0 or config["drift_constant"] != 0:
         solver.add_cost(
             motile.costs.EdgeSelection(
                 weight=config["drift_weight"],
@@ -107,9 +107,9 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
             name="drift",
         )
     else:
-        print("Skipping drift cost (weight=0)")
+        print("Skipping drift cost (weight=0, constant=0)")
 
-    if config["area_weight"] != 0:
+    if config["area_weight"] != 0 or config["area_constant"] != 0:
         solver.add_cost(
             motile.costs.EdgeSelection(
                 weight=config["area_weight"],
@@ -119,9 +119,9 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
             name="area",
         )
     else:
-        print("Skipping area cost (weight=0)")
+        print("Skipping area cost (weight=0, constant=0)")
 
-    if config["intensity_weight"] != 0:
+    if config["intensity_weight"] != 0 or config["intensity_constant"] != 0:
         solver.add_cost(
             motile.costs.EdgeSelection(
                 weight=config["intensity_weight"],
@@ -131,9 +131,9 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
             name="intensity",
         )
     else:
-        print("Skipping intensity cost (weight=0)")
+        print("Skipping intensity cost (weight=0, constant=0)")
 
-    if config["curvature_weight"] != 0:
+    if config["curvature_weight"] != 0 or config["curvature_constant"] != 0:
         solver.add_cost(
             CurvatureCost(
                 weight=config["curvature_weight"],
@@ -143,7 +143,7 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
             name="curvature",
         )
     else:
-        print("Skipping curvature cost (weight=0)")
+        print("Skipping curvature cost (weight=0, constant=0)")
 
     if no_merges:
         print("Skipping cohesion/adhesion costs (no-merge mode)")

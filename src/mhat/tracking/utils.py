@@ -342,6 +342,59 @@ def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
         cand_graph.edges[edge]["intensity_diff"] = intensity_diff
 
 
+def apply_mean_ablation(config: dict, track_graph: motile.TrackGraph) -> None:
+    """Replace graph attribute values with their mean to ablate discriminating power.
+
+    Weights and constants stay unchanged; only the attribute values are
+    flattened so that the cost std becomes zero for ablated attributes.
+    """
+    # Node attributes: cohesion and adhesion (treated as a single group)
+    # Compute mean of the full cost (weight * attr + constant) * num_leaves,
+    # then solve for the attribute value that gives each node that target cost:
+    #   target = (weight * attr_new + constant) * nl
+    #   attr_new = (target / nl - constant) / weight
+    if config.get("ablate_cohesion_adhesion", False):
+        for attr, w_key, c_key in [
+            ("cohesion", "cohesion_weight", "cohesion_constant"),
+            ("adhesion", "adhesion_weight", "adhesion_constant"),
+        ]:
+            weight = config.get(w_key, 0.0)
+            constant = config.get(c_key, 0.0)
+            if weight == 0.0:
+                continue
+            costs = []
+            for _, data in track_graph.nodes.items():
+                if attr in data:
+                    nl = data.get("num_leaves", 1)
+                    costs.append((weight * data[attr] + constant) * nl)
+            if costs:
+                target = np.mean(costs)
+                n = len(costs)
+                for _, data in track_graph.nodes.items():
+                    if attr in data:
+                        nl = data.get("num_leaves", 1)
+                        data[attr] = (target / nl - constant) / weight
+                print(f"ABLATION: replaced {attr} with target cost="
+                      f"{target:.4f} on {n} nodes")
+
+    # Edge attributes
+    edge_ablations = [
+        ("ablate_drift", "drift_dist"),
+        ("ablate_area", "area_diff"),
+        ("ablate_intensity", "intensity_diff"),
+    ]
+    for flag, attr in edge_ablations:
+        if config.get(flag, False):
+            vals = [data[attr] for _, data in track_graph.edges.items() if attr in data]
+            if vals:
+                mean_val = np.mean(vals)
+                for _, data in track_graph.edges.items():
+                    if attr in data:
+                        data[attr] = mean_val
+                print(f"ABLATION: replaced {attr} with mean={mean_val:.4f} "
+                      f"on {len(vals)} edges")
+
+
 @profile
 def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: bool = True) -> nx.DiGraph:
     """Add hyper edges representing specific merges and divisions to the graph

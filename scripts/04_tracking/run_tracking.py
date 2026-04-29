@@ -71,41 +71,54 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     flow_group = "flow_raw"
 
     max_edge_distance = config["max_edge_distance"]
+    max_timepoints = config.get("max_timepoints", None)
 
-    raw_img = zarr.open(raw_zarr_path)[:, 0, ...]
+    raw_zarr = zarr.open(raw_zarr_path)
     seg_zarr_root = zarr.open(seg_zarr_path)
-    fragments = seg_zarr_root[seg_group][:]
+    n_total_frames = seg_zarr_root[seg_group].shape[0]
+    n_frames = min(max_timepoints, n_total_frames) if max_timepoints is not None else n_total_frames
+    if n_frames < n_total_frames:
+        print(f"Truncating to first {n_frames} timepoints (of {n_total_frames})")
+    raw_img = raw_zarr[:n_frames, 0, ...]
+    fragments = seg_zarr_root[seg_group][:n_frames]
     if flow_2d_zarr_path is not None:
         flow_2d_zarr_root = zarr.open(flow_2d_zarr_path)
-        flow_2d = flow_2d_zarr_root[flow_group][:]
-        # Add a zero flow for the last timepoint
-        flow_2d = np.concatenate(
-            [flow_2d, np.zeros((1, *flow_2d[0].shape), dtype=flow_2d.dtype)],
-            axis=0,
-        )
+        flow_2d_zarr = flow_2d_zarr_root[flow_group]
+        flow_2d_shape = flow_2d_zarr.shape
+        n_flow_frames_2d = flow_2d_shape[0]
     else:
-        flow_2d = None
+        flow_2d_zarr = None
+        flow_2d_shape = None
     if flow_3d_zarr_path is not None:
         flow_3d_zarr_root = zarr.open(flow_3d_zarr_path)
-        flow_3d = flow_3d_zarr_root[flow_group][:]
-        # Add a zero flow for the last timepoint
-        flow_3d = np.concatenate(
-            [flow_3d, np.zeros((1, *flow_3d[0].shape), dtype=flow_3d.dtype)],
-            axis=0,
-        )
-        # Try to load the per-pixel confidence array from the same zarr (optional).
+        flow_3d_zarr = flow_3d_zarr_root[flow_group]
+        flow_3d_shape = flow_3d_zarr.shape
+        n_flow_frames_3d = flow_3d_shape[0]
         if "confidence" in flow_3d_zarr_root:
-            confidence_3d = flow_3d_zarr_root["confidence"][:]
-            confidence_3d = np.concatenate(
-                [confidence_3d, np.zeros((1, *confidence_3d[0].shape), dtype=confidence_3d.dtype)],
-                axis=0,
-            )
+            confidence_3d_zarr = flow_3d_zarr_root["confidence"]
         else:
-            confidence_3d = None
+            confidence_3d_zarr = None
     else:
-        flow_3d = None
-        confidence_3d = None
-    print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d.shape if flow_2d is not None else None}, flow_3d shape: {flow_3d.shape if flow_3d is not None else None}")
+        flow_3d_zarr = None
+        flow_3d_shape = None
+        confidence_3d_zarr = None
+
+    def load_flow_timepoint(zarr_arr, n_frames, timepoint):
+        """Load a single timepoint from a flow zarr, returning zeros for the last frame."""
+        if zarr_arr is None:
+            return None
+        if timepoint < n_frames:
+            return zarr_arr[timepoint]
+        else:
+            return np.zeros(zarr_arr.shape[1:], dtype=zarr_arr.dtype)
+
+    # Create wrapper objects that support [timepoint] indexing for lazy loading
+    # and is-not-None checks for downstream flow detection
+    flow_2d = flow_2d_zarr  # None if no 2D flow
+    flow_3d = flow_3d_zarr  # None if no 3D flow
+    confidence_3d = confidence_3d_zarr  # None if no confidence
+
+    print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d_shape if flow_2d_zarr is not None else None}, flow_3d shape: {flow_3d_shape if flow_3d_zarr is not None else None}")
     axes = seg_zarr_root[seg_group].attrs.get("axes", None)
     if axes is not None:
         for axis in axes:
@@ -123,7 +136,22 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     ]
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
+    skip_merge_hypotheses = config.get("skip_merge_hypotheses", False)
     no_merges = len(merge_history) == 0
+
+    if skip_merge_hypotheses and not no_merges:
+        # Pre-merge fragments to max_merge_cost level, then run as no-merge mode
+        print("skip_merge_hypotheses=true: pre-merging fragments and running without multi-hypothesis")
+        max_cost = config.get("max_merge_cost", config.get("max_merge_score", 1.0))
+        for merge in merge_history:
+            a, b, c, cost, tp = merge
+            a, b, c = int(a), int(b), int(c)
+            tp = int(tp)
+            if tp < n_frames and cost <= max_cost:
+                fragments[tp][fragments[tp] == a] = c
+                fragments[tp][fragments[tp] == b] = c
+        merge_history = np.empty((0, 5))
+        no_merges = True
 
     if no_merges:
         print("No merge history found. Running in no-merge (fragments-only) mode.")
@@ -161,13 +189,17 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
 
     for timepoint in range(img_shape[0]):
         print(f"Processing timepoint {timepoint}")
+        # Lazy-load flow data for this timepoint
+        flow_2d_tp = load_flow_timepoint(flow_2d_zarr, n_flow_frames_2d, timepoint) if flow_2d_zarr is not None else None
+        flow_3d_tp = load_flow_timepoint(flow_3d_zarr, n_flow_frames_3d, timepoint) if flow_3d_zarr is not None else None
+        conf_3d_tp = load_flow_timepoint(confidence_3d_zarr, n_flow_frames_3d, timepoint) if confidence_3d_zarr is not None else None
         if no_merges:
             cand_graph = utils.nodes_from_segmentation(
                 fragments[timepoint],
                 raw_img=raw_img[timepoint],
-                flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
-                flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
-                confidence_3d=confidence_3d[timepoint] if confidence_3d is not None else None,
+                flow_3d=flow_3d_tp,
+                flow_2d=flow_2d_tp,
+                confidence_3d=conf_3d_tp,
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,
                 size_threshold=config["size_threshold"],
@@ -184,12 +216,13 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
                 min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
                 max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
                 raw_img=raw_img[timepoint],
-                flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
-                flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
-                confidence_3d=confidence_3d[timepoint] if confidence_3d is not None else None,
+                flow_2d=flow_2d_tp,
+                flow_3d=flow_3d_tp,
+                confidence_3d=conf_3d_tp,
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,
                 size_threshold=config["size_threshold"],
+                tp=timepoint,
                 scale=scale,
             )
         if timepoint == 0:
@@ -228,10 +261,15 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         utils.add_drift_dist_attr(track_graph, drift=0)
     utils.add_area_diff_attr(track_graph)
     utils.add_intensity_diff_attr(track_graph)
+    utils.apply_mean_ablation(config, track_graph)
 
-    # Save candidate edge list for analysis
+    # Save candidate edge list for analysis (simple edges only, skip hyperedges)
     cand_edges_path = output_dir / "candidate_edges.npy"
-    cand_edge_list = np.array([(e[0], e[1]) for e in track_graph.edges], dtype=np.int64)
+    simple_edges = [(e[0], e[1]) for e in track_graph.edges if isinstance(e[0], (int, np.integer)) and isinstance(e[1], (int, np.integer))]
+    if simple_edges:
+        cand_edge_list = np.array(simple_edges, dtype=np.int64)
+    else:
+        cand_edge_list = np.empty((0, 2), dtype=np.int64)
     np.save(cand_edges_path, cand_edge_list)
     print(f"Saved {len(cand_edge_list)} candidate edges to {cand_edges_path}")
 

@@ -265,3 +265,157 @@ Verdict: [supported/falsified/inconclusive] — [one line explanation]
 ```
 | Run | Changed Params | TE | TF_mean | Node_Recall | Edge_Recall | Notes |
 ```
+
+## NC281-Sparse-Label Tracking Optimization Pipeline
+
+Iterative optimization for the NC281-sparse-label/01_nuclei_denoised dataset. Same pipeline shape as the other two datasets, but **runs on the Janelia cluster** (LSF, mhat2 env, gurobi module) with parallel batches rather than sequential local runs.
+
+### Cluster Pipeline
+
+Tracking and evaluation are submitted as parallel LSF jobs:
+
+- `scripts/04_tracking/launch_batch.py` — orchestrator that generates unique `exp_uid`s and submits parallel tracking jobs. Run-spec list is hardcoded inside `main()` and edited per batch.
+- `scripts/04_tracking/launch_curvature_batch.py` — variant for curvature-weight sweeps (takes paired `--curvature-weights` and `--curvature-constants`).
+- `scripts/04_tracking/submit_evals.py` — submits dependent eval jobs with LSF `ended()` deps so they fire even if tracking exits with code 120 (a known post-completion exit-code anomaly; outputs are still valid).
+
+Inner command for tracking jobs:
+```bash
+module load gurobi && conda run -n mhat2 --no-capture-output python -u <run_tracking.py> <config>
+```
+
+Per-batch artifacts (configs + manifest) land in `experiments/tracking/NC281-sparse-label/01_nuclei_denoised/batches/<batch_id>/`. LSF logs land in the sibling `logs/` directory; eval logs in `experiments/evaluation/.../logs/`.
+
+### Evaluation Setup
+
+- **Metrics**: `basic` (BasicMetrics) + `track_overlap` (TrackOverlapMetrics)
+- **Matcher**: `point` (PointMatcher) — Hungarian matching on node positions with distance threshold
+- **match_threshold**: 10
+
+### Metrics Reference
+
+Same fields as NC281-Fl2mSiH2B (BasicMetrics + TrackOverlapMetrics).
+
+### Optimization Targets
+
+The NC281-sparse-label dataset name is misleading — the **GT is densely annotated** ("sparse-label" refers to the raw-data labeling sparsity, not GT sparsity). Because GT is dense, **precision and purity are reliable metrics here** (unlike NC281-Fl2mSiH2B where sparse GT makes them unreliable). Optimize all three of recall, coverage, and purity.
+
+**Primary targets**:
+- `target_effectiveness` (TE)
+- `track_fractions` mean (TF)
+- `track_purity` — promoted to primary here; a config that inflates NodeR by adding FPs is *not* an improvement
+
+**Diagnostic signals**:
+- `Node Recall`, `Edge Recall` — detection / linking coverage of GT
+- `False Positive Nodes`, `False Negative Edges` — counterbalancing signals to recall
+
+### Baseline Metrics (2026-04-28)
+
+- TE: 0.769, TF: 0.779, Node Recall: 0.932, Edge Recall: 0.880
+
+### Optimization Log Files
+
+- `nc281_sparse_optimization_log.md` — full log (append-only)
+- `nc281_sparse_optimization_memory.md` — working memory (read + update each batch)
+
+### Optimization Strategy
+
+Same general approach as the other two datasets (coordinate-wise search, 5 runs per batch, hypothesis-driven), with these dataset-specific notes:
+
+**Cluster ergonomics**:
+- Tracking runs occasionally exit 120 *after* writing valid outputs (Python shutdown phase quirk). `submit_evals.py` uses `ended()` dependencies so evals fire regardless. If output dirs have complete `pred_tracks.zarr/{nodes,edges,.zattrs}` and `pred_seg.zarr`, the run succeeded despite the exit code.
+- Use `python -u` in the bsub inner command (already in the launchers) for unbuffered stdout — best practice on long runs.
+- Walltime: 24h tracking, 1h eval is sufficient for current operating point. R2 (newer seg) and R3 (cohesion variants) had previous runs at 14h+ — consider queue default for those.
+
+**Diagnostic guidance**:
+- **Low TE/TF** → adjust drift / cohesion. drift_weight=100 (from 25) was the cleanest single-param win at baseline.
+- **Low Node Recall** → consider `size_threshold=0` (recovers small-object FNs) or richer seg, but watch purity.
+- **Low Edge Recall** → drift weight, edge costs.
+- **Inactive parameters at current operating point**: cohesion_constant, appear_constant, disappear_constant. Confirmed in B1R3, B1R4.
+
+**Log entry format** (append to `nc281_sparse_optimization_log.md`):
+```
+### B{batch}R{run}: [param change description]
+exp_uid: <from manifest.toml or config.toml>
+Hypothesis: "[specific testable prediction]"
+TE: X, TF_mean: X, Node_Recall: X, Edge_Recall: X, Purity: X
+Verdict: [supported/falsified/inconclusive] — [one line explanation]
+```
+
+**Reporting format** after each batch:
+```
+| Run | Changed Params | NodeR | EdgeR | TE | TF | Purity | Notes |
+```
+
+## Fluo-C3DH-H157 Tracking Optimization Pipeline
+
+Iterative optimization for Fluo-C3DH-H157/01_cells. Same pipeline shape as the other datasets, but with a key structural difference: **runs in `skip_merge_hypotheses=true` mode**, which disables multi-hypothesis selection and exclusion sets. As a consequence, **ILP cost tuning has essentially no effect on this dataset** — the only lever that moves metrics is `size_threshold`.
+
+### Run Mode and Why ILP Costs Don't Matter
+
+- `skip_merge_hypotheses = true` means the pipeline pre-merges fragments to the maximum level and feeds a single set of node hypotheses to the ILP (no alternatives, no exclusion sets).
+- Without exclusion sets, the ILP has no node-selection trade-off — every node is selected, and every feasible edge is chosen.
+- This makes drift/area/intensity/curvature/cohesion/adhesion/appear/disappear costs all inert: B1R1-B1R4 confirmed identical metrics across intensity sign flips, appear/disappear up to 5000, curvature on/off, and stronger drift_c.
+- The only effective lever is `size_threshold` — it filters FP fragments **before** graph construction, so it changes the candidate node set itself rather than the ILP's selection from a fixed set.
+
+### Eval Setup
+
+- **Metrics**: `ctc` (CTCMetrics)
+- **Matcher**: `ctc` (CTCMatcher) — requires >50% IoU between predicted and GT segments to count as a match
+- **No `match_threshold`** for CTC matcher (it takes no kwargs)
+
+### Optimization Targets
+
+- **Primary**: TRA, DET (same priority as MDA231 — correct detections drive tracking)
+- **Secondary**: LNK (will follow from better detection)
+- **Diagnostics**: `fp_nodes`, `fn_nodes`, `fn_edges` — useful for diagnosing CTC matcher mismatches
+
+### Baseline Metrics (B0R0, 2026-04-24)
+
+- TRA: 0.860, DET: 0.855, LNK: 0.893 (size_threshold=500, MDA231 ILP params transferred uncalibrated)
+
+### Optimization Log Files
+
+- `h157_optimization_log.md` — full log (append-only)
+- `h157_optimization_memory.md` — working memory (read + update each batch)
+
+### Optimization Strategy
+
+**This dataset is unusual** — coordinate-wise ILP cost tuning won't move metrics. Strategy is fundamentally different:
+
+1. **Sweep size_threshold first** — it's the only lever. Real cells in H157 are 100k-495k voxels; FP fragments are <20k. There's a clear size gap.
+2. **Skip ILP cost tuning entirely** in skip_merge_hypotheses mode. Only revisit if `skip_merge_hypotheses=false` is re-enabled (which would restore exclusion sets and make ILP costs effective again).
+3. **Diagnose with CTC matcher in mind** — fn_nodes/fn_edges may be CTC IoU mismatches (predicted segment doesn't overlap its GT cell ≥50%) rather than tracking errors. These cannot be fixed by tuning.
+
+### Optimization Setup Notes
+
+- Timeline truncated to 15 timepoints for optimization speed (full sequence is 60 frames).
+- Segmentation: `2026-04-21_13-35-28` (cellpose, merge_thresholds=[1.0])
+- Optical flow: `2026-04-24_14-36-14` (2D Farneback + 3D Lucas-Kanade)
+- GT format: CTC (`01_GT` for the truncated 15-frame eval; `01_GT_full` saved for the full sequence).
+
+### Current Best (2026-04-24)
+
+- **B2R3 (size_threshold=50000)**: TRA=0.892, DET=0.892, LNK=0.893, fp=5, fn=6, fn_edges=6, 59 nodes selected.
+- **Plateau reached** — remaining errors are segmentation-level CTC matcher mismatches (predicted segments don't overlap GT segments ≥50%), not fixable via ILP tuning.
+
+### Open Questions
+
+1. Could re-enabling merge hypotheses (`skip_merge_hypotheses=false`) recover the 6 FN nodes via under-merged fragments? Would also restore ILP cost tuning as a real lever.
+2. Would a different (more fragmented) segmentation help bridge the IoU gap on the 6 mismatched nodes?
+3. Need to run full 60 timepoints with `size_threshold=50000` to confirm metrics generalize beyond the 15-frame optimization window.
+
+### Log Entry Format
+
+```
+### B{batch}R{run}: [param change description]
+exp_uid: <from manifest.toml or config.toml>
+Hypothesis: "[specific testable prediction]"
+TRA: X, DET: X, LNK: X, fp: X, fn: X, fn_edges: X
+Verdict: [supported/falsified/inconclusive] — [one line explanation]
+```
+
+### Reporting Format
+
+```
+| Run | Changed Params | TRA | DET | LNK | fp | fn | fn_edges | Nodes |
+```

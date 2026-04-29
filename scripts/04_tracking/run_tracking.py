@@ -207,6 +207,10 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     print("Solving tracking with motile...")
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets)
 
+    if solution_graph is None:
+        print("No solution graph (stats_only mode); skipping result save.")
+        return
+
     print("Saving results...")
  
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
@@ -232,8 +236,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
                axis_names=["time", "z", "y", "x"],
                axis_types=["time", "space", "space", "space"],
                axis_scales=scale,
-               metadata=metadata,
-               overwrite=True)
+               metadata=metadata)
     
 
 if __name__ == "__main__":
@@ -280,11 +283,12 @@ if __name__ == "__main__":
     else:
         flow_dirs = {"2d": None, "3d": None}
 
-    current_datetime = datetime.datetime.now()
-    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    config["exp_uid"] = exp_uid
+    exp_uid = config.get("exp_uid")
+    if not exp_uid:
+        exp_uid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        config["exp_uid"] = exp_uid
 
-    output_dir = output_base_dir / "tracking" / experiment / dataset / "test_run"
+    output_dir = output_base_dir / "tracking" / experiment / dataset / exp_uid
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 

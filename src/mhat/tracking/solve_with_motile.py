@@ -176,6 +176,10 @@ def solve_with_motile(config, graph, exclusion_sets):
 
     report_graph_statistics(config, graph)
 
+    if config.get("stats_only", False):
+        print("stats_only=true; exiting before ILP solve.")
+        return None
+
     solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))
 
     solver.solve()

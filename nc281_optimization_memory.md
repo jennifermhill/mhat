@@ -135,3 +135,24 @@ NC281 cells move meaningfully in Z, so Z-flow rescaling materially affected drif
 - Gap from old baseline (0.703 vs 0.690) — may be inherent to new semantics. Old coh_w=500, coh_c=-450 had a different cost profile that cannot be replicated.
 - Could different segmentation or flow results help more than parameter tuning?
 - Are there edge cost formulations beyond drift/area/intensity/curvature worth trying?
+- **Curvature as a solver-addition (single-cost over no-cost baseline) — pending cluster runs.** See "Curvature Addition Sweep" below. Prior curvature work (NC6-R5, 2026-04-28 batch) tested curvature *on top of* tuned/Full configs and found it harmful; the standalone-addition contribution is a separate question.
+
+## Curvature Addition Sweep — Plan (2026-04-29)
+
+**Status**: pending cluster runs (local solve hangs past 45 min). For the +Curvature bar on `solver_addition_results_nc281.png`. Curvature is the only active cost; all other weights and constants = 0 (`drift_c=0`); `appear/disappear=50`, `merges=false`.
+
+Curvature stats: count=100732, mean=6.628, std=4.112.
+
+### Sweep grid
+
+| Run | curv_w | curv_c | cost_mean | cost_std |
+|-----|-------:|-------:|----------:|---------:|
+| R1 | 25  | -300  | -135 | 103 |
+| R2 | 50  | -500  | -169 | 206 |
+| R3 | 100 | -800  | -137 | 411 |
+| R4 | 200 | -1500 | -176 | 822 |
+| R5 | 220 | -2000 | -542 | 905 |
+
+Distinct from the prior 2026-04-28 Curvature Batch (curvature on top of Full config with neutral cost_mean — harmful). Here curvature is a standalone addition over a no-cost baseline, matching how `+ Volume` / `+ Intensity` / `+ Drift` were evaluated.
+
+For reference, the equivalent MDA231 sweep best config (`curv_w=10, curv_c=-500`) gave TRA=0.853, DET=0.858, LNK=0.815 — competitive with `+Volume` and `+Drift` on that dataset.

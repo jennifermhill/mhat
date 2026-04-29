@@ -518,3 +518,29 @@ Verdict: Supported — ties B1 best. Cohesion magnitude insensitive in [-250, -5
 ### Interpretation
 
 The ~5% of nodes with near-zero confidence across their entire region were contributing pure noise in Z. Removing them prevents that noise from corrupting drift_dist for those edges, without over-filtering the many nodes where Z flow has real signal. This is different from the pre-fix regime where Z flow was uniformly attenuated — here we keep full-physical Z flow where it's trustworthy and drop it entirely where it's not.
+
+---
+
+## Curvature Addition Sweep — Plan (2026-04-29)
+
+**Setup**: 5 cluster runs to fill the +Curvature bar in `solver_addition_results_nc281.png`. Solver-addition convention: curvature is the *only* active cost, all other weights and constants = 0 (`drift_c=0`, `area_*=0`, `intensity_*=0`, `cohesion_*=0`, `adhesion_*=0`). `appear/disappear=50`, `merges=false`. Curvature stats: count=100732, mean=6.628, std=4.112.
+
+**Status**: pending. **Local solves do not finish** — a single run with curvature-only on NC281 hung past 45 minutes locally without completing the gurobi solve. Submit on cluster.
+
+### Sweep grid
+
+| Run | curv_w | curv_c | cost_mean | cost_std |
+|-----|-------:|-------:|----------:|---------:|
+| R1 | 25  | -300  | -135 | 103 |
+| R2 | 50  | -500  | -169 | 206 |
+| R3 | 100 | -800  | -137 | 411 |
+| R4 | 200 | -1500 | -176 | 822 |
+| R5 | 220 | -2000 | -542 | 905 |
+
+### Methodology note
+
+Distinct from the prior 2026-04-28 Curvature Batch (`Curv-B1R1`–`R5`), which tested curvature on top of the post-flow-fix Full config with neutral cost_mean and showed monotonic harm. This sweep measures curvature's standalone contribution as a single addition over a no-cost baseline, mirroring how `+ Volume`, `+ Intensity`, and `+ Drift` are evaluated on the addition plot.
+
+### Reference: MDA231 +Curvature addition (2026-04-29)
+
+Same methodology run on MDA231 finished in ~3 min/run. Best config: `curv_w=10, curv_c=-500` → TRA=0.853, DET=0.858, LNK=0.815. Comparable to +Volume (0.853) and slightly better than +Drift (0.846). NC281 result pending cluster runs.

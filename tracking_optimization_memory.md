@@ -290,3 +290,29 @@ Prior best (no intensity): PF-B2R1 (exp_uid: 2026-04-03_11-37-48)
 ### Open Question
 
 - **NC281 likely has more Z motion** — the fix should have a real impact there. Separate re-optimization needed for NC281.
+- **Curvature batch design — slightly encouraging variant.** Neutral curvature sweep (below) was harmful — slightly encouraging variant (`constant = -weight × curvature_mean - X` for some X) is the remaining untested form.
+
+---
+
+## Curvature Re-test, neutral cost_mean (2026-04-28)
+
+Tested curvature on top of post-flow-fix MDA231 best (INT-B1R1: TRA=0.881, DET=0.886, LNK=0.845, fp=101, fn=28, ns=7). Sweep used neutral cost_mean (`curvature_constant = -weight × curvature_mean`) so curvature only discriminates without globally penalizing/encouraging edges.
+
+**Curvature stats** (count=2737, mean=31.869, std=22.845): target weight ≈ 40 for cost_std=900.
+
+### Results
+
+| Run | curv_w | curv_c | TRA | DET | LNK | fp | fn | ns |
+|-----|--------|--------|-----|-----|-----|-----|-----|-----|
+| **Baseline** | 0 | 0 | **0.881** | **0.886** | **0.845** | **101** | **28** | **7** |
+| Curv-R1 | 10 | -319 | 0.880 | 0.885 | 0.845 | 104 | 28 | 7 |
+| Curv-R2 | 25 | -797 | 0.880 | 0.885 | 0.845 | 104 | 28 | 7 |
+| Curv-R3 | 50 | -1594 | 0.877 | 0.882 | 0.845 | 106 | 29 | 7 |
+| Curv-R4 | 100 | -3187 | 0.866 | 0.870 | 0.833 | 118 | 33 | 5 |
+| Curv-R5 | 200 | -6374 | 0.858 | 0.863 | 0.824 | 124 | 35 | 5 |
+
+### Conclusion
+
+**Curvature with neutral cost_mean does not help.** R1/R2 (low weight) quantize to a near-baseline regime with +3 fp; R3-R5 monotonically degrade as curvature_weight grows. Edge selection suffers progressively (LNK 0.845 → 0.824, fp 101 → 124). Confirms pre-fix finding "curvature hurts DET when cohesion is active" post-fix as well.
+
+**Remaining curvature direction**: slightly-encouraging variant (`constant = -weight × mean - X`). Untested.

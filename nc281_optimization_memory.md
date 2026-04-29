@@ -80,8 +80,33 @@ NC281 cells move meaningfully in Z, so Z-flow rescaling materially affected drif
 ### Open Questions
 
 - **Gap vs pre-fix (-0.037 TE) likely structural, not tuning-addressable.** Hypothesis: old optimum was partially lucky — buggy drift_dist inflated Z distances, happening to reward GT-aligned edges in this dataset. Post-fix drift is physically correct but selects a different valid subset. Sparse GT makes TE sensitive to which specific edges are chosen.
-- **Remaining untested**: adhesion under new drift regime (always harmful pre-fix), appear/disappear fine-tuning, area/intensity/curvature (all harmful pre-fix).
+- **Remaining untested**: adhesion under new drift regime (always harmful pre-fix), appear/disappear fine-tuning, area/intensity (still untested post-fix). **Curvature now confirmed harmful post-fix with neutral cost_mean** (see Curvature Re-test below).
 - Could a different matcher threshold help? threshold=10 was tuned pre-fix.
+- **Curvature batch — slightly encouraging variant still untested.** Neutral cost_mean sweep was harmful (below). The remaining direction is `constant = -weight × curvature_mean - X` for some X, which would add a small global edge-encouragement on top of curvature discrimination.
+
+---
+
+## Curvature Re-test, neutral cost_mean (2026-04-28)
+
+Tested curvature on top of post-flow-fix best (TE=0.6616, TF=0.7057, NodeR=1.000, EdgeR=0.8416). Sweep used neutral cost_mean (`curvature_constant = -weight × 6.628`) so curvature only discriminates without globally penalizing edges.
+
+### Results
+
+| Run | curv_w | curv_c | TE | TF | NodeR | EdgeR |
+|-----|--------|--------|-----|-----|-------|-------|
+| **Baseline** | 0 | 0 | **0.6616** | **0.7057** | **1.000** | **0.8416** |
+| Curv-R1 | 50 | -331.4 | 0.6551 | 0.6830 | 1.000 | 0.8395 |
+| Curv-R2 | 100 | -662.8 | 0.6074 | 0.6463 | 0.998 | 0.8265 |
+| Curv-R3 | 200 | -1325.6 | 0.5944 | 0.6347 | 0.996 | 0.7918 |
+| Curv-R4 | 400 | -2651.2 | 0.6009 | 0.6367 | 0.996 | 0.8048 |
+| Curv-R5 | 800 | -5302.4 | 0.5900 | 0.6281 | 0.994 | 0.7766 |
+
+### Conclusions
+
+- **Curvature with neutral cost_mean is monotonically harmful.** TE drops -0.0065 at w=50 and bottoms at -0.072 at w=800. EdgeR drops 0.84 → 0.78. TF drops similarly.
+- **Edge recall regression suggests curvature is filtering out valid GT edges** (cells turning, dividing, etc.) along with truly curvy bad trajectories.
+- **Strengthens prior pre-fix falsified hypothesis**: "Curvature improves linking" — confirmed harmful post-fix at proper cost_std too. Was previously written off due to tiny cost_std (20.6 at w=5); now tested at cost_std up to 3290 (w=800) and still bad.
+- **No curvature_weight tested helps NC281-Fl2m at the current operating point.** Remaining curvature variant (slightly encouraging cost_mean) is the only untested form.
 
 ## Results Comparison Table
 

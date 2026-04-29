@@ -135,6 +135,7 @@ def nodes_from_fragments(
     z_flow_conf_threshold: float | None = None,
     z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
+    tp: int = 0,
     scale: list[float] = [1.0, 1.0, 1.0, 1.0],
 ) -> tuple[nx.DiGraph, list[tuple]]:
     """Compute the nodes of a candidate graph from a set of fragments and a
@@ -230,6 +231,18 @@ def nodes_from_fragments(
 
             # add conflicting segs to conflict sets
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)
+
+    if graph is None:
+        # No merges for this timepoint — initialize graph from base fragments
+        graph = nodes_from_segmentation(
+            fragments, raw_img=raw_img,
+            flow_3d=flow_3d, flow_2d=flow_2d,
+            confidence_3d=confidence_3d,
+            z_flow_conf_threshold=z_flow_conf_threshold,
+            z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+            size_threshold=size_threshold,
+            tp=tp, scale=scale
+        )
 
     for node in graph.nodes():
         cohesion = 1 - last_costs.get(node, 0.0)

@@ -7,11 +7,13 @@ conditions = [
     "+ Volume",
     "+ Intensity",
     "+ Drift",
+    "+ Curvature",
     "Full",
 ]
 
-te = [0.297, 0.330, 0.401, 0.427, 0.659, 0.662]
-tf = [0.336, 0.371, 0.457, 0.462, 0.705, 0.706]
+# + Curvature from nc281curvadd_2026-04-29_16-49-06 R3 (curv_w=100, curv_c=-800)
+te = [0.297, 0.330, 0.401, 0.427, 0.659, 0.616, 0.662]
+tf = [0.336, 0.371, 0.457, 0.462, 0.705, 0.649, 0.706]
 
 metrics = [
     ("Target Effectiveness", te),
@@ -20,7 +22,7 @@ metrics = [
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
-colors = ["#9C27B0", "#E91E63", "#FF9800", "#64B5F6", "#4CAF50", "#2196F3"]
+colors = ["#9C27B0", "#E91E63", "#FF9800", "#64B5F6", "#4CAF50", "#FFC107", "#2196F3"]
 
 for ax, (title, values) in zip(axes, metrics):
     x = np.arange(len(conditions))

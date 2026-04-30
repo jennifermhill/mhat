@@ -1128,3 +1128,45 @@ MDA231 |confidence| in-region distribution: range [0, 320], p25=0, p50=0.002, p7
 | Filter @ 0.01 | 0.01 | 13.7% | 0.8808 | 0.8857 | 0.8449 | 101 | 28 | 7 |
 
 **Identical metrics across all runs** — Z motion is so small on MDA231 that dropping Z-flow contribution for some nodes doesn't change which edges the ILP selects. Filter is safely a no-op here.
+
+---
+
+## Curvature Batch (post-flow-fix neutral cost_mean), 2026-04-28
+
+**Setup**: 5 cluster runs, base = post-fix INT-B1R1 best. Sweep `curvature_weight` with `curvature_constant = -weight × curvature_mean` (=−31.869×weight) for cost_mean=0.
+
+**Stats job** (149690838): curvature count=2737, mean=31.869, std=22.845. Target weight ≈40 for cost_std=900.
+
+### Curv-B1R1: curvature_weight=10, constant=-318.7
+exp_uid: 2026-04-28_16-46-28_R1
+Hypothesis: "Light curvature penalty discriminates without disrupting edge selection"
+TRA: 0.880, DET: 0.885, LNK: 0.845, fp: 104, fn: 28
+Verdict: inconclusive — quantized to near-baseline regime with +3 fp, no benefit
+
+### Curv-B1R2: curvature_weight=25, constant=-796.7
+exp_uid: 2026-04-28_16-46-28_R2
+Hypothesis: "Mid curvature gets cost_std into 500-1000 range for real influence"
+TRA: 0.880, DET: 0.885, LNK: 0.845, fp: 104, fn: 28
+Verdict: inconclusive — identical to R1, same quantized regime
+
+### Curv-B1R3: curvature_weight=50, constant=-1593.5
+exp_uid: 2026-04-28_16-46-28_R3
+Hypothesis: "Target weight (cost_std≈1142) actively discriminates curvy edges"
+TRA: 0.877, DET: 0.882, LNK: 0.845, fp: 106, fn: 29
+Verdict: falsified — discrimination starts hurting (TRA -0.004)
+
+### Curv-B1R4: curvature_weight=100, constant=-3186.9
+exp_uid: 2026-04-28_16-46-28_R4
+Hypothesis: "Strong curvature penalty filters bad trajectories"
+TRA: 0.866, DET: 0.870, LNK: 0.833, fp: 118, fn: 33
+Verdict: falsified — TRA -0.015, fp +17, real damage
+
+### Curv-B1R5: curvature_weight=200, constant=-6373.8
+exp_uid: 2026-04-28_16-46-28_R5
+Hypothesis: "Aggressive curvature penalty"
+TRA: 0.858, DET: 0.863, LNK: 0.824, fp: 124, fn: 35
+Verdict: falsified — worst result, TRA -0.023, LNK -0.021, fp +23
+
+### Conclusion
+
+Curvature with neutral cost_mean monotonically degrades MDA231 metrics for any weight that produces nontrivial cost_std. Confirms the older "curvature hurts DET when cohesion is active" finding holds post-flow-fix. Remaining direction: slightly-encouraging constant (`constant = -weight × mean - X` for some X) — untested.

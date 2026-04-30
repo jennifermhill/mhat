@@ -521,21 +521,71 @@ The ~5% of nodes with near-zero confidence across their entire region were contr
 
 ---
 
-## Curvature Addition Sweep — Plan (2026-04-29)
+## Curvature Batch (post-flow-fix neutral cost_mean), 2026-04-28
+
+**Setup**: 5 cluster runs, base = post-flow-fix best (TE=0.6616, TF=0.7057, NodeR=1.000, EdgeR=0.8416). Sweep `curvature_weight` with `curvature_constant = -weight × 6.628` (neutral cost_mean). Curvature stats: count=100732, mean=6.628, std=4.112 (target weight ≈220 for cost_std=900).
+
+### Curv-B1R1: curvature_weight=50, constant=-331.4
+exp_uid: 2026-04-28_16-43-58_R1
+Hypothesis: "Light curvature penalty discriminates without disrupting edge selection (cost_std ~206)"
+TE: 0.6551, TF_mean: 0.6830, Node_Recall: 1.000, Edge_Recall: 0.8395
+Verdict: falsified — even mild curvature hurts (TE -0.0065)
+
+### Curv-B1R2: curvature_weight=100, constant=-662.8
+exp_uid: 2026-04-28_16-43-58_R2
+Hypothesis: "Mid curvature with cost_std≈411 has real influence"
+TE: 0.6074, TF_mean: 0.6463, Node_Recall: 0.998, Edge_Recall: 0.8265
+Verdict: falsified — large regression (TE -0.054)
+
+### Curv-B1R3: curvature_weight=200, constant=-1325.6
+exp_uid: 2026-04-28_16-43-58_R3
+Hypothesis: "Target weight (cost_std≈822) produces effective curvature discrimination"
+TE: 0.5944, TF_mean: 0.6347, Node_Recall: 0.996, Edge_Recall: 0.7918
+Verdict: falsified — TE -0.067, EdgeR -0.05 — curvature is filtering out valid edges
+
+### Curv-B1R4: curvature_weight=400, constant=-2651.2
+exp_uid: 2026-04-28_16-43-58_R4
+Hypothesis: "Strong curvature filters bad trajectories aggressively"
+TE: 0.6009, TF_mean: 0.6367, Node_Recall: 0.996, Edge_Recall: 0.8048
+Verdict: falsified — slight non-monotonicity (slightly above R3) but still TE -0.061
+
+### Curv-B1R5: curvature_weight=800, constant=-5302.4
+exp_uid: 2026-04-28_16-43-58_R5
+Hypothesis: "Aggressive curvature penalty"
+TE: 0.5900, TF_mean: 0.6281, Node_Recall: 0.994, Edge_Recall: 0.7766
+Verdict: falsified — worst result (TE -0.072, EdgeR -0.065)
+
+### Conclusion
+
+Curvature with neutral cost_mean is monotonically harmful for NC281-Fl2m at the current operating point. The pattern (Edge Recall drops monotonically with curvature weight) suggests curvature is filtering out valid GT edges where cells turn or have non-straight motion. Confirms the pre-fix "curvature harmful" finding at proper cost_std calibration.
+
+Remaining direction: slightly-encouraging cost_mean (`constant = -weight × mean - X` for some X). Untested.
+
+---
+
+## Curvature Addition Sweep — Results (submitted 2026-04-29, complete 2026-04-30)
 
 **Setup**: 5 cluster runs to fill the +Curvature bar in `solver_addition_results_nc281.png`. Solver-addition convention: curvature is the *only* active cost, all other weights and constants = 0 (`drift_c=0`, `area_*=0`, `intensity_*=0`, `cohesion_*=0`, `adhesion_*=0`). `appear/disappear=50`, `merges=false`. Curvature stats: count=100732, mean=6.628, std=4.112.
 
-**Status**: pending. **Local solves do not finish** — a single run with curvature-only on NC281 hung past 45 minutes locally without completing the gurobi solve. Submit on cluster.
+Submitted via `launch_curvature_batch.py` with new base config `scripts/04_tracking/NC281_curvature_addition_baseline.toml`. Batch dir: `experiments/tracking/NC281-Fl2mSiH2B/03_nuclei/batches/nc281curvadd_2026-04-29_16-49-06/`.
 
-### Sweep grid
+### Results
 
-| Run | curv_w | curv_c | cost_mean | cost_std |
-|-----|-------:|-------:|----------:|---------:|
-| R1 | 25  | -300  | -135 | 103 |
-| R2 | 50  | -500  | -169 | 206 |
-| R3 | 100 | -800  | -137 | 411 |
-| R4 | 200 | -1500 | -176 | 822 |
-| R5 | 220 | -2000 | -542 | 905 |
+| Run | curv_w | curv_c | cost_std | NodeR | EdgeR | TE | TF | Notes |
+|-----|-------:|-------:|---------:|------:|------:|-----:|-----:|-------|
+| R1 | 25  | -300  | 103 | — | — | — | — | TIMEOUT 24h (LSF exit 140) |
+| R2 | 50  | -500  | 206 | — | — | — | — | TIMEOUT 24h (LSF exit 140) |
+| **R3** | **100** | **-800**  | **411** | **0.986** | **0.805** | **0.616** | **0.649** | **canonical +Curvature bar** |
+| R4 | 200 | -1500 | 822 | 0.980 | 0.798 | 0.618 | 0.651 | tied with R3 |
+| R5 | 220 | -2000 | 905 | 0.990 | 0.798 | 0.607 | 0.638 | slightly worse |
+
+### Conclusion
+
+**+Curvature bar value**: TE ≈ 0.617, TF ≈ 0.650 (R3 or R4, essentially tied). Use R3 (curv_w=100, curv_c=-800) as the canonical config.
+
+R1 and R2 (cost_std 103, 206) timed out at 24h — confirms the local-solve-hang note from the plan. When the only active cost has weak discrimination (cost_std < ~400), the ILP is intractable. R3 (cost_std=411) is the lower bound that solves in 24h.
+
+TE/TF plateau at curv_w=100-200; R5 (curv_w=220, cost_std=905) is slightly worse than the R3-R4 plateau. Track purity is ~0.05 in all completed runs (expected with sparse GT: 506 GT nodes vs ~7500 pred nodes).
 
 ### Methodology note
 
@@ -543,4 +593,8 @@ Distinct from the prior 2026-04-28 Curvature Batch (`Curv-B1R1`–`R5`), which t
 
 ### Reference: MDA231 +Curvature addition (2026-04-29)
 
-Same methodology run on MDA231 finished in ~3 min/run. Best config: `curv_w=10, curv_c=-500` → TRA=0.853, DET=0.858, LNK=0.815. Comparable to +Volume (0.853) and slightly better than +Drift (0.846). NC281 result pending cluster runs.
+Same methodology run on MDA231 finished in ~3 min/run. Best config: `curv_w=10, curv_c=-500` → TRA=0.853, DET=0.858, LNK=0.815. Comparable to +Volume (0.853) and slightly better than +Drift (0.846). NC281 standalone curvature TE=0.617 is the parallel data point.
+
+### Tooling note
+
+argparse in `launch_curvature_batch.py` interprets a leading `-` in `--curvature-constants -300,...` as a flag. Use `=` syntax: `--curvature-constants=-300,-500,-800,-1500,-2000`.

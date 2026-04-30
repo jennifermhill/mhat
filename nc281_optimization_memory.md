@@ -80,8 +80,33 @@ NC281 cells move meaningfully in Z, so Z-flow rescaling materially affected drif
 ### Open Questions
 
 - **Gap vs pre-fix (-0.037 TE) likely structural, not tuning-addressable.** Hypothesis: old optimum was partially lucky — buggy drift_dist inflated Z distances, happening to reward GT-aligned edges in this dataset. Post-fix drift is physically correct but selects a different valid subset. Sparse GT makes TE sensitive to which specific edges are chosen.
-- **Remaining untested**: adhesion under new drift regime (always harmful pre-fix), appear/disappear fine-tuning, area/intensity/curvature (all harmful pre-fix).
+- **Remaining untested**: adhesion under new drift regime (always harmful pre-fix), appear/disappear fine-tuning, area/intensity (still untested post-fix). **Curvature now confirmed harmful post-fix with neutral cost_mean** (see Curvature Re-test below).
 - Could a different matcher threshold help? threshold=10 was tuned pre-fix.
+- **Curvature batch — slightly encouraging variant still untested.** Neutral cost_mean sweep was harmful (below). The remaining direction is `constant = -weight × curvature_mean - X` for some X, which would add a small global edge-encouragement on top of curvature discrimination.
+
+---
+
+## Curvature Re-test, neutral cost_mean (2026-04-28)
+
+Tested curvature on top of post-flow-fix best (TE=0.6616, TF=0.7057, NodeR=1.000, EdgeR=0.8416). Sweep used neutral cost_mean (`curvature_constant = -weight × 6.628`) so curvature only discriminates without globally penalizing edges.
+
+### Results
+
+| Run | curv_w | curv_c | TE | TF | NodeR | EdgeR |
+|-----|--------|--------|-----|-----|-------|-------|
+| **Baseline** | 0 | 0 | **0.6616** | **0.7057** | **1.000** | **0.8416** |
+| Curv-R1 | 50 | -331.4 | 0.6551 | 0.6830 | 1.000 | 0.8395 |
+| Curv-R2 | 100 | -662.8 | 0.6074 | 0.6463 | 0.998 | 0.8265 |
+| Curv-R3 | 200 | -1325.6 | 0.5944 | 0.6347 | 0.996 | 0.7918 |
+| Curv-R4 | 400 | -2651.2 | 0.6009 | 0.6367 | 0.996 | 0.8048 |
+| Curv-R5 | 800 | -5302.4 | 0.5900 | 0.6281 | 0.994 | 0.7766 |
+
+### Conclusions
+
+- **Curvature with neutral cost_mean is monotonically harmful.** TE drops -0.0065 at w=50 and bottoms at -0.072 at w=800. EdgeR drops 0.84 → 0.78. TF drops similarly.
+- **Edge recall regression suggests curvature is filtering out valid GT edges** (cells turning, dividing, etc.) along with truly curvy bad trajectories.
+- **Strengthens prior pre-fix falsified hypothesis**: "Curvature improves linking" — confirmed harmful post-fix at proper cost_std too. Was previously written off due to tiny cost_std (20.6 at w=5); now tested at cost_std up to 3290 (w=800) and still bad.
+- **No curvature_weight tested helps NC281-Fl2m at the current operating point.** Remaining curvature variant (slightly encouraging cost_mean) is the only untested form.
 
 ## Results Comparison Table
 
@@ -135,24 +160,30 @@ NC281 cells move meaningfully in Z, so Z-flow rescaling materially affected drif
 - Gap from old baseline (0.703 vs 0.690) — may be inherent to new semantics. Old coh_w=500, coh_c=-450 had a different cost profile that cannot be replicated.
 - Could different segmentation or flow results help more than parameter tuning?
 - Are there edge cost formulations beyond drift/area/intensity/curvature worth trying?
-- **Curvature as a solver-addition (single-cost over no-cost baseline) — pending cluster runs.** See "Curvature Addition Sweep" below. Prior curvature work (NC6-R5, 2026-04-28 batch) tested curvature *on top of* tuned/Full configs and found it harmful; the standalone-addition contribution is a separate question.
+- **Curvature as a solver-addition (single-cost over no-cost baseline) — complete.** See "Curvature Addition Sweep — Results" below. +Curvature bar value: TE ≈ 0.617 (R3, curv_w=100, curv_c=-800).
 
-## Curvature Addition Sweep — Plan (2026-04-29)
+## Curvature Addition Sweep — Results (2026-04-30)
 
-**Status**: pending cluster runs (local solve hangs past 45 min). For the +Curvature bar on `solver_addition_results_nc281.png`. Curvature is the only active cost; all other weights and constants = 0 (`drift_c=0`); `appear/disappear=50`, `merges=false`.
+**Status**: complete. Submitted 2026-04-29 via `launch_curvature_batch.py` on cluster (`nc281curvadd_2026-04-29_16-49-06`). Standalone curvature only — all other weights/constants = 0; `appear/disappear=50`, `merges=false`. Base config: `scripts/04_tracking/NC281_curvature_addition_baseline.toml`.
+
+For the +Curvature bar on `solver_addition_results_nc281.png`. Distinct from the prior 2026-04-28 Curvature Batch (curvature on top of Full config with neutral cost_mean — harmful).
 
 Curvature stats: count=100732, mean=6.628, std=4.112.
 
-### Sweep grid
+### Results
 
-| Run | curv_w | curv_c | cost_mean | cost_std |
-|-----|-------:|-------:|----------:|---------:|
-| R1 | 25  | -300  | -135 | 103 |
-| R2 | 50  | -500  | -169 | 206 |
-| R3 | 100 | -800  | -137 | 411 |
-| R4 | 200 | -1500 | -176 | 822 |
-| R5 | 220 | -2000 | -542 | 905 |
+| Run | curv_w | curv_c | cost_mean | cost_std | NodeR | EdgeR | TE | TF | Notes |
+|-----|-------:|-------:|----------:|---------:|------:|------:|-----:|-----:|-------|
+| R1 | 25  | -300  | -135 | 103 | — | — | — | — | TIMEOUT 24h |
+| R2 | 50  | -500  | -169 | 206 | — | — | — | — | TIMEOUT 24h |
+| **R3** | **100** | **-800**  | **-137** | **411** | **0.986** | **0.805** | **0.616** | **0.649** | **canonical +Curvature bar** |
+| R4 | 200 | -1500 | -176 | 822 | 0.980 | 0.798 | 0.618 | 0.651 | tied with R3 |
+| R5 | 220 | -2000 | -542 | 905 | 0.990 | 0.798 | 0.607 | 0.638 | slightly worse |
 
-Distinct from the prior 2026-04-28 Curvature Batch (curvature on top of Full config with neutral cost_mean — harmful). Here curvature is a standalone addition over a no-cost baseline, matching how `+ Volume` / `+ Intensity` / `+ Drift` were evaluated.
+### Conclusions
 
-For reference, the equivalent MDA231 sweep best config (`curv_w=10, curv_c=-500`) gave TRA=0.853, DET=0.858, LNK=0.815 — competitive with `+Volume` and `+Drift` on that dataset.
+- **+Curvature bar value**: TE ≈ 0.617, TF ≈ 0.650 (R3 or R4, essentially tied). Use R3 (curv_w=100, curv_c=-800) as the canonical config.
+- **Low-discrimination configs (R1, R2) timed out at 24h.** Confirms the local-solve-hang note from the plan: when the only active cost has weak discrimination (cost_std < ~400), the ILP becomes intractable. R3 (cost_std=411) is the lower bound that solves in 24h.
+- **TE/TF plateau at curv_w=100-200.** R3 ≈ R4; R5 (curv_w=220) slightly worse. The plateau is the meaningful curvature-only result.
+- **Track purity is ~0.05** in all completed runs — expected given sparse GT (506 GT nodes vs ~7500 pred nodes).
+- **Comparable to MDA231**: equivalent MDA231 sweep best (`curv_w=10, curv_c=-500`) gave TRA=0.853, DET=0.858, LNK=0.815. NC281-Fl2m's standalone curvature TE=0.617 is the parallel data point.

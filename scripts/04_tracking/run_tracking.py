@@ -16,6 +16,63 @@ from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
 from mhat.tracking.tracks_io import save_tracks_to_csv
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
+def report_graph_statistics(config, track_graph):
+    """Print mean/std of graph attributes and their ILP costs."""
+    # Collect node attributes (only those with ILP cost parameters)
+    node_attrs = {"cohesion": [], "adhesion": []}
+    for node_id, data in track_graph.nodes.items():
+        for attr in node_attrs:
+            if attr in data:
+                node_attrs[attr].append(data[attr])
+
+    # Collect edge attributes
+    edge_attrs = {"drift_dist": [], "area_diff": [], "intensity_diff": []}
+    for edge_key, data in track_graph.edges.items():
+        for attr in edge_attrs:
+            if attr in data:
+                edge_attrs[attr].append(data[attr])
+
+    # Compute curvature values from edge pairs
+    curvature_values = []
+    for node in track_graph.nodes:
+        in_edges = list(track_graph.prev_edges[node])
+        out_edges = list(track_graph.next_edges[node])
+        for in_edge in in_edges:
+            in_offset = np.array(track_graph.nodes[in_edge[1]]["centroid"]) - np.array(track_graph.nodes[in_edge[0]]["centroid"])
+            for out_edge in out_edges:
+                out_offset = np.array(track_graph.nodes[out_edge[1]]["centroid"]) - np.array(track_graph.nodes[out_edge[0]]["centroid"])
+                curvature_values.append(np.linalg.norm(out_offset - in_offset))
+
+    # Config parameter mapping
+    param_map = {
+        "cohesion": ("cohesion_weight", "cohesion_constant"),
+        "adhesion": ("adhesion_weight", "adhesion_constant"),
+        "drift_dist": ("drift_weight", "drift_constant"),
+        "area_diff": ("area_weight", "area_constant"),
+        "intensity_diff": ("intensity_weight", "intensity_constant"),
+        "curvature": ("curvature_weight", "curvature_constant"),
+    }
+
+    print("\n" + "=" * 100)
+    print("Graph Attribute Statistics")
+    print("=" * 100)
+    header = f"{'Attribute':<16} {'Count':>6} {'Mean':>10} {'Std':>10} {'Weight':>10} {'Constant':>10} {'Cost Mean':>12} {'Cost Std':>12}"
+    print(header)
+    print("-" * 100)
+
+    all_attrs = {**node_attrs, **edge_attrs, "curvature": curvature_values}
+    for attr, values in all_attrs.items():
+        if not values:
+            continue
+        arr = np.array(values)
+        w_key, c_key = param_map[attr]
+        weight = config.get(w_key, 0.0)
+        constant = config.get(c_key, 0.0)
+        costs = weight * arr + constant
+        print(f"{attr:<16} {len(arr):>6} {arr.mean():>10.3f} {arr.std():>10.3f} {weight:>10.1f} {constant:>10.1f} {costs.mean():>12.1f} {costs.std():>12.1f}")
+
+    print("=" * 100 + "\n")
+
 
 def get_solution_seg(fragments, merge_history, solution_graph):
     solution_seg = np.zeros_like(fragments)
@@ -198,6 +255,8 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     utils.add_area_diff_attr(track_graph)
     utils.add_intensity_diff_attr(track_graph)
 
+    report_graph_statistics(config, track_graph)
+
     # Save candidate edge list for analysis
     cand_edges_path = output_dir / "candidate_edges.npy"
     cand_edge_list = np.array([(e[0], e[1]) for e in track_graph.edges], dtype=np.int64)
@@ -288,7 +347,7 @@ if __name__ == "__main__":
         exp_uid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         config["exp_uid"] = exp_uid
 
-    output_dir = output_base_dir / "tracking" / experiment / dataset / exp_uid
+    output_dir = output_base_dir / "tracking" / experiment / dataset / "test_run"
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 

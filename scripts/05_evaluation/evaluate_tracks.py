@@ -61,7 +61,7 @@ if __name__ == "__main__":
     gt_data_dir = input_base_dir / "tracking" / experiment / dataset
     assert gt_data_dir.is_dir(), f"GT data dir {gt_data_dir} is missing"
 
-    pred_data_dir = input_base_dir / "tracking" / experiment / dataset / "test_run"
+    pred_data_dir = input_base_dir / "tracking" / experiment / dataset / config["track_result"]
     assert pred_data_dir.is_dir(), f"Pred data dir {pred_data_dir} is missing"
 
     output_dir = output_base_dir / "evaluation" / experiment / dataset / config["track_result"]

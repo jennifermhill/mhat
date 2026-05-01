@@ -35,8 +35,12 @@ def main(config, data_dir: Path):
     gap = config['gap']
 
     fps = config['fps']
+    png_dpi = config.get('png_dpi', 600)
 
-    output_path = data_dir.parent / f"quiver_movie_z{z_slice}_conf{conf_per}_gap{gap}.mp4"
+    output_name = f"quiver_movie_z{z_slice}_conf{conf_per}_gap{gap}"
+    output_path = data_dir.parent / f"{output_name}.mp4"
+    frames_dir = data_dir.parent / output_name
+    frames_dir.mkdir(exist_ok=True)
 
     colormap = cc.m_CET_C8
 
@@ -87,9 +91,9 @@ def main(config, data_dir: Path):
         conf_mask = conf_frame > conf_thresh
 
         # --- Load velocity data ---
-        # channel order is z, y, x if 3D flow, and y, x if 2D flow
-        vx = flow_frame[..., -1].astype(float) # [Y, X]
-        vy = flow_frame[..., -2].astype(float) # [Y, X]
+        # channel order is x, y, z if 3D flow, and x, y if 2D flow
+        vx = flow_frame[..., 0].astype(float) # [Y, X]
+        vy = flow_frame[..., 1].astype(float) # [Y, X]
 
         # Apply confidence mask and convert to physical units
         for v in (vx, vy):
@@ -116,7 +120,7 @@ def main(config, data_dir: Path):
             X_2d[::gap, ::gap], Y_2d[::gap, ::gap],
             vx_sub, vy_sub,
             color=colormap(thetaPlot),
-            scale=1/10, angles='xy', scale_units='xy', units='xy', headwidth=4,
+            scale=1/5, angles='xy', scale_units='xy', units='xy', headwidth=4,
         )
 
         ax.set_xlim(np.min(x), np.max(x))
@@ -130,12 +134,15 @@ def main(config, data_dir: Path):
         buf = fig.canvas.buffer_rgba()
         img = np.asarray(buf)[:, :, :3]  # drop alpha
         img_bgr = img[:, :, ::-1]  # RGB -> BGR for OpenCV
+
+        fig.savefig(frames_dir / f"frame_{frame:04d}.png", facecolor=fig.get_facecolor(), dpi=png_dpi)
         plt.close(fig)
 
         writer.write(img_bgr)
 
     writer.release()
     print(f'Movie saved to {output_path}')
+    print(f'PNG frames saved to {frames_dir}')
     print('Done.')
 
 

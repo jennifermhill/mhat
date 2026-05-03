@@ -20,7 +20,13 @@ metrics = [
 
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
-colors = ["#2196F3", "#64B5F6", "#FF9800", "#4CAF50"]
+# Wong colorblind-friendly palette (per-concept consistent across figures)
+colors = [
+    "#0072B2",  # Baseline      — blue
+    "#CC79A7",  # - Coh/Adh     — reddish purple
+    "#F0E442",  # - Affinities  — yellow
+    "#000000",  # - Merges      — black
+]
 
 for ax, (title, values) in zip(axes, metrics):
     x = np.arange(len(conditions))

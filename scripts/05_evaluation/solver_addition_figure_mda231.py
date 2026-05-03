@@ -1,18 +1,40 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-conditions = [
-    "None",
-    "+ Coh/Adh",
-    "+ Volume",
-    "+ Intensity",
-    "+ Drift",
-    "Full",
+# Per-cost color (Wong palette, consistent across all addition/ablation plots)
+COLOR = {
+    "None": "#999999",        # grey
+    "+ Coh/Adh": "#CC79A7",   # reddish purple
+    "+ Volume": "#E69F00",    # orange
+    "+ Intensity": "#56B4E9", # sky blue
+    "+ Drift": "#009E73",     # bluish green
+    "+ Curvature": "#D55E00", # vermillion
+    "Full": "#0072B2",        # blue
+}
+
+# Tuned values (merges=false):
+# + Coh/Adh:    coh=2000, adh=-1000   (drift_c=-2000 baseline)
+# + Volume:     area_w=1000, area_c=-1000
+# + Intensity:  intensity_w=2, intensity_c=-1000
+# + Drift:      drift_w=30, drift_c=-1000
+# + Curvature:  curv_w=10, curv_c=-500
+# Bars sorted by LNK ascending.
+rows = [
+    # (label,         TRA,   DET,   LNK)
+    ("None",          0.788, 0.826, 0.512),
+    ("+ Coh/Adh",     0.822, 0.855, 0.586),
+    ("+ Intensity",   0.822, 0.839, 0.696),
+    ("+ Volume",      0.857, 0.869, 0.771),
+    ("+ Curvature",   0.853, 0.858, 0.815),
+    ("+ Drift",       0.853, 0.858, 0.821),
+    ("Full",          0.881, 0.886, 0.845),
 ]
 
-tra = [0.797, 0.804, 0.826, 0.815, 0.842, 0.881]
-det = [0.828, 0.838, 0.846, 0.834, 0.852, 0.886]
-lnk = [0.570, 0.558, 0.680, 0.677, 0.763, 0.845]
+conditions = [r[0] for r in rows]
+tra = [r[1] for r in rows]
+det = [r[2] for r in rows]
+lnk = [r[3] for r in rows]
+colors = [COLOR[c] for c in conditions]
 
 metrics = [
     ("TRA", tra),
@@ -21,8 +43,6 @@ metrics = [
 ]
 
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-
-colors = ["#9C27B0", "#E91E63", "#FF9800", "#64B5F6", "#4CAF50", "#2196F3"]
 
 for ax, (title, values) in zip(axes, metrics):
     x = np.arange(len(conditions))

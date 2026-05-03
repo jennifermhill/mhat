@@ -22,7 +22,15 @@ metrics = [
 
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
-colors = ["#2196F3", "#64B5F6", "#FF9800", "#E91E63", "#4CAF50", "#9C27B0"]
+# Wong colorblind-friendly palette (per-concept consistent across figures)
+colors = [
+    "#0072B2",  # Baseline    — blue
+    "#56B4E9",  # - Intensity — sky blue
+    "#E69F00",  # - Volume    — orange
+    "#009E73",  # - Drift     — bluish green
+    "#CC79A7",  # - Coh/Adh   — reddish purple
+    "#999999",  # - All       — grey
+]
 
 for ax, (title, values) in zip(axes, metrics):
     x = np.arange(len(conditions))

@@ -1,19 +1,34 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-conditions = [
-    "None",
-    "+ Cohesion",
-    "+ Volume",
-    "+ Intensity",
-    "+ Drift",
-    "+ Curvature",
-    "Full",
+# Per-cost color (Wong palette, consistent across all addition/ablation plots)
+COLOR = {
+    "None": "#999999",        # grey
+    "+ Cohesion": "#CC79A7",  # reddish purple
+    "+ Volume": "#E69F00",    # orange
+    "+ Intensity": "#56B4E9", # sky blue
+    "+ Drift": "#009E73",     # bluish green
+    "+ Curvature": "#D55E00", # vermillion
+    "Full": "#0072B2",        # blue
+}
+
+# + Curvature from nc281curvadd_2026-04-29_16-49-06 R3 (curv_w=100, curv_c=-800).
+# Bars sorted by Track Fraction ascending.
+rows = [
+    # (label,        TE,    TF)
+    ("None",         0.297, 0.336),
+    ("+ Cohesion",   0.330, 0.371),
+    ("+ Volume",     0.401, 0.457),
+    ("+ Intensity",  0.427, 0.462),
+    ("+ Curvature",  0.616, 0.649),
+    ("+ Drift",      0.659, 0.705),
+    ("Full",         0.662, 0.706),
 ]
 
-# + Curvature from nc281curvadd_2026-04-29_16-49-06 R3 (curv_w=100, curv_c=-800)
-te = [0.297, 0.330, 0.401, 0.427, 0.659, 0.616, 0.662]
-tf = [0.336, 0.371, 0.457, 0.462, 0.705, 0.649, 0.706]
+conditions = [r[0] for r in rows]
+te = [r[1] for r in rows]
+tf = [r[2] for r in rows]
+colors = [COLOR[c] for c in conditions]
 
 metrics = [
     ("Target Effectiveness", te),
@@ -21,8 +36,6 @@ metrics = [
 ]
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-
-colors = ["#9C27B0", "#E91E63", "#FF9800", "#64B5F6", "#4CAF50", "#FFC107", "#2196F3"]
 
 for ax, (title, values) in zip(axes, metrics):
     x = np.arange(len(conditions))

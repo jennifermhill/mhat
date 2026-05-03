@@ -3,6 +3,7 @@
 /.claude
 /data
 /experiments
+/workshop_paper
 
 # Locally editable installed packages
 /funtracks

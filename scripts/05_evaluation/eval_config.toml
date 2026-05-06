@@ -1,12 +1,12 @@
 # IO
-input_base_dir = "Y:/jennifer/mhat/experiments/"
-output_base_dir = "Y:/jennifer/mhat/experiments/"
-experiment = "Fluo-C3DL-MDA231"
-dataset = "01_cells"
+input_base_dir = "C:/Users/hillj/Documents/mhat/experiments/"
+output_base_dir = "C:/Users/hillj/Documents/mhat/experiments/"
+experiment = "NC281-Fl2mSiH2B"
+dataset = "03_nuclei"
 
-track_result = "2026-03-10_11-10-29"
+track_result = "2026-05-01_17-15-28"
 
 # Eval settings
-metrics = ["ctc"]
-iou_threshold = 0.25
+metrics = ["basic", "track_overlap"]
+matcher = "point"
 match_threshold = 10

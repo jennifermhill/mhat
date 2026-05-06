@@ -239,12 +239,13 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
                                  node_props_metadata={},
                                  edge_props_metadata={},
                                  )
-    geff.write(solution_graph, 
-               output_filepath_geff, 
-               axis_names=["time", "z", "y", "x"], 
-               axis_types=["time", "space", "space", "space"], 
-               axis_scales=scale, 
-               metadata=metadata)
+    geff.write(solution_graph,
+               output_filepath_geff,
+               axis_names=["time", "z", "y", "x"],
+               axis_types=["time", "space", "space", "space"],
+               axis_scales=scale,
+               metadata=metadata,
+               overwrite=True)
     
 
 if __name__ == "__main__":

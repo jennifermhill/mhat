@@ -9,14 +9,18 @@ exp_uid = "2026-03-24_17-16-56"
 # Metadata
 xy_scale = 0.65
 z_scale = 2.110045248868777
-t_scale = 1
+t_scale = 0.5
+xyz_scale_unit = 'µm'
+t_scale_unit = 'min'
 
 # Thresholding
-confidence_percentile = 85
+confidence_percentile = 90
 
 # Visualization
 z_slice = 2
-gap = 3
+gap = 2
+quiver_scale = 1
+scale_bar_velocity = 10
 
 # Movie settings
 fps = 5

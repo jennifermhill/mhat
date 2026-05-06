@@ -5,7 +5,7 @@ Uses matplotlib quiver rendering (matching example_analysis_script.ipynb style).
 Slower than the OpenCV version (make_quiver_movie.py) but produces different visual output.
 
 Usage:
-    conda activate opticalflow3D
+    conda activate mhat2
     python make_quiver_movie_mpl.py movie_config.toml
 """
 
@@ -33,11 +33,12 @@ def main(config, data_dir: Path):
 
     z_slice = config['z_slice']
     gap = config['gap']
+    quiver_scale = config['quiver_scale']
 
     fps = config['fps']
     png_dpi = config.get('png_dpi', 600)
 
-    output_name = f"quiver_movie_z{z_slice}_conf{conf_per}_gap{gap}"
+    output_name = f"quiver_movie_z{z_slice}_conf{conf_per}_gap{gap}_scale{quiver_scale}"
     output_path = data_dir.parent / f"{output_name}.mp4"
     frames_dir = data_dir.parent / output_name
     frames_dir.mkdir(exist_ok=True)
@@ -120,7 +121,46 @@ def main(config, data_dir: Path):
             X_2d[::gap, ::gap], Y_2d[::gap, ::gap],
             vx_sub, vy_sub,
             color=colormap(thetaPlot),
-            scale=1/5, angles='xy', scale_units='xy', units='xy', headwidth=4,
+            scale=quiver_scale, angles='xy', scale_units='xy', units='xy',
+            # headwidth=2, headlength=2, headaxislength=2,
+            width=0.3
+        )
+
+        # --- Scale bar: 8-arrow compass in bottom-right with length label ---
+        # sb_len is a vector magnitude (same units as vx/vy), so plot-length =
+        # sb_len / quiver_scale and the bar tracks quiver_scale just like data arrows
+        sb_len = config.get('scale_bar_velocity', 5)
+        sb_arm = sb_len / quiver_scale  # arm length in data units (µm)
+        sb_cx = np.max(x) - sb_arm - 0.03 * (np.max(x) - np.min(x))
+        sb_cy = np.max(y) - sb_arm - 0.03 * (np.max(y) - np.min(y))
+        # y axis is flipped on display, so -y in data points up on screen
+        dirs = np.array([
+            ( 0, -1),  # N
+            ( 1, -1),  # NE
+            ( 1,  0),  # E
+            ( 1,  1),  # SE
+            ( 0,  1),  # S
+            (-1,  1),  # SW
+            (-1,  0),  # W
+            (-1, -1),  # NW
+        ], dtype=float)
+        dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+        sb_theta = np.arctan2(dirs[:, 1], dirs[:, 0])
+        sb_colors = colormap(norm(sb_theta))
+        ax.quiver(
+            np.full(8, sb_cx), np.full(8, sb_cy),
+            dirs[:, 0] * sb_len,
+            dirs[:, 1] * sb_len,
+            color=sb_colors,
+            scale=quiver_scale, angles='xy', scale_units='xy', units='xy',
+            width=0.3,
+        )
+        xy_unit = config.get('xyz_scale_unit', 'µm')
+        t_unit = config.get('t_scale_unit', 'min')
+        ax.text(
+            sb_cx, sb_cy - sb_arm - 0.15 * sb_arm,
+            f'{sb_len:g} {xy_unit}/{t_unit}',
+            color='white', ha='center', va='bottom', fontsize=0.5 * sb_arm,
         )
 
         ax.set_xlim(np.min(x), np.max(x))

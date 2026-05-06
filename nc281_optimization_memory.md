@@ -4,6 +4,8 @@
 
 **TE: 0.6616, TF: 0.7057, Edge Recall: 0.8416, FN Edges: 73**
 
+Original exp_uid: TH-optimal `2026-04-15_16-35-25` (overwritten in legacy `test_run/` flow). Reproduced at unique exp_uid `2026-05-01_17-15-28` from `scripts/04_tracking/NC281_baseline.toml`.
+
 ```toml
 drift_weight = 30.0
 drift_constant = -1000.0

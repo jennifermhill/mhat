@@ -301,7 +301,8 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
                axis_names=["time", "z", "y", "x"],
                axis_types=["time", "space", "space", "space"],
                axis_scales=scale,
-               metadata=metadata)
+               metadata=metadata,
+               overwrite=True)
     
 
 if __name__ == "__main__":

@@ -49,7 +49,7 @@ for ax, (title, values) in zip(axes, metrics):
     bars = ax.bar(x, values, color=colors, edgecolor="black", linewidth=0.5)
     ax.set_title(title, fontsize=13, fontweight="bold")
     ax.set_xticks(x)
-    ax.set_xticklabels(conditions, fontsize=9)
+    ax.set_xticklabels(conditions, fontsize=9, rotation=30, ha="right")
     ax.set_ylim(0, 1.0)
     ax.set_ylabel("Score")
     ax.axhline(y=values[-1], color="gray", linestyle="--", linewidth=0.8, alpha=0.5)

@@ -9,7 +9,6 @@ import numpy as np
 import scipy
 from scipy import linalg
 import skimage
-from motile.variables import NodeSelected
 from line_profiler import profile
 
 
@@ -440,18 +439,6 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
     candidate_graph.add_edges_from(hyperedges)
     
     return candidate_graph
-
-def scale_by_leaves(solver: motile.Solver) -> None:
-    """Scale the costs of the node variables by the number of leaves in the merge they represent."""
-    node_vars = solver.get_variables(NodeSelected)
-    # Access .costs to trigger computation and cache the result
-    costs = solver.costs
-    for node_id in node_vars:
-        index = node_vars._index_map[node_id]
-        num_leaves = solver.graph.nodes[node_id].get("num_leaves", 1)
-        if num_leaves > 1:
-            costs[index] *= num_leaves
-
 
 def to_nx_graph(graph, flatten_hyperedges: bool = True) -> nx.DiGraph:
     """Convert a this TrackGraph into a networkx DiGraph.

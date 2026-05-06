@@ -1,14 +1,16 @@
 import numpy as np
 import motile
 from mhat.tracking.edge_pairs import CurvatureCost
-from mhat.tracking.utils import to_nx_graph, scale_by_leaves
+from mhat.tracking.leaves_scaled_costs import LeavesScaledNodeSelection
+from mhat.tracking.utils import to_nx_graph
 
 
 def report_graph_statistics(config, track_graph):
     """Print mean/std of graph attributes and their ILP costs.
 
     Node costs are scaled by num_leaves to reflect the actual costs
-    seen by the ILP solver after scale_by_leaves().
+    seen by the ILP solver (LeavesScaledNodeSelection bakes num_leaves
+    into the node feature values).
     """
     # Collect node attributes (only those with ILP cost parameters)
     node_attrs = {"cohesion": ([], []), "adhesion": ([], [])}
@@ -149,7 +151,7 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
         print("Skipping cohesion/adhesion costs (no-merge mode)")
     else:
         solver.add_cost(
-            motile.costs.NodeSelection(
+            LeavesScaledNodeSelection(
                 weight=config["cohesion_weight"],
                 attribute="cohesion",
                 constant=config["cohesion_constant"],
@@ -158,7 +160,7 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
         )
 
         solver.add_cost(
-            motile.costs.NodeSelection(
+            LeavesScaledNodeSelection(
                 weight=config["adhesion_weight"],
                 attribute="adhesion",
                 constant=config["adhesion_constant"],
@@ -176,34 +178,6 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
             constant=config["disappear_constant"], ignore_attribute="ignore_disappear"
         )
     )
-
-    if config.get("skip_scale_by_leaves", False):
-        print("Skipping scale_by_leaves (ablation flag set)")
-    else:
-        scale_by_leaves(solver)
-
-    # Sanity check: if coh/adh ablation is active, verify post-scaling costs
-    # are uniform (std ≈ 0) for each attribute independently.
-    if config.get("ablate_cohesion_adhesion", False):
-        for attr, w_key, c_key in [
-            ("cohesion", "cohesion_weight", "cohesion_constant"),
-            ("adhesion", "adhesion_weight", "adhesion_constant"),
-        ]:
-            weight = config.get(w_key, 0.0)
-            constant = config.get(c_key, 0.0)
-            scaled_costs = []
-            for node_id, data in graph.nodes.items():
-                if attr in data:
-                    nl = data.get("num_leaves", 1)
-                    scaled_costs.append((weight * data[attr] + constant) * nl)
-            if scaled_costs:
-                std = np.std(scaled_costs)
-                assert std < 1e-6, (
-                    f"ABLATION SANITY CHECK FAILED: {attr} cost std={std:.6f} "
-                    f"after scale_by_leaves (expected ~0)"
-                )
-                print(f"ABLATION SANITY CHECK: {attr} cost std={std:.2e} after "
-                      f"scaling (OK)")
 
     report_graph_statistics(config, graph)
 

@@ -1,6 +1,7 @@
 import motile
 from mhat.tracking.edge_pairs import CurvatureCost
-from mhat.tracking.utils import to_nx_graph, scale_by_leaves
+from mhat.tracking.leaves_scaled_costs import LeavesScaledNodeSelection
+from mhat.tracking.utils import to_nx_graph
 
 
 def solve_with_motile(config, graph, exclusion_sets):
@@ -66,7 +67,7 @@ def solve_with_motile(config, graph, exclusion_sets):
         print("Skipping curvature cost (weight=0)")
 
     solver.add_cost(
-        motile.costs.NodeSelection(
+        LeavesScaledNodeSelection(
             weight=config["cohesion_weight"],
             attribute="cohesion",
             constant=config["cohesion_constant"],
@@ -75,7 +76,7 @@ def solve_with_motile(config, graph, exclusion_sets):
     )
 
     solver.add_cost(
-        motile.costs.NodeSelection(
+        LeavesScaledNodeSelection(
             weight=config["adhesion_weight"],
             attribute="adhesion",
             constant=config["adhesion_constant"],
@@ -93,8 +94,6 @@ def solve_with_motile(config, graph, exclusion_sets):
             constant=config["disappear_constant"], ignore_attribute="ignore_disappear"
         )
     )
-
-    scale_by_leaves(solver)
 
     solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))
 

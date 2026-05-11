@@ -1,0 +1,121 @@
+"""Shared multi-hypothesis candidate graph construction.
+
+Used by both run_tracking.py and the SSVM fit/inspect scripts so they all
+build the candidate graph the same way.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import motile
+import networkx as nx
+import numpy as np
+import zarr
+
+from mhat.tracking import create_multihypo_graph, utils
+
+
+def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
+    """Load arrays, run multi-hypo construction, attach attributes.
+
+    Returns:
+        (track_graph, fragments, merge_history, exclusion_sets, scale, axes)
+    """
+    raw_zarr_path = raw_dir
+    seg_zarr_path = seg_dir / "data.zarr"
+    flow_2d_zarr_path = flow_dirs["2d"] / "flow.zarr" if flow_dirs["2d"] is not None else None
+    flow_3d_zarr_path = flow_dirs["3d"] / "flow.zarr" if flow_dirs["3d"] is not None else None
+    merge_history_csv_path = seg_dir / "merge_history.csv"
+
+    raw_img = zarr.open(raw_zarr_path)[:, 0, ...]
+    seg_zarr_root = zarr.open(seg_zarr_path)
+    fragments = seg_zarr_root["fragments"][:]
+
+    if flow_2d_zarr_path is not None:
+        flow_2d = zarr.open(flow_2d_zarr_path)["flow_raw"][:]
+        flow_2d = np.concatenate(
+            [flow_2d, np.zeros((1, *flow_2d[0].shape), dtype=flow_2d.dtype)], axis=0
+        )
+    else:
+        flow_2d = None
+    if flow_3d_zarr_path is not None:
+        flow_3d_root = zarr.open(flow_3d_zarr_path)
+        flow_3d = flow_3d_root["flow_raw"][:]
+        flow_3d = np.concatenate(
+            [flow_3d, np.zeros((1, *flow_3d[0].shape), dtype=flow_3d.dtype)], axis=0
+        )
+        if "confidence" in flow_3d_root:
+            confidence_3d = flow_3d_root["confidence"][:]
+            confidence_3d = np.concatenate(
+                [confidence_3d, np.zeros((1, *confidence_3d[0].shape), dtype=confidence_3d.dtype)],
+                axis=0,
+            )
+        else:
+            confidence_3d = None
+    else:
+        flow_3d = None
+        confidence_3d = None
+
+    axes = seg_zarr_root["fragments"].attrs.get("axes", None)
+    if axes is not None:
+        for axis in axes:
+            axis["scale"] = 1.0 if axis["scale"] is None else float(axis["scale"])
+        scale = [axis["scale"] for axis in axes if "scale" in axis]
+    else:
+        scale = [1.0, 1.0, 1.0, 1.0]
+    img_shape = fragments.shape
+    img_shape_scaled = [int(img_shape[i] * scale[i]) for i in range(len(img_shape))]
+    max_node_id = int(np.max(fragments))
+
+    merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
+    merge_history = create_multihypo_graph.normalize_costs(merge_history)
+    merge_history = create_multihypo_graph.renumber_merge_history(merge_history, max_node_id)
+
+    z_flow_conf_threshold = config.get("z_flow_conf_threshold", None)
+    z_flow_min_pass_pixels = config.get("z_flow_min_pass_pixels", 10)
+
+    all_cand_graph = None
+    all_exclusion_sets: list = []
+    for t in range(img_shape[0]):
+        cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
+            fragments[t],
+            merge_history[merge_history[:, 4] == t],
+            min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
+            max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
+            raw_img=raw_img[t],
+            flow_2d=flow_2d[t] if flow_2d is not None else None,
+            flow_3d=flow_3d[t] if flow_3d is not None else None,
+            confidence_3d=confidence_3d[t] if confidence_3d is not None else None,
+            z_flow_conf_threshold=z_flow_conf_threshold,
+            z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+            size_threshold=config["size_threshold"],
+            scale=scale,
+        )
+        if all_cand_graph is None:
+            all_cand_graph = cand_graph
+            all_exclusion_sets = exclusion_sets
+        else:
+            all_cand_graph = nx.compose(all_cand_graph, cand_graph)
+            all_exclusion_sets.extend(exclusion_sets)
+
+    utils.add_cand_edges(
+        all_cand_graph, config["max_edge_distance"], max_children=config["max_children"]
+    )
+    all_cand_graph = utils.add_hyperedges(
+        all_cand_graph, divisions=config["divisions"], merges=config["merges"]
+    )
+    utils.add_appear_ignore_attr(all_cand_graph)
+    utils.add_disappear(all_cand_graph, img_shape_scaled)
+    track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
+
+    if flow_3d is not None:
+        utils.add_flow_dist_attr(track_graph)
+    elif "drift_distance" in config:
+        utils.add_drift_dist_attr(track_graph, drift=config["drift_distance"])
+    else:
+        utils.add_drift_dist_attr(track_graph, drift=0)
+    utils.add_area_diff_attr(track_graph)
+    utils.add_intensity_diff_attr(track_graph)
+
+    return track_graph, fragments, merge_history, all_exclusion_sets, scale, axes

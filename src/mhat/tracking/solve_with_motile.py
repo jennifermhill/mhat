@@ -149,7 +149,7 @@ def add_costs(solver, config, no_merges=False):
         print("Skipping cohesion/adhesion costs (no-merge mode)")
     else:
         if not config.get("ablate_cohesion_adhesion", False):
-        solver.add_cost(
+            solver.add_cost(
                 LeavesScaledNodeSelection(
                     weight=config["cohesion_weight"],
                     attribute="cohesion",
@@ -165,8 +165,8 @@ def add_costs(solver, config, no_merges=False):
                 ),
                 name="adhesion",
             )
-    else:
-        print("Ablating cohesion and adhesion costs")
+        else:
+            print("Ablating cohesion and adhesion costs")
 
     solver.add_cost(
         motile.costs.Appear(
@@ -180,7 +180,7 @@ def add_costs(solver, config, no_merges=False):
     )
 
 
-def solve_with_motile(config, graph, exclusion_sets):
+def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
     """Set up and solve the network flow problem.
 
     Args:

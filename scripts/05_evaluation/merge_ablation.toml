@@ -13,8 +13,8 @@
 [mda231]
 experiment = "Fluo-C3DL-MDA231"
 dataset_dir = "01_cells"
-eval_base_dir = "C:/Users/hillj/Documents/mhat/experiments/evaluation"
-output_png = "C:/Users/hillj/Documents/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_results_mda231.png"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation"
 
 [mda231.metrics.TRA]
@@ -42,19 +42,19 @@ tracking_uid = "2026-04-15_09-42-38"
 label = "- Coh/Adh"
 seg_uid = "2026-04-03_11-09-49"
 seg_overrides = ""
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_13-55-31"
 
 [mda231.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "<fill in>"
+seg_uid = "2026-04-28_13-43-53"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_14-07-43"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
-seg_uid = "<fill in>"
+seg_uid = "2026-04-23_12-51-45"
 seg_overrides = "skip_merges = true"
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_14-06-59"
 
 # =============================================================================
 # NC281-Fl2mSiH2B / 03_nuclei
@@ -62,8 +62,8 @@ tracking_uid = "<fill in>"
 [nc281]
 experiment = "NC281-Fl2mSiH2B"
 dataset_dir = "03_nuclei"
-eval_base_dir = "C:/Users/hillj/Documents/mhat/experiments/evaluation"
-output_png = "C:/Users/hillj/Documents/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/merge_ablation_results_nc281.png"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/merge_ablation_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Merge Ablation"
 
 [nc281.metrics.TE]
@@ -80,22 +80,22 @@ reduction = "mean"
 label = "Baseline"
 seg_uid = "2026-02-25_11-56-23"
 seg_overrides = ""
-tracking_uid = "<fill in>"
+tracking_uid = "2026-04-15_12-04-23"
 
 [nc281.conditions.no_cohesion]
 label = "- Cohesion"
 seg_uid = "2026-02-25_11-56-23"
 seg_overrides = ""
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_14-12-50"
 
 [nc281.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "<fill in>"
+seg_uid = "2026-04-28_13-37-46"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_14-16-14"
 
 [nc281.conditions.no_merges]
 label = "- Merges"
-seg_uid = "<fill in>"
+seg_uid = "2026-04-22_10-04-15"
 seg_overrides = "skip_merges = true"
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_14-17-14"

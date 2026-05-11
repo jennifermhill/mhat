@@ -418,3 +418,65 @@ Verdict: [supported/falsified/inconclusive] — [one line explanation]
 ```
 | Run | Changed Params | TRA | DET | LNK | fp | fn | fn_edges | Nodes |
 ```
+
+## SSVM Weight Fitting (`ssvm-fit` branch only)
+
+Experimental: use motile's `Solver.fit_weights()` (structsvm bundle method, branch `scale-features-and-costs`) to learn ILP cost weights from CTC ground truth, as an alternative to coordinate-wise hand-tuning. Result on MDA231: TRA=0.826 vs hand-tuned 0.881 — useful as a starting point but does not replace hand-tuning.
+
+### Files
+
+- `src/mhat/tracking/gt_annotation.py` — annotates `gt_selected ∈ {0, 1}` on candidate nodes/edges via Hungarian matching (IoGT > 0.5 filter, IoU as ranking tiebreaker).
+- `src/mhat/tracking/pipeline.py` — `build_track_graph()` shared between `run_tracking.py` and the SSVM scripts.
+- `src/mhat/tracking/leaves_scaled_costs.py` — `LeavesScaledNodeSelection` (bakes `num_leaves` into features so SSVM and inference see the same costs).
+- `src/mhat/tracking/solve_with_motile.py` — `add_costs(solver, config)` shared cost-adding helper, gated by `ablate_*` flags (not weight==0).
+- `scripts/04_tracking/fit_weights_ssvm.py` — runs the fit, writes `learned_weights.toml`, runs a final solve.
+- `scripts/04_tracking/inspect_gt_annotation.py` — napari overlay for visual sanity check of the GT→candidate matching.
+- `scripts/04_tracking/sweep_post_ssvm_offsets.py` — sweeps additive offsets on edge constants to overcome the empty-solution issue (see "Post-hoc offset" below).
+- `scripts/04_tracking/MDA231_ssvm_fit.toml` — fit config; new keys vs `MDA231_baseline.toml`: `ssvm_reg`, `ssvm_max_iter`, `ssvm_eps`, `iogt_threshold`.
+
+### Workflow
+
+1. **Inspect first** (interactive, optional but recommended once per dataset):
+   ```
+   conda run -n mhat-sandbox --no-capture-output python scripts/04_tracking/inspect_gt_annotation.py scripts/04_tracking/MDA231_ssvm_fit.toml
+   ```
+   Verify `matched_cand` layer aligns with `gt_seg` in napari.
+
+2. **Fit**:
+   ```
+   conda run -n mhat-sandbox --no-capture-output python scripts/04_tracking/fit_weights_ssvm.py scripts/04_tracking/MDA231_ssvm_fit.toml
+   ```
+   Outputs `learned_weights.toml` and `pred_tracks.zarr` under `experiments/tracking/<experiment>/<dataset>/ssvm_fit/`. Bundle method logs per-iteration ε to stdout (decreasing toward 0; small negative ε at end is numerical noise).
+
+3. **Run post-hoc offset sweep** (required — raw SSVM produces empty inference solution):
+   ```
+   conda run -n mhat-sandbox --no-capture-output python scripts/04_tracking/sweep_post_ssvm_offsets.py <ssvm_fit dir>/learned_weights.toml
+   ```
+   Sweeps over an additive offset to `intensity_constant` (the dominant edge term). The plateau at offset ≈ -1000 gave best TRA on MDA231.
+
+### Why the post-hoc offset is needed
+
+SSVM's soft-margin loss enforces a *gap* between gt=1 and gt=0 costs but doesn't push absolute costs negative. Inference (cost minimization) selects only variables with cost < 0; SSVM-learned weights can produce gt=1 cost ≈ +ε with gt=0 cost ≈ +1+ε — gap exists, but everything stays positive, so inference picks ∅.
+
+Compounding this: the constraint structure (`MaxParents=1`, `MaxChildren=1`, `ExclusiveNodes`) caps how many variables the loss-augmented decoding can select, which caps gradient magnitude on bias terms (e.g., `drift_constant`). So SSVM never learns the strongly-negative constants that hand-tuning finds.
+
+Workaround: take the SSVM-learned weights (the relative pattern is informative — particularly which features SSVM judged discriminative) and sweep an additive offset on the dominant cost constant to shift inference into a non-empty regime.
+
+### Key parameters
+
+- `ssvm_reg` (default 0.1) — regularization strength on `½λ‖w‖²`. Acts as a 1/k scale on learned weight magnitudes; *does not change the direction* of the learned weights. Branch's feature/cost scaling by `mask.sum()` already normalizes for dataset size, so 0.1 is a reasonable default.
+- `ssvm_max_iter` (default 100) — bundle method typically converges in 10-20 iterations; the structsvm exit on `ε ≤ eps` (or `ε < 0` numerical noise) usually fires before max_iter.
+- `iogt_threshold` (default 0.5) — minimum intersection-over-GT for a candidate to be a valid match (CTC detection criterion). Use IoGT (not IoU) because GT segs on this dataset are often smaller than the actual cell extent; IoU underestimates match quality for over-merged candidates that fully contain the GT.
+
+### Logging
+
+Bundle method output is captured by configuring Python's `logging` module at INFO level on the `structsvm` logger. The fit script does this automatically via `configure_logging()` in `fit_weights_ssvm.py`.
+
+### Best result on MDA231
+
+```
+intensity_constant += -1000 (post-hoc offset)
+TRA=0.826, DET=0.840, LNK=0.723, fp=161, fn=40
+```
+
+Hand-tuned best for comparison: `TRA=0.881, DET=0.886, LNK=0.845`. The 0.055 TRA gap is mostly LNK (0.723 vs 0.845), driven by SSVM learning `drift_weight≈0.6` (vs hand-tuned 57) — drift effectively contributes nothing, and a 1D constant offset can't fix a near-zero weight.

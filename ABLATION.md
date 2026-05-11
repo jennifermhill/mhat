@@ -54,7 +54,7 @@ Once all four `tracking_uid`s for a dataset are filled in:
 ```
 conda run -n mhat-sandbox --no-capture-output \
   python scripts/05_evaluation/merge_ablation_figure.py \
-  scripts/05_evaluation/merge_ablation.toml --dataset {mda231,nc281}
+  scripts/05_evaluation/merge_ablation.toml --dataset {mda231,nc281,nc281_sparse}
 ```
 
 The output PNG path is read from the TOML's `output_png` field per dataset. Override with `--output PATH` if needed. Missing or unfilled `tracking_uid`s produce a warning and skip the bar, so partial-progress plotting works.

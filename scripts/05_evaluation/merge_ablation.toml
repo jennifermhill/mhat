@@ -99,3 +99,53 @@ label = "- Merges"
 seg_uid = "2026-04-22_10-04-15"
 seg_overrides = "skip_merges = true"
 tracking_uid = "2026-05-11_14-17-14"
+
+# =============================================================================
+# NC281-sparse-label / 01_nuclei_denoised
+# Dense GT (despite "sparse-label" name) — purity is a reliable signal here.
+# =============================================================================
+[nc281_sparse]
+experiment = "NC281-sparse-label"
+dataset_dir = "01_nuclei_denoised"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/merge_ablation_results_nc281-sparse.png"
+suptitle = "NC28.1-sparse-label Merge Ablation"
+
+[nc281_sparse.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+[nc281_sparse.conditions.baseline]
+label = "Baseline"
+seg_uid = "2026-04-01_11-08-44"
+seg_overrides = ""
+tracking_uid = "2026-04-29_11-36-23_R1"
+
+[nc281_sparse.conditions.no_cohesion]
+label = "- Cohesion"
+seg_uid = "2026-04-01_11-08-44"
+seg_overrides = ""
+tracking_uid = "<fill in>"
+
+[nc281_sparse.conditions.no_affinities]
+label = "- Affinities"
+seg_uid = "<fill in>"
+seg_overrides = "scoring_function = 'symmetric'"
+tracking_uid = "<fill in>"
+
+[nc281_sparse.conditions.no_merges]
+label = "- Merges"
+seg_uid = "<fill in>"
+seg_overrides = "skip_merges = true"
+tracking_uid = "<fill in>"

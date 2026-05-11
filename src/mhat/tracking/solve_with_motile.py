@@ -85,7 +85,102 @@ def report_graph_statistics(config, track_graph):
     print("=" * 100 + "\n")
 
 
-def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
+def add_costs(solver, config, no_merges=False):
+    """Add all ILP cost terms to the solver, gated by ablation flags.
+
+    Each cost is included unless its corresponding `ablate_*` flag is true:
+    `ablate_drift`, `ablate_area`, `ablate_intensity`, `ablate_curvature`,
+    `ablate_cohesion_adhesion`. Appear/disappear costs are not ablatable.
+
+    A cost is added with whatever weight/constant the config specifies; weight=0
+    no longer skips a cost (use the ablation flag instead). This makes the cost
+    set deterministic from the flags, which matters for SSVM weight fitting where
+    the initial weights are zero but the cost terms must still be present.
+    """
+    if not config.get("ablate_drift", False):
+        solver.add_cost(
+            motile.costs.EdgeSelection(
+                weight=config["drift_weight"],
+                attribute="drift_dist",
+                constant=config["drift_constant"],
+            ),
+            name="drift",
+        )
+    else:
+        print("Ablating drift cost")
+
+    if not config.get("ablate_area", False):
+        solver.add_cost(
+            motile.costs.EdgeSelection(
+                weight=config["area_weight"],
+                attribute="area_diff",
+                constant=config["area_constant"],
+            ),
+            name="area",
+        )
+    else:
+        print("Ablating area cost")
+
+    if not config.get("ablate_intensity", False):
+        solver.add_cost(
+            motile.costs.EdgeSelection(
+                weight=config["intensity_weight"],
+                attribute="intensity_diff",
+                constant=config["intensity_constant"],
+            ),
+            name="intensity",
+        )
+    else:
+        print("Ablating intensity cost")
+
+    if not config.get("ablate_curvature", False):
+        solver.add_cost(
+            CurvatureCost(
+                weight=config["curvature_weight"],
+                position_attribute="centroid",
+                constant=config["curvature_constant"],
+            ),
+            name="curvature",
+        )
+    else:
+        print("Ablating curvature cost")
+
+    if no_merges:
+        print("Skipping cohesion/adhesion costs (no-merge mode)")
+    else:
+        if not config.get("ablate_cohesion_adhesion", False):
+        solver.add_cost(
+                LeavesScaledNodeSelection(
+                    weight=config["cohesion_weight"],
+                    attribute="cohesion",
+                    constant=config["cohesion_constant"],
+                ),
+                name="cohesion",
+            )
+            solver.add_cost(
+                LeavesScaledNodeSelection(
+                    weight=config["adhesion_weight"],
+                    attribute="adhesion",
+                    constant=config["adhesion_constant"],
+                ),
+                name="adhesion",
+            )
+    else:
+        print("Ablating cohesion and adhesion costs")
+
+    solver.add_cost(
+        motile.costs.Appear(
+            constant=config["appear_constant"], ignore_attribute="ignore_appear"
+        )
+    )
+    solver.add_cost(
+        motile.costs.Disappear(
+            constant=config["disappear_constant"], ignore_attribute="ignore_disappear"
+        )
+    )
+
+
+def solve_with_motile(config, graph, exclusion_sets):
     """Set up and solve the network flow problem.
 
     Args:
@@ -99,85 +194,7 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(1))
 
-    if config["drift_weight"] != 0 or config["drift_constant"] != 0:
-        solver.add_cost(
-            motile.costs.EdgeSelection(
-                weight=config["drift_weight"],
-                attribute="drift_dist",
-                constant=config["drift_constant"],
-            ),
-            name="drift",
-        )
-    else:
-        print("Skipping drift cost (weight=0, constant=0)")
-
-    if config["area_weight"] != 0 or config["area_constant"] != 0:
-        solver.add_cost(
-            motile.costs.EdgeSelection(
-                weight=config["area_weight"],
-                attribute="area_diff",
-                constant=config["area_constant"],
-            ),
-            name="area",
-        )
-    else:
-        print("Skipping area cost (weight=0, constant=0)")
-
-    if config["intensity_weight"] != 0 or config["intensity_constant"] != 0:
-        solver.add_cost(
-            motile.costs.EdgeSelection(
-                weight=config["intensity_weight"],
-                attribute="intensity_diff",
-                constant=config["intensity_constant"],
-            ),
-            name="intensity",
-        )
-    else:
-        print("Skipping intensity cost (weight=0, constant=0)")
-
-    if config["curvature_weight"] != 0 or config["curvature_constant"] != 0:
-        solver.add_cost(
-            CurvatureCost(
-                weight=config["curvature_weight"],
-                position_attribute="centroid",
-                constant=config["curvature_constant"],
-            ),
-            name="curvature",
-        )
-    else:
-        print("Skipping curvature cost (weight=0, constant=0)")
-
-    if no_merges:
-        print("Skipping cohesion/adhesion costs (no-merge mode)")
-    else:
-        solver.add_cost(
-            LeavesScaledNodeSelection(
-                weight=config["cohesion_weight"],
-                attribute="cohesion",
-                constant=config["cohesion_constant"],
-            ),
-            name="cohesion",
-        )
-
-        solver.add_cost(
-            LeavesScaledNodeSelection(
-                weight=config["adhesion_weight"],
-                attribute="adhesion",
-                constant=config["adhesion_constant"],
-            ),
-            name="adhesion",
-        )
-
-    solver.add_cost(
-        motile.costs.Appear(
-            constant=config["appear_constant"], ignore_attribute="ignore_appear"
-        )
-    )
-    solver.add_cost(
-        motile.costs.Disappear(
-            constant=config["disappear_constant"], ignore_attribute="ignore_disappear"
-        )
-    )
+    add_costs(solver, config)
 
     report_graph_statistics(config, graph)
 

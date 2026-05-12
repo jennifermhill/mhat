@@ -13,6 +13,7 @@ import networkx as nx
 
 from mhat.evaluation.eval_io import check_video_dir
 from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
+from mhat.tracking.solve_with_motile import report_graph_statistics
 from mhat.tracking.tracks_io import save_tracks_to_csv
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
@@ -52,7 +53,7 @@ def get_solution_seg(fragments, merge_history, solution_graph):
     return solution_seg
 
 
-def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path):
+def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path, stats_only: bool = False):
 
     raw_zarr_path = raw_dir
     seg_zarr_path = seg_dir / "data.zarr"
@@ -263,6 +264,11 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     utils.add_intensity_diff_attr(track_graph)
     utils.apply_mean_ablation(config, track_graph)
 
+    if stats_only:
+        report_graph_statistics(config, track_graph)
+        print("Stats-only mode: skipping ILP solve and result saving.")
+        return
+
     # Save candidate edge list for analysis (simple edges only, skip hyperedges)
     cand_edges_path = output_dir / "candidate_edges.npy"
     simple_edges = [(e[0], e[1]) for e in track_graph.edges if isinstance(e[0], (int, np.integer)) and isinstance(e[1], (int, np.integer))]
@@ -308,6 +314,8 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config")
+    parser.add_argument("--stats-only", action="store_true",
+                        help="Build candidate graph and print attribute statistics, then exit.")
     args = parser.parse_args()
     config = toml.load(args.config)
 
@@ -358,4 +366,4 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir)
+    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only=args.stats_only)

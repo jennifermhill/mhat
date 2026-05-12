@@ -156,8 +156,12 @@ def evaluate_tracking(
     else:
         scale = [a.scale for a in axes if a.scale is not None]  # Extract scale values
 
-    gt_seg_path = gt_data_dir / "correct_seg.zarr"
-    gt_seg_path = gt_seg_path if gt_seg_path.exists() else None
+    gt_seg_path = None
+    for candidate in ("correct_seg.zarr", "segmentation"):
+        p = gt_data_dir / candidate
+        if p.exists():
+            gt_seg_path = p
+            break
     gt_tracks = import_from_geff(
         gt_data_dir / "correct_tracks.zarr",
         name_map,
@@ -215,7 +219,16 @@ def evaluate_tracking(
             raise ValueError(f"Invalid metric specified: {metric}\nValid metrics are: {list(metrics_dict.keys())}")
 
     matcher_fn = matchers_dict[matcher]
-    kwargs = {"threshold": threshold} if threshold is not None else {}
+    if matcher == "iou":
+        # IOUMatcher expects iou_threshold (default 0.6); also supports one_to_one.
+        kwargs = {}
+        iou_threshold = config.get("iou_threshold", threshold)
+        if iou_threshold is not None:
+            kwargs["iou_threshold"] = iou_threshold
+        if "one_to_one" in config:
+            kwargs["one_to_one"] = config["one_to_one"]
+    else:
+        kwargs = {"threshold": threshold} if threshold is not None else {}
 
     results, matched = run_metrics(
         gt_graph,

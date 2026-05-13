@@ -34,9 +34,15 @@ from mhat.tracking.solve_with_motile import add_costs, report_graph_statistics
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 
-def configure_logging():
-    """Surface structsvm bundle-method convergence output."""
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
+def configure_logging(output_dir):
+    """Surface structsvm bundle-method convergence output to a logfile only."""
+    log_dir = output_dir
+    log_dir.mkdir(exist_ok=True)
+    log_path = log_dir / f"fit_weights_ssvm_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s: %(message)s"))
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler])
     logging.getLogger("structsvm").setLevel(logging.INFO)
 
 
@@ -120,7 +126,7 @@ def get_solution_seg(fragments, merge_history, solution_graph):
 
 
 def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
-    configure_logging()
+    configure_logging(output_dir)
 
     # Persist input config (pre-fit) for reproducibility
     with open(output_dir / "config.toml", "w") as f:

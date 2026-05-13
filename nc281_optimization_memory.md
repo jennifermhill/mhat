@@ -189,3 +189,42 @@ Curvature stats: count=100732, mean=6.628, std=4.112.
 - **TE/TF plateau at curv_w=100-200.** R3 ≈ R4; R5 (curv_w=220) slightly worse. The plateau is the meaningful curvature-only result.
 - **Track purity is ~0.05** in all completed runs — expected given sparse GT (506 GT nodes vs ~7500 pred nodes).
 - **Comparable to MDA231**: equivalent MDA231 sweep best (`curv_w=10, curv_c=-500`) gave TRA=0.853, DET=0.858, LNK=0.815. NC281-Fl2m's standalone curvature TE=0.617 is the parallel data point.
+
+---
+
+## Merge-Ablation Per-Condition Optimization (2026-05-12)
+
+Re-tuned each of the 4 merge-ablation conditions independently (5 runs each, 20 total). Detailed runs in `nc281_optimization_log.md`. Key principles & post-opt winners:
+
+### Per-condition winners (point matcher, threshold=10)
+
+| Condition | seg_uid | ablate | Best param Δ from canon | exp_uid | TE | TF | EdgeR | FN_e |
+|-----------|---------|--------|--------------------------|---------|-----|-----|-------|------|
+| Baseline | 2026-02-25_11-56-23 | false | drift_constant=-750 | 2026-05-12_15-57-57 | 0.6616 | 0.7067 | 0.846 | 71 |
+| - Cohesion | 2026-02-25_11-56-23 | true | drift_constant=-750 | 2026-05-12_16-33-09 | 0.6703 | 0.7162 | 0.846 | 71 |
+| - Affinities | 2026-04-28_13-37-46 | true | drift_constant=-750 | 2026-05-12_17-06-45 | 0.6725 | 0.7236 | 0.850 | 69 |
+| - Merges | 2026-04-22_10-02-35 | true | drift_weight=45 (drift_c=-1000) | 2026-05-12_17-28-54 | 0.6356 | 0.6822 | 0.829 | 79 |
+
+(no_merges seg was switched from cellpose `2026-04-22_10-04-15` to otsu `2026-04-22_10-02-35` to remove the seg-method confound; full point/IoU eval results saved alongside in each eval dir as `track_metrics_point.json` / `track_metrics_iou.json`.)
+
+### IoU eval (threshold=0.8) on the 4 winners
+
+| Condition | TE_iou | TF_iou | NodeR_iou | EdgeR_iou |
+|-----------|--------|--------|-----------|-----------|
+| Baseline | 0.6594 | 0.6992 | 0.992 | 0.837 |
+| - Cohesion | 0.6573 | 0.6980 | 0.982 | 0.824 |
+| - Affinities | 0.6616 | 0.7072 | 0.986 | 0.835 |
+| - Merges | 0.6312 | 0.6785 | 0.988 | 0.820 |
+
+IoU NodeR is 0.98–0.99 (vs 1.0 for point) — small number of detections fall below the 0.8 IoU threshold. Relative ordering of conditions is the same under both matchers.
+
+### New principles confirmed in this batch
+
+- **Under `ablate_cohesion_adhesion=true`, drift_c=-750 wins decisively** (NC: +0.011, NA: +0.009). Removing cohesion shifts the lower drift_c plateau edge — previously believed unchanged from baseline. This *falsifies* the prior "lower plateau edge is fixed at -1000" assumption.
+- **Joint corners (drift_w + drift_c shifted together) consistently underperform single-axis moves.** NC-R5, NA-R5, NM-R5 all confirmed antagonistic interaction at the plateau boundary.
+- **For `no_merges`, drift_w=45 (not 30) is optimal.** Both directions of drift_w from 30 improved (R2 at 20: +0.013, R3 at 45: +0.037), with higher weight winning more strongly. Drift_dist std interpretation (4.39 vs canon 4.20 → predicted lower w) was wrong here.
+- **Baseline (full costs) is at a stable plateau.** drift_c=-750 ties drift_c=-1000 on TE/TF (0.6616/0.7067) and barely edges out on EdgeR (0.846 vs 0.842). The cohesion-on-vs-off effect remains exactly -0.0022 TE.
+
+### Outstanding
+
+- The (drift_w=35, drift_c=-750) corner has now been tested in both baseline (TE=0.6616, ties canon) and no_affinities (NA-R5 TE=0.6659, worse than NA-R3 alone). No new joint-corner improvements have been found across 3+ batches — this can probably be retired from future sweeps.

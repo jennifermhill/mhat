@@ -598,3 +598,71 @@ Same methodology run on MDA231 finished in ~3 min/run. Best config: `curv_w=10, 
 ### Tooling note
 
 argparse in `launch_curvature_batch.py` interprets a leading `-` in `--curvature-constants -300,...` as a flag. Use `=` syntax: `--curvature-constants=-300,-500,-800,-1500,-2000`.
+
+---
+
+## Merge-Ablation 4-Condition Sweep (2026-05-12)
+
+5 hypothesis-driven runs per condition (20 total) to re-tune each merge-ablation condition independently. Selection criterion: TE primary, TF tiebreak, EdgeR/FN_e secondary. All runs use confidence-filtered Z-flow (`z_flow_conf_threshold=1e-7`, `z_flow_min_pass_pixels=10`).
+
+For the `no_merges` condition, the seg was switched from cellpose (`2026-04-22_10-04-15`) to a freshly regenerated otsu seg (`2026-04-22_10-02-35`) to eliminate the seg-method confound vs the other three conditions.
+
+NC281 correct_seg.zarr was generated via centroid-based lookup in `2026-02-02_13-47-53/pred_seg.zarr` (see `scripts/05_evaluation/build_correct_seg.py`). Sanity-checked with IoU eval: 501/506 GT nodes matched (NodeR 0.99).
+
+### Baseline condition (otsu seg `2026-02-25_11-56-23`, ablate=false)
+
+| Run | Changed Params | exp_uid | TE | TF | NodeR | EdgeR | FN_e |
+|-----|----------------|---------|------|------|-------|-------|------|
+| canon | (prior, ref) | 2026-05-12_14-17-55 | 0.6616 | 0.7057 | 1.000 | 0.842 | 73 |
+| B-R1 | drift_weight=35 | 2026-05-12_15-51-21 | 0.6616 | 0.7067 | 1.000 | 0.842 | 73 |
+| **B-R2** | **drift_constant=-750** | **2026-05-12_15-57-57** | **0.6616** | **0.7067** | **1.000** | **0.846** | **71** |
+| B-R3 | cohesion off | 2026-05-12_16-03-40 | 0.6594 | 0.7045 | 1.000 | 0.837 | 75 |
+| B-R4 | cohesion_constant=550 | 2026-05-12_16-09-20 | 0.6529 | 0.6974 | 1.000 | 0.837 | 75 |
+| B-R5 | coh_w=-250, coh_c=250 | 2026-05-12_16-15-07 | 0.6616 | 0.7057 | 1.000 | 0.840 | 74 |
+
+**Winner: B-R2 (drift_c=-750)**. Verdict: TE/TF tied with canonical and B-R1, but B-R2 has best EdgeR (0.846) and FN_e (71) — tiebreak winner. cohesion_c=550 falsified (TE -0.0087); cohesion off worse by exactly the predicted 0.0022.
+
+### no_cohesion condition (same seg as baseline, ablate=true)
+
+| Run | Changed Params | exp_uid | TE | TF | NodeR | EdgeR | FN_e |
+|-----|----------------|---------|------|------|-------|-------|------|
+| canon | (prior, ref) | 2026-05-11_14-12-50 | 0.6594 | 0.7045 | 1.000 | 0.837 | 75 |
+| NC-R1 | drift_weight=35 | 2026-05-12_16-21-11 | 0.6594 | 0.7054 | 1.000 | 0.840 | 74 |
+| NC-R2 | drift_constant=-1250 | 2026-05-12_16-27-16 | 0.6356 | 0.6834 | 1.000 | 0.833 | 77 |
+| **NC-R3** | **drift_constant=-750** | **2026-05-12_16-33-09** | **0.6703** | **0.7162** | **1.000** | **0.846** | **71** |
+| NC-R4 | drift_weight=25 | 2026-05-12_16-39-37 | 0.6486 | 0.6888 | 1.000 | 0.831 | 78 |
+| NC-R5 | drift_w=35, drift_c=-750 (adapted from plan's drift_c=-1250 corner — that direction known harmful) | 2026-05-12_16-47-27 | 0.6464 | 0.6984 | 1.000 | 0.842 | 73 |
+
+**Winner: NC-R3 (drift_c=-750)**, TE 0.6703 (+0.0109 over canon). Significant finding: removing cohesion shifts the drift_c optimum from -1000 to -750 — the "lower plateau edge" hypothesis was *falsified* in an interesting way. Joint corner (35, -750) underperformed both individual moves (non-additive interaction).
+
+### no_affinities condition (otsu seg `2026-04-28_13-37-46` with scoring=symmetric, ablate=true)
+
+| Run | Changed Params | exp_uid | TE | TF | NodeR | EdgeR | FN_e |
+|-----|----------------|---------|------|------|-------|-------|------|
+| NA-R1 | canon reproduce | 2026-05-12_16-55-24 | 0.6638 | 0.7132 | 1.000 | 0.846 | 71 |
+| NA-R2 | drift_weight=35 | 2026-05-12_17-01-16 | 0.6681 | 0.7172 | 1.000 | 0.848 | 70 |
+| **NA-R3** | **drift_constant=-750** | **2026-05-12_17-06-45** | **0.6725** | **0.7236** | **1.000** | **0.850** | **69** |
+| NA-R4 | drift_constant=-1250 | 2026-05-12_17-12-25 | 0.6377 | 0.6903 | 1.000 | 0.837 | 75 |
+| NA-R5 | drift_w=35, drift_c=-750 | 2026-05-12_17-18-03 | 0.6659 | 0.7190 | 1.000 | 0.853 | 68 |
+
+**Winner: NA-R3 (drift_c=-750)**, TE 0.6725 (+0.0087 over canon). Same drift_c=-750 plateau-edge falsification as no_cohesion. NA-R5 has slightly better EdgeR/FN_e than NA-R3 but lower TE/TF; primary criterion picks NA-R3.
+
+### no_merges condition (otsu seg `2026-04-22_10-02-35` with skip_merges=true, ablate=true)
+
+NM-R1 is the Phase B canonical run on the otsu seg (replacing the discarded cellpose-seg run `2026-05-11_14-17-14` with TE 0.3232). Drift_dist std=4.39 (vs canon 4.20, ~5% inflation — predicted lower drift_w would win; actual finding was the opposite).
+
+| Run | Changed Params | exp_uid | TE | TF | NodeR | EdgeR | FN_e |
+|-----|----------------|---------|------|------|-------|-------|------|
+| NM-R1 | canon on otsu seg | 2026-05-12_15-45-18 | 0.5987 | 0.6448 | 0.998 | 0.809 | 88 |
+| NM-R2 | drift_weight=20 | 2026-05-12_17-23-50 | 0.6117 | 0.6517 | 0.998 | 0.811 | 87 |
+| **NM-R3** | **drift_weight=45** | **2026-05-12_17-28-54** | **0.6356** | **0.6822** | **0.998** | **0.829** | **79** |
+| NM-R4 | drift_constant=-750 | 2026-05-12_17-34-03 | 0.6095 | 0.6542 | 0.998 | 0.816 | 85 |
+| NM-R5 | drift_w=45, drift_c=-750 (adapted from plan; drift_c=-1250 direction known harmful) | 2026-05-12_17-39-07 | 0.6030 | 0.6600 | 0.992 | 0.811 | 87 |
+
+**Winner: NM-R3 (drift_w=45)**, TE 0.6356 (+0.0369 over otsu-canon NM-R1). Surprising finding: both drift_w directions from 30 improved (R2 and R3), with higher drift_w winning more strongly. Drift_dist std interpretation predicted opposite direction. drift_c=-750 helped less in no_merges than in the other two ablation conditions; joint corner (45, -750) again underperformed both individual moves.
+
+### Cross-condition observation: `drift_c=-750` is the dominant ablation-regime lever
+
+For all three `ablate_cohesion_adhesion=true` conditions (no_cohesion, no_affinities, no_merges), drift_c=-750 was either the winner (NC, NA) or a tied improvement (NM). The pre-confidence-filter regime had the drift_c plateau at [-1000, -750]; with confidence filtering AND cohesion removed, the plateau peak shifts to drift_c=-750. The full-baseline condition is more ambivalent — B-R2 ties B-R1 and canon on TE/TF, with EdgeR tiebreak going to drift_c=-750.
+
+Joint corners `(drift_w=35, drift_c=-750)` and `(drift_w=45, drift_c=-750)` consistently underperformed single-axis moves — interaction is antagonistic at the boundary.

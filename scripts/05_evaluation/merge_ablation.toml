@@ -48,13 +48,13 @@ tracking_uid = "2026-05-11_13-55-31"
 label = "- Affinities"
 seg_uid = "2026-04-28_13-43-53"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "2026-05-11_14-07-43"
+tracking_uid = "2026-05-11_15-44-05"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-04-23_12-51-45"
-seg_overrides = "skip_merges = true"
-tracking_uid = "2026-05-11_14-06-59"
+seg_uid = "2026-04-23_11-58-21"
+seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
+tracking_uid = "2026-05-12_10-15-29"
 
 # =============================================================================
 # NC281-Fl2mSiH2B / 03_nuclei
@@ -80,25 +80,25 @@ reduction = "mean"
 label = "Baseline"
 seg_uid = "2026-02-25_11-56-23"
 seg_overrides = ""
-tracking_uid = "2026-04-15_12-04-23"
+tracking_uid = "2026-05-12_15-57-57"
 
 [nc281.conditions.no_cohesion]
 label = "- Cohesion"
 seg_uid = "2026-02-25_11-56-23"
 seg_overrides = ""
-tracking_uid = "2026-05-11_14-12-50"
+tracking_uid = "2026-05-12_16-33-09"
 
 [nc281.conditions.no_affinities]
 label = "- Affinities"
 seg_uid = "2026-04-28_13-37-46"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "2026-05-11_14-16-14"
+tracking_uid = "2026-05-12_17-06-45"
 
 [nc281.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-04-22_10-04-15"
+seg_uid = "2026-04-22_10-02-35"
 seg_overrides = "skip_merges = true"
-tracking_uid = "2026-05-11_14-17-14"
+tracking_uid = "2026-05-12_17-28-54"
 
 # =============================================================================
 # NC281-sparse-label / 01_nuclei_denoised
@@ -140,12 +140,12 @@ tracking_uid = "<fill in>"
 
 [nc281_sparse.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "<fill in>"
+seg_uid = "2026-05-07_11-14-03"
 seg_overrides = "scoring_function = 'symmetric'"
 tracking_uid = "<fill in>"
 
 [nc281_sparse.conditions.no_merges]
 label = "- Merges"
-seg_uid = "<fill in>"
+seg_uid = "2026-05-07_11-15-00"
 seg_overrides = "skip_merges = true"
 tracking_uid = "<fill in>"

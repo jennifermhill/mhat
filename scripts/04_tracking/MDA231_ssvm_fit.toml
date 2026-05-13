@@ -1,0 +1,57 @@
+# MDA231 SSVM weight-fitting config.
+# Initial weights/constants are 0 — bundle method always starts at w=0 internally
+# (Weight() initial values are overwritten when optimize() returns).
+
+# IO
+raw_base_dir = "C:/Users/hillj/Documents/mhat/data/"
+input_base_dir = "C:/Users/hillj/Documents/mhat/experiments/"
+output_base_dir = "C:/Users/hillj/Documents/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
+
+seg_result = "2026-04-03_11-09-49"
+flow_result = "2026-02-17_15-55-00"
+use_lk = false
+
+# ILP params (initial values for SSVM; will be overwritten with learned values)
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.0
+drift_constant = 0.0
+area_weight = 0.0
+area_constant = 0.0
+intensity_weight = 0.0
+intensity_constant = 0.0
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = 0.0
+cohesion_constant = 0.0
+adhesion_weight = 0.0
+adhesion_constant = 0.0
+appear_constant = 0.0
+disappear_constant = 0.0
+
+# cand graph creation params (same as MDA231_baseline.toml)
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 60
+size_threshold = 60
+
+# Confidence-based Z flow filtering
+z_flow_conf_threshold = 0.0
+z_flow_min_pass_pixels = 10
+
+# Ablation flags
+ablate_cohesion_adhesion = false
+ablate_drift = false
+ablate_area = false
+ablate_intensity = false
+ablate_curvature = false
+
+# SSVM params
+ssvm_reg = 0.1
+ssvm_max_iter = 100
+ssvm_eps = 1.0e-6
+iogt_threshold = 0.5

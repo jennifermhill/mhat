@@ -22,6 +22,7 @@ from pathlib import Path
 import geff
 import motile
 import numpy as np
+import structsvm as ssvm
 import toml
 import zarr
 
@@ -31,7 +32,124 @@ from mhat.tracking import utils
 from mhat.tracking.gt_annotation import annotate_gt_on_candidate_graph
 from mhat.tracking.pipeline import build_track_graph
 from mhat.tracking.solve_with_motile import add_costs, report_graph_statistics
+from motile.variables import EdgeSelected, NodeSelected
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
+
+
+class TolerantBundleMethod(ssvm.BundleMethod):
+    """UNUSED LEGACY (pre-ilpy-fix).
+
+    BundleMethod whose convergence test treats only |ε| ≤ eps as converged.
+    The base class exits on any ε ≤ eps (line 120 of structsvm/bundle_method.py),
+    which includes large-magnitude negative ε. Before the 2026-05-15 ilpy update,
+    a bug in ilpy's QP solver caused ε to converge to a non-zero negative fixed
+    point — the base class would exit immediately on that as "convergence" when
+    it was actually a spurious-cut signal. This subclass kept iterating in that
+    case until max_iterations so stronger regularizers could be explored.
+
+    With the fixed ilpy, ε converges monotonically from above to ≈0 and the
+    base class exits correctly. This subclass is no longer wired into
+    fit_and_solve; kept here for reference / in case the ilpy bug recurs.
+    """
+
+    def optimize(self, max_iterations=None):
+        ssvm_logger = logging.getLogger("structsvm")
+        w = np.zeros((self._dims,), dtype=np.float64)
+        min_value = np.inf
+        t = 0
+        while max_iterations is None or t < max_iterations:
+            t += 1
+            ssvm_logger.info("----------------- iteration %d", t)
+            w_tm1 = w
+            L_w_tm1, a_t = self._value_gradient_callback(w_tm1)
+            min_value = min(
+                min_value, L_w_tm1 + 0.5 * self._lambda * np.dot(w_tm1, w_tm1)
+            )
+            b_t = L_w_tm1 - np.dot(w_tm1, a_t)
+            self._add_hyperplane(a_t, b_t)
+            w, min_lower = self._find_min_lower_bound()
+            eps_t = min_value - min_lower
+            ssvm_logger.info("          ε   is: %f", eps_t)
+            if abs(eps_t) <= self._eps:
+                ssvm_logger.info("converged (|ε| ≤ eps)")
+                break
+            if eps_t < 0:
+                ssvm_logger.warning("ε < 0 (%f) — continuing; cut may be spurious", eps_t)
+        return w
+
+
+def fit_weights_standardized(
+    solver,
+    gt_attribute,
+    regularizer_weight,
+    max_iterations,
+    eps,
+):
+    """UNUSED LEGACY (pre-ilpy-fix).
+
+    Per-feature-standardized variant of motile.Solver.fit_weights. Each column
+    of the feature matrix is divided by its std before being passed to
+    structsvm's BundleMethod, then the returned weights are inverse-scaled so
+    that the cost `features @ weights` is identical to what would have been
+    computed without the rescaling. Mathematically a pure reconditioning of
+    the QP — the function being optimized is unchanged.
+
+    This was developed to mitigate an ill-conditioned QP that caused large-
+    magnitude negative ε plateaus before the 2026-05-15 ilpy fix. Uses
+    `TolerantBundleMethod` internally so it can keep iterating past spurious
+    negative ε events. With the fixed ilpy, stock `solver.fit_weights()`
+    converges directly and this helper is no longer wired into fit_and_solve;
+    kept here for reference / in case the underlying conditioning issue
+    resurfaces.
+
+    Returns the optimal weights in the *original* (unscaled) space.
+    """
+    features = solver.features.to_ndarray()
+    mask = np.zeros((solver.num_variables,), dtype=np.float32)
+    ground_truth = np.zeros((solver.num_variables,), dtype=np.float32)
+
+    for node, index in solver.get_variables(NodeSelected).items():
+        gt = solver.graph.nodes[node].get(gt_attribute, None)
+        if gt is not None:
+            mask[index] = 1.0
+            ground_truth[index] = gt
+    for edge, index in solver.get_variables(EdgeSelected).items():
+        gt = solver.graph.edges[edge].get(gt_attribute, None)
+        if gt is not None:
+            mask[index] = 1.0
+            ground_truth[index] = gt
+
+    feature_stds = features.std(axis=0)
+    # Degenerate (all-zero) columns: leave scale at 1 — weight has no effect.
+    safe_stds = np.where(feature_stds > 0, feature_stds, 1.0)
+    features_scaled = features / safe_stds[np.newaxis, :]
+
+    logger = logging.getLogger(__name__)
+    weight_names = list(solver.weights._weights_by_name.keys())
+    logger.info("Per-feature standardization:")
+    for name, s in zip(weight_names, feature_stds):
+        logger.info(f"  {str(name):<35} std={s:.4g}")
+
+    loss = ssvm.SoftMarginLoss(
+        solver.constraints,
+        features_scaled.T,  # TODO: motile/ssvm.py:63 has the same transpose
+        ground_truth,
+        ssvm.HammingCosts(ground_truth, mask),
+    )
+    bundle = TolerantBundleMethod(
+        loss.value_and_gradient,
+        dims=features.shape[1],
+        regularizer_weight=regularizer_weight,
+        eps=eps,
+    )
+    w_scaled = bundle.optimize(max_iterations)
+    w_original = w_scaled / safe_stds
+
+    logger.info("Weights (scaled space → original space):")
+    for name, ws, wo in zip(weight_names, w_scaled, w_original):
+        logger.info(f"  {str(name):<35} scaled={ws:+.4g}   original={wo:+.4g}")
+
+    return w_original
 
 
 def configure_logging(output_dir):
@@ -164,6 +282,8 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
     report_graph_statistics(config, track_graph)
 
     print("\nFitting weights via SSVM (this may take a while)...")
+    # Use stock motile fit_weights — ε converges from above to ≈0 with the
+    # post-2026-05-15 ilpy. No post-hoc adjustments needed; see CLAUDE.md.
     solver.fit_weights(
         gt_attribute="gt_selected",
         regularizer_weight=config.get("ssvm_reg", 0.1),

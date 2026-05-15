@@ -52,12 +52,13 @@ def load_condition_metrics(cond_cfg, dataset_cfg, metric_specs):
     tracking_uid = cond_cfg["tracking_uid"]
     if tracking_uid == PLACEHOLDER:
         return None
+    metrics_filename = dataset_cfg.get("metrics_filename", "track_metrics.json")
     metrics_path = (
         Path(dataset_cfg["eval_base_dir"])
         / dataset_cfg["experiment"]
         / dataset_cfg["dataset_dir"]
         / tracking_uid
-        / "track_metrics.json"
+        / metrics_filename
     )
     if not metrics_path.is_file():
         raise FileNotFoundError(f"track_metrics.json not found at {metrics_path}")

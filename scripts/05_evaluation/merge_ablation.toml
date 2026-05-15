@@ -16,6 +16,18 @@ dataset_dir = "01_cells"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
 output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation"
+recall_metrics_filename = "track_metrics_basic.json"
+recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_recall_mda231.png"
+
+[mda231.recall_metrics.NodeRecall]
+display_name = "Node Recall"
+json_path = ["BasicMetrics", "Node Recall"]
+reduction = "scalar"
+
+[mda231.recall_metrics.EdgeRecall]
+display_name = "Edge Recall"
+json_path = ["BasicMetrics", "Edge Recall"]
+reduction = "scalar"
 
 [mda231.metrics.TRA]
 display_name = "TRA"
@@ -36,7 +48,7 @@ reduction = "scalar"
 label = "Baseline"
 seg_uid = "2026-04-03_11-09-49"
 seg_overrides = ""
-tracking_uid = "2026-04-15_09-42-38"
+tracking_uid = "2026-05-15_10-55-56"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
@@ -65,6 +77,19 @@ dataset_dir = "03_nuclei"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
 output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/merge_ablation_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Merge Ablation"
+metrics_filename = "track_metrics_iou.json"
+recall_metrics_filename = "track_metrics_iou.json"
+recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/merge_ablation_recall_nc281.png"
+
+[nc281.recall_metrics.NodeRecall]
+display_name = "Node Recall"
+json_path = ["BasicMetrics", "Node Recall"]
+reduction = "scalar"
+
+[nc281.recall_metrics.EdgeRecall]
+display_name = "Edge Recall"
+json_path = ["BasicMetrics", "Edge Recall"]
+reduction = "scalar"
 
 [nc281.metrics.TE]
 display_name = "Target Effectiveness"
@@ -110,6 +135,19 @@ dataset_dir = "01_nuclei_denoised"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
 output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/merge_ablation_results_nc281-sparse.png"
 suptitle = "NC28.1-sparse-label Merge Ablation"
+metrics_filename = "track_metrics_iou08.json"
+recall_metrics_filename = "track_metrics_iou08.json"
+recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/merge_ablation_recall_nc281-sparse.png"
+
+[nc281_sparse.recall_metrics.NodeRecall]
+display_name = "Node Recall"
+json_path = ["BasicMetrics", "Node Recall"]
+reduction = "scalar"
+
+[nc281_sparse.recall_metrics.EdgeRecall]
+display_name = "Edge Recall"
+json_path = ["BasicMetrics", "Edge Recall"]
+reduction = "scalar"
 
 [nc281_sparse.metrics.TE]
 display_name = "Target Effectiveness"
@@ -136,16 +174,16 @@ tracking_uid = "2026-04-29_11-36-23_R1"
 label = "- Cohesion"
 seg_uid = "2026-04-01_11-08-44"
 seg_overrides = ""
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_15-05-11_no_coh_R2"
 
 [nc281_sparse.conditions.no_affinities]
 label = "- Affinities"
 seg_uid = "2026-05-07_11-14-03"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_15-05-11_no_aff_R2"
 
 [nc281_sparse.conditions.no_merges]
 label = "- Merges"
 seg_uid = "2026-05-07_11-15-00"
 seg_overrides = "skip_merges = true"
-tracking_uid = "<fill in>"
+tracking_uid = "2026-05-11_15-05-11_no_mrg_R2"

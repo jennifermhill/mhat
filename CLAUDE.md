@@ -421,7 +421,7 @@ Verdict: [supported/falsified/inconclusive] — [one line explanation]
 
 ## SSVM Weight Fitting (`ssvm-fit` branch only)
 
-Experimental: use motile's `Solver.fit_weights()` (structsvm bundle method, branch `scale-features-and-costs`) to learn ILP cost weights from CTC ground truth, as an alternative to coordinate-wise hand-tuning. Result on MDA231: TRA=0.826 vs hand-tuned 0.881 — useful as a starting point but does not replace hand-tuning.
+Experimental: use motile's `Solver.fit_weights()` (structsvm bundle method) to learn ILP cost weights from CTC ground truth, as an alternative to coordinate-wise hand-tuning. Un-tuned result on MDA231 (no post-hoc adjustments): TRA=0.797 vs hand-tuned 0.881. SSVM does not replace hand-tuning, but it gives a usable starting point with no manual coordinate search.
 
 ### Files
 
@@ -429,9 +429,8 @@ Experimental: use motile's `Solver.fit_weights()` (structsvm bundle method, bran
 - `src/mhat/tracking/pipeline.py` — `build_track_graph()` shared between `run_tracking.py` and the SSVM scripts.
 - `src/mhat/tracking/leaves_scaled_costs.py` — `LeavesScaledNodeSelection` (bakes `num_leaves` into features so SSVM and inference see the same costs).
 - `src/mhat/tracking/solve_with_motile.py` — `add_costs(solver, config)` shared cost-adding helper, gated by `ablate_*` flags (not weight==0).
-- `scripts/04_tracking/fit_weights_ssvm.py` — runs the fit, writes `learned_weights.toml`, runs a final solve.
+- `scripts/04_tracking/fit_weights_ssvm.py` — runs the fit using stock `motile.Solver.fit_weights()`, writes `learned_weights.toml`, runs a final solve. Also contains unused `fit_weights_standardized()` and `TolerantBundleMethod` helpers left over from pre-ilpy-fix workarounds (see "History" below); safe to delete if no longer wanted.
 - `scripts/04_tracking/inspect_gt_annotation.py` — napari overlay for visual sanity check of the GT→candidate matching.
-- `scripts/04_tracking/sweep_post_ssvm_offsets.py` — sweeps additive offsets on edge constants to overcome the empty-solution issue (see "Post-hoc offset" below).
 - `scripts/04_tracking/MDA231_ssvm_fit.toml` — fit config; new keys vs `MDA231_baseline.toml`: `ssvm_reg`, `ssvm_max_iter`, `ssvm_eps`, `iogt_threshold`.
 
 ### Workflow
@@ -446,37 +445,30 @@ Experimental: use motile's `Solver.fit_weights()` (structsvm bundle method, bran
    ```
    conda run -n mhat-sandbox --no-capture-output python scripts/04_tracking/fit_weights_ssvm.py scripts/04_tracking/MDA231_ssvm_fit.toml
    ```
-   Outputs `learned_weights.toml` and `pred_tracks.zarr` under `experiments/tracking/<experiment>/<dataset>/ssvm_fit/`. Bundle method logs per-iteration ε to stdout (decreasing toward 0; small negative ε at end is numerical noise).
+   Outputs `learned_weights.toml` and `pred_tracks.zarr` under `experiments/tracking/<experiment>/<dataset>/ssvm_fit/`. Logging goes to a timestamped logfile in the same directory (UTF-8 encoding so structsvm's `ε` character writes correctly on Windows cp1252). Per-iteration ε convergence is in the logfile; gurobi solver output prints to stdout directly (C-level write — not captured by Python logging without fd-level redirection).
 
-3. **Run post-hoc offset sweep** (required — raw SSVM produces empty inference solution):
-   ```
-   conda run -n mhat-sandbox --no-capture-output python scripts/04_tracking/sweep_post_ssvm_offsets.py <ssvm_fit dir>/learned_weights.toml
-   ```
-   Sweeps over an additive offset to `intensity_constant` (the dominant edge term). The plateau at offset ≈ -1000 gave best TRA on MDA231.
-
-### Why the post-hoc offset is needed
-
-SSVM's soft-margin loss enforces a *gap* between gt=1 and gt=0 costs but doesn't push absolute costs negative. Inference (cost minimization) selects only variables with cost < 0; SSVM-learned weights can produce gt=1 cost ≈ +ε with gt=0 cost ≈ +1+ε — gap exists, but everything stays positive, so inference picks ∅.
-
-Compounding this: the constraint structure (`MaxParents=1`, `MaxChildren=1`, `ExclusiveNodes`) caps how many variables the loss-augmented decoding can select, which caps gradient magnitude on bias terms (e.g., `drift_constant`). So SSVM never learns the strongly-negative constants that hand-tuning finds.
-
-Workaround: take the SSVM-learned weights (the relative pattern is informative — particularly which features SSVM judged discriminative) and sweep an additive offset on the dominant cost constant to shift inference into a non-empty regime.
+That's the whole workflow. No post-hoc offset sweep, no standardization step — stock `solver.fit_weights()` converges (ε → 0 from above) and the final solve produces a non-empty inference solution directly. To evaluate, point `scripts/05_evaluation/eval_config.toml`'s `track_result` at `ssvm_fit` and run `evaluate_tracks.py`.
 
 ### Key parameters
 
-- `ssvm_reg` (default 0.1) — regularization strength on `½λ‖w‖²`. Acts as a 1/k scale on learned weight magnitudes; *does not change the direction* of the learned weights. Branch's feature/cost scaling by `mask.sum()` already normalizes for dataset size, so 0.1 is a reasonable default.
-- `ssvm_max_iter` (default 100) — bundle method typically converges in 10-20 iterations; the structsvm exit on `ε ≤ eps` (or `ε < 0` numerical noise) usually fires before max_iter.
+- `ssvm_reg` (default 0.1) — regularization strength on `½λ‖w‖²`. Acts as a 1/k scale on learned weight magnitudes; does not change their direction.
+- `ssvm_max_iter` (default 100) — bundle method on MDA231 converges in ~30 iterations.
 - `iogt_threshold` (default 0.5) — minimum intersection-over-GT for a candidate to be a valid match (CTC detection criterion). Use IoGT (not IoU) because GT segs on this dataset are often smaller than the actual cell extent; IoU underestimates match quality for over-merged candidates that fully contain the GT.
 
-### Logging
-
-Bundle method output is captured by configuring Python's `logging` module at INFO level on the `structsvm` logger. The fit script does this automatically via `configure_logging()` in `fit_weights_ssvm.py`.
-
-### Best result on MDA231
+### Un-tuned result on MDA231
 
 ```
-intensity_constant += -1000 (post-hoc offset)
-TRA=0.826, DET=0.840, LNK=0.723, fp=161, fn=40
+ssvm_reg = 0.1 (default)
+no post-hoc offset, no standardization
+→ TRA=0.797, DET=0.841, LNK=0.478, fp=149, fn=37, fn_edges=172
 ```
 
-Hand-tuned best for comparison: `TRA=0.881, DET=0.886, LNK=0.845`. The 0.055 TRA gap is mostly LNK (0.723 vs 0.845), driven by SSVM learning `drift_weight≈0.6` (vs hand-tuned 57) — drift effectively contributes nothing, and a 1D constant offset can't fix a near-zero weight.
+Hand-tuned best for comparison: `TRA=0.881, DET=0.886, LNK=0.845` (config: `scripts/04_tracking/MDA231_baseline.toml`). DET is comparable (0.841 vs 0.886); the main gap is LNK (0.478 vs 0.845). The LNK gap likely reflects the SSVM/CTC objective mismatch — Hamming-distance margin (per-variable mismatch) doesn't perfectly track CTC linking error (trajectory-level edge errors weighted by track continuity). Closing this gap would require either modifying the SSVM loss to better proxy CTC, or running a post-hoc adjustment on top of the SSVM weights.
+
+### History
+
+The workflow above is the current, simplified one. Previously, structsvm's bundle method appeared not to converge on this problem — ε plateaued at large negative values (-5 at default reg) and inference produced empty solutions. A series of workarounds was developed to manage this: per-feature feature-matrix standardization, a `TolerantBundleMethod` subclass that ignored spurious negative ε events, and a 2D post-hoc offset sweep on `intensity_constant` + `drift_constant`. Best result with that pipeline: TRA=0.841 (see `ssvm_results.md` for the full comparison table).
+
+**2026-05-15: an ilpy update fixed the underlying bug**. With the new ilpy, ε converges monotonically from above to ≈0 over ~30 iterations, inference is non-empty directly, and all the workarounds become unnecessary. The previous results are preserved in `ssvm_results.md` for historical reference.
+
+Full comparison table, including pre-fix experiment runs, lives in `ssvm_results.md` at the repo root.

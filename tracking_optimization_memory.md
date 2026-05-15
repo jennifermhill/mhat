@@ -212,8 +212,9 @@ Cohesion/adhesion calculation fixed (commit 4eae562). New segmentation (seg_resu
 
 ### Post-Fix Current Best Config (with intensity, 2026-04-15)
 
-Best overall: INT-B1R1 (exp_uid: 2026-04-15_09-42-38)
+Best overall: INT-B1R1 (exp_uid: 2026-04-15_09-42-38; rerun on 2026-05-01 saved at exp_uid: 2026-05-01_17-12-10)
 - TRA=0.881, DET=0.886, LNK=0.845, fp=101, fn=28, ns=7
+- Reproduces exactly via `scripts/04_tracking/MDA231_baseline.toml`
 
 ```toml
 # seg_result = "2026-04-03_11-09-49"

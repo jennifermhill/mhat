@@ -1,16 +1,18 @@
-# MDA231 SSVM weight-fitting config.
-# Initial weights/constants are 0 — bundle method always starts at w=0 internally
-# (Weight() initial values are overwritten when optimize() returns).
+# NC281-sparse-label SSVM weight-fitting config.
+# Initial weights/constants are 0 — bundle method always starts at w=0 internally.
+# Graph-construction params (size_threshold, max_edge_distance, etc.) match
+# NC281_sparse_baseline.toml so the candidate graph is identical to the
+# hand-tuned baseline.
 
 # IO
 raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
-experiment = "Fluo-C3DL-MDA231"
-dataset = "01_cells"
+experiment = "NC281-sparse-label"
+dataset = "01_nuclei_denoised"
 
-seg_result = "2026-04-03_11-09-49"
-flow_result = "2026-02-17_15-55-00"
+seg_result = "2026-04-01_11-08-44"
+flow_result = "2026-04-01_11-18-35"
 use_lk = false
 
 # ILP params (initial values for SSVM; will be overwritten with learned values)
@@ -30,25 +32,21 @@ adhesion_constant = 0.0
 appear_constant = 0.0
 disappear_constant = 0.0
 
-# cand graph creation params (same as MDA231_baseline.toml)
+# cand graph creation params (same as NC281_sparse_baseline.toml)
 max_children = 3
 merges = false
 divisions = false
 min_merge_cost = 0.0
 max_merge_cost = 1.0
-max_edge_distance = 60
-size_threshold = 60
-
-# Confidence-based Z flow filtering
-z_flow_conf_threshold = 0.0
-z_flow_min_pass_pixels = 10
+max_edge_distance = 35
+size_threshold = 0
 
 # Ablation flags
 ablate_cohesion_adhesion = false
 ablate_drift = false
 ablate_area = false
 ablate_intensity = false
-ablate_curvature = false
+ablate_curvature = true  # curvature dominates solve time on NC281-sparse; disabled for fit
 
 # SSVM params
 ssvm_reg = 0.1

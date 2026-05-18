@@ -1,6 +1,6 @@
 # IO
-input_base_dir = "Y:/jennifer/mhat/experiments/"
-output_base_dir = "Y:/jennifer/mhat/experiments/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 experiment = "Fluo-C3DL-MDA231"
 dataset = "01_cells"
 

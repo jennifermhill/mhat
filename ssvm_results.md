@@ -102,5 +102,5 @@ The per-feature std approach hits a sweet spot: enough conditioning to converge 
 
 - Logfiles with full ε trajectories: `experiments/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit/fit_weights_ssvm_*.log`
 - Sweep output: `/tmp/sweep_reg10.out` (per-feature std) and `/tmp/sweep_graphnorm.out` (graph norm) — temp files, may not persist
-- Fit config: `scripts/04_tracking/MDA231_ssvm_fit.toml` (`ssvm_reg = 10.0`)
+- Fit config: `scripts/04_tracking/MDA231_ssvm_fit.toml` (`ssvm_reg = 0.1` — current default after the 2026-05-15 ilpy fix; the pre-fix experiments in this doc used `ssvm_reg = 10.0`)
 - Hand-tuned config: `scripts/04_tracking/MDA231_baseline.toml`

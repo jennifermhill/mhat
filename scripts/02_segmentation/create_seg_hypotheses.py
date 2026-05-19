@@ -14,7 +14,7 @@ from scipy.ndimage import label
 from skimage.segmentation import watershed
 from skimage.filters import gaussian
 
-from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, voronoi_mean_labeling
+from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, voronoi_mean_labeling, voronoi_li_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
 
@@ -61,8 +61,10 @@ def generate_fragments(data_zarr: Path, output_root, config):
         frame = raw_data[tp, 0]
         if seg_method == 'cellpose':
             labels = segment_with_cellpose(frame, gpu=gpu, **cellpose_kwargs)
-        elif seg_method == 'voronoi_mean':
+        elif seg_method == 'mean':
             labels = voronoi_mean_labeling(frame, spot_sigma=config["spot_sigma"], outline_sigma=config["outline_sigma"])
+        elif seg_method == 'li':
+            labels = voronoi_li_labeling(frame, spot_sigma=config["spot_sigma"], outline_sigma=config["outline_sigma"])
         else:
             labels = voronoi_otsu_labeling(frame, spot_sigma=config["spot_sigma"], outline_sigma=config["outline_sigma"])
         

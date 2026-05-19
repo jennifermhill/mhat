@@ -3,7 +3,6 @@ from pathlib import Path
 import geff
 import numpy as np
 
-from geff_spec import Axis
 from traccuracy import TrackingGraph, run_metrics
 import traccuracy.matchers as matchers
 import traccuracy.metrics as metrics

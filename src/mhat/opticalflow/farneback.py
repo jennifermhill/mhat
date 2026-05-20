@@ -95,7 +95,7 @@ def compute_farneback_flow_3d(config, zarr_img, output_zarr):
     T, Z, Y, X = zarr_img.shape
 
     # # Check if Z dim is large enough for 3D optical flow
-    min_z_size = (int(config['pyr_scale'])^(int(config['levels']) - 1)) * 3  # heuristic minimum size
+    min_z_size = (int(config['pyr_scale'][0])^(int(config['levels']) - 1)) * 3  # heuristic minimum size
     if Z < min_z_size:
         pad_z = min_z_size - Z
     else:

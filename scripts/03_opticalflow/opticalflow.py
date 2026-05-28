@@ -54,19 +54,6 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
         output_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
         output_zarr['flow_frames_Z'][:] = flow[..., 2]
 
-    flow = flow_function(config, zarr_img, output_zarr)
-    
-    if config['hyperparams']['frame_averaging'] > 0:
-        frame_avg = config['hyperparams']['frame_averaging']
-        frame_average(flow_zarr=output_zarr, frame_avg=frame_avg)
-
-    generate_flow_frames(flow_zarr=output_zarr, color_wheel=True)
-
-    if do_3d or do_lk:
-        output_zarr.create_dataset('flow_frames_Z', shape=(T-1, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
-        output_zarr['flow_frames_Z'][:] = flow[..., 2]
-
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

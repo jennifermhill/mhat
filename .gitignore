@@ -6,7 +6,7 @@
 
 # Claude files
 /.claude
-'CLAUDE.md' 
+CLAUDE.md
 
 # Locally editable installed packages
 /funtracks

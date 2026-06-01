@@ -1,6 +1,17 @@
 *.png
+*.ipynb
 /data
 /experiments
+/workshop_paper
+
+# Claude files
+/.claude
+CLAUDE.md
+
+# Locally editable installed packages
+/funtracks
+/motile_tracker
+/ctc
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

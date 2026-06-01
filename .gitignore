@@ -2,6 +2,11 @@
 *.ipynb
 /data
 /experiments
+/workshop_paper
+
+# Claude files
+/.claude
+CLAUDE.md
 
 # Locally editable installed packages
 /funtracks

@@ -69,6 +69,68 @@ seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
 tracking_uid = "2026-05-12_10-15-29"
 
 # =============================================================================
+# Fluo-C3DL-MDA231 / 02_cells
+# Same param values as 01_cells; separate dataset/segmentation/tracking runs.
+# =============================================================================
+[mda231_02cells]
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "02_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/merge_ablation_results_mda231_02.png"
+suptitle = "Fluo-C3DL-MDA231 02_cells Merge Ablation"
+recall_metrics_filename = "track_metrics_basic.json"
+recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/merge_ablation_recall_mda231_02.png"
+
+[mda231_02cells.recall_metrics.NodeRecall]
+display_name = "Node Recall"
+json_path = ["BasicMetrics", "Node Recall"]
+reduction = "scalar"
+
+[mda231_02cells.recall_metrics.EdgeRecall]
+display_name = "Edge Recall"
+json_path = ["BasicMetrics", "Edge Recall"]
+reduction = "scalar"
+
+[mda231_02cells.metrics.TRA]
+display_name = "TRA"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+
+[mda231_02cells.metrics.DET]
+display_name = "DET"
+json_path = ["CTCMetrics", "DET"]
+reduction = "scalar"
+
+[mda231_02cells.metrics.LNK]
+display_name = "LNK"
+json_path = ["CTCMetrics", "LNK"]
+reduction = "scalar"
+
+[mda231_02cells.conditions.baseline]
+label = "Baseline"
+seg_uid = "2026-05-29_10-47-41"
+seg_overrides = ""
+tracking_uid = "2026-06-01_14-41-03"
+
+[mda231_02cells.conditions.no_cohesion]
+label = "- Coh/Adh"
+seg_uid = "2026-05-29_10-47-41"
+seg_overrides = ""
+tracking_uid = "2026-06-01_15-05-17"
+
+[mda231_02cells.conditions.no_affinities]
+label = "- Affinities"
+seg_uid = "2026-06-01_15-40-35"
+seg_overrides = "scoring_function = 'symmetric'"
+tracking_uid = "2026-06-01_16-00-08"
+
+[mda231_02cells.conditions.no_merges]
+label = "- Merges"
+seg_uid = "2026-06-01_15-44-39"
+seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
+tracking_uid = "2026-06-01_16-01-29"
+
+# =============================================================================
 # NC281-Fl2mSiH2B / 03_nuclei
 # =============================================================================
 [nc281]

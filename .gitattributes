@@ -1,0 +1,29 @@
+# Normalize line endings. The repo is checked out on both Windows and Linux
+# (shared /Volumes/sgrolab filesystem), so force LF on checkout everywhere to
+# avoid CRLF<->LF churn showing every file as modified after switching OS.
+* text=auto eol=lf
+
+# Belt-and-suspenders: explicit text types kept as LF.
+*.py    text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+*.sh    text eol=lf
+
+# Common binary/scientific formats — never touch line endings if they get tracked.
+*.zarr  binary
+*.npy   binary
+*.npz   binary
+*.png   binary
+*.jpg   binary
+*.tif   binary
+*.tiff  binary
+*.h5    binary
+*.hdf5  binary
+*.pt    binary
+*.pth   binary
+*.pkl   binary

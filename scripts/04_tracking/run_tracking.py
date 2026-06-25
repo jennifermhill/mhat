@@ -262,7 +262,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         utils.add_drift_dist_attr(track_graph, drift=0)
     utils.add_area_diff_attr(track_graph)
     utils.add_intensity_diff_attr(track_graph)
-    utils.apply_mean_ablation(config, track_graph)
 
     if stats_only:
         report_graph_statistics(config, track_graph)

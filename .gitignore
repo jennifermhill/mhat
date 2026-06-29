@@ -2,6 +2,7 @@
 *.ipynb
 /data
 /experiments
+/configs
 /workshop_paper
 
 # Claude files

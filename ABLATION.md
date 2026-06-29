@@ -47,6 +47,8 @@ The single source of truth for which `seg_uid` and `tracking_uid` correspond to 
 
 The `seg_overrides` field in the TOML is informational (the canonical record lives in the saved `config.toml` inside each seg result directory). Together, `seg_uid` + `seg_overrides` are enough to identify and regenerate any segmentation used here.
 
+Each condition also carries a `config = "configs/tracking/…"` pointer to a static, git-ignored archive of its tracking config (rebuilt by `scripts/05_evaluation/build_config_archive.py`). The mda231 `baseline` (01_cells) and `- Coh/Adh` (02_cells) runs are **shared with the solver experiments** (one run + one config). See the "Config archive" section in `SOLVER_EXPERIMENTS.md` for the full layout and rebuild step.
+
 ### Plotting
 
 Once all four `tracking_uid`s for a dataset are filled in:
@@ -58,6 +60,28 @@ conda run -n mhat-sandbox --no-capture-output \
 ```
 
 The output PNG path is read from the TOML's `output_png` field per dataset. Override with `--output PATH` if needed. Missing or unfilled `tracking_uid`s produce a warning and skip the bar, so partial-progress plotting works.
+
+### Recall figure (BasicMetrics) — separate eval + matcher gotcha
+
+`merge_ablation_figure_recall.py` reads **Node Recall / Edge Recall from `BasicMetrics`**, which lives in a **separate** metrics file (`recall_metrics_filename` in the TOML, e.g. `track_metrics_basic.json` for MDA231). This file is **not** produced by the normal CTC eval — `evaluate_tracks.py` always writes `track_metrics.json` only. You have to run a second eval with `metrics = ["basic"]` and then rename/copy the output to the recall filename.
+
+Key gotchas (learned 2026-06-23):
+
+- **`BasicMetrics` rejects the CTC matcher.** It needs a one-to-one matcher; passing `matcher = "ctc"` raises `TypeError: The matched data uses a matcher that does not meet the requirements of the metric`.
+- **`PointMatcher` requires an explicit `threshold`** (or `match_threshold`) — it has no default and errors without one.
+- **For MDA231 `01_cells` the recall files use `matcher = "point"`, `match_threshold = 10`** (verified: this exactly reproduces the existing `track_metrics_basic.json` files — `iou` at the default 0.6 gives near-zero recall because the 3D segments don't overlap that tightly). Use the same matcher/threshold for any new condition so the recall bars stay comparable.
+
+Procedure to add a recall file for one new run without disturbing its CTC file:
+
+1. Eval with `metrics = ["basic"]`, `matcher = "point"`, `match_threshold = 10` → writes `track_metrics.json` (BasicMetrics).
+2. Copy that to `track_metrics_basic.json`.
+3. Re-run the CTC eval (`metrics = ["ctc"]`, `matcher = "ctc"`) to restore `track_metrics.json` (and `eval_config.toml`) to the CTC version.
+
+### Regenerating a segmentation for one condition (keep it a one-variable swap)
+
+When regenerating the seg for a `- affinities` / `- merges` condition, change **only** the ablation knob (`scoring_function`, `skip_merges`) and keep every other seg param identical to the **baseline** seg. A stray difference defeats the ablation's one-variable logic.
+
+Concretely: the original MDA231 `01_cells` `- affinities` seg (`2026-04-28_13-43-53`) also carried `outline_sigma = 0.5` vs the baseline's `1.0`. It was regenerated on 2026-06-23 as `2026-06-23_17-04-19` with `outline_sigma = 1.0` (symmetric scoring, cellpose, `merge_thresholds = [1.0]`). The metrics barely moved (TRA 0.8548→0.8553, fp 141→139, LNK unchanged), confirming the conclusion was robust — but the comparison is now clean. The `02_cells` merge segs were already consistent (`outline_sigma = 1.0` throughout); only `01_cells` had the drift. When re-running tracking for a regenerated seg, replicate the existing run's `tracking_config.toml` verbatim and change only `seg_result`.
 
 ---
 

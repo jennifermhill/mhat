@@ -1,4 +1,5 @@
 import json
+import shutil
 import argparse
 from pathlib import Path
 
@@ -14,12 +15,6 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
 
     gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
     pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
-    pred_segmentation_path = pred_data_dir / "pred_seg.zarr"
-    if pred_segmentation_path.is_dir():
-        pred_segmentation = zarr.open(pred_segmentation_path)
-    else:
-        print(f"Warning: Predicted segmentation zarr not found at {pred_segmentation_path}")
-        pred_segmentation = None
 
     (pred_graph, pred_metadata) = geff.read(pred_tracks_path)
 
@@ -28,21 +23,18 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
         if not gt_tracks_path.is_dir():
             print(f"Converting GT tracks to geff format at {gt_tracks_path}")
             axes = pred_metadata.axes
+            ctc_gt = config.get("ctc_gt", "01_GT")
             from_ctc_to_geff(
-                ctc_path=gt_data_dir / "01_GT" / "TRA",
+                ctc_path=gt_data_dir / ctc_gt / "TRA",
                 geff_path=gt_tracks_path,
                 segmentation_store=gt_data_dir / "correct_seg.zarr",
                 axes=axes,
             )
 
-    (gt_graph, gt_metadata) = geff.read(gt_tracks_path)
-
     results = evaluate_tracking(
         config,
-        gt_graph, 
-        pred_graph, 
-        gt_segmentation=None,
-        pred_segmentation=None,
+        gt_data_dir,
+        pred_data_dir,
     )
 
     track_metrics = {}
@@ -80,3 +72,11 @@ if __name__ == "__main__":
     tracksfile = output_dir / "track_metrics.json"
     with open(tracksfile, 'w') as f:
         json.dump(track_metrics, f)
+
+    tracking_config = pred_data_dir / "config.toml"
+    if tracking_config.is_file():
+        shutil.copy2(tracking_config, output_dir / "tracking_config.toml")
+
+    # Save the eval config used for this run alongside the results for provenance
+    with open(output_dir / "eval_config.toml", "w") as config_file:
+        toml.dump(config, config_file)

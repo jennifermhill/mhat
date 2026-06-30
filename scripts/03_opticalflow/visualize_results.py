@@ -25,12 +25,19 @@ def main(config, compute: bool = False):
     viewer = napari.Viewer()
 
     if path_to_raw.exists():
+        zarr_img = zarr.open(path_to_raw, mode='r')
         raw_img = da.from_zarr(path_to_raw)
+        axes = zarr_img.attrs.get("axes", None)
+        if axes is not None:
+            axes = [axis for axis in axes if axis.get("name") != "channel"]
+            scale = [axis["scale"] for axis in axes if axis.get("scale") is not None]
+        else:
+            scale = [1.0, 1.0, 1.0, 1.0]
         if compute:
             raw_img = raw_img.compute()
         raw_img = raw_img[:, 0, ...] # Remove channel dimension
         print(f"Raw image shape: {raw_img.shape}")
-        viewer.add_image(raw_img, name="Raw Image")
+        viewer.add_image(raw_img, name="Raw Image", scale=scale)
     else:
         print(f"Raw data not found at {path_to_raw}")
 
@@ -40,6 +47,7 @@ def main(config, compute: bool = False):
         path_to_flow_frames_2d = path_to_2d / "flow_frames_XY"
         if not path_to_flow_frames_2d.exists(): 
             from mhat.opticalflow.visualization import generate_flow_frames
+
             print(f"Flow frames path does not exist. Creating at: {path_to_2d / 'flow_frames_XY'}")
             flow_zarr = zarr.open(path_to_2d, mode='a')
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
@@ -49,7 +57,7 @@ def main(config, compute: bool = False):
         if compute:
             flow_frames_2d = flow_frames_2d.compute()
         print(f"2D Flow frames shape: {flow_frames_2d.shape}")
-        viewer.add_image(flow_frames_2d, name="2D Flow Frames", blending='additive')
+        viewer.add_image(flow_frames_2d, name="2D Flow Frames", blending='additive', scale=scale)
     else:
         print(f"2D optical flow data not found at {path_to_2d}")
 
@@ -58,6 +66,8 @@ def main(config, compute: bool = False):
 
         path_to_flow_frames_3d_XY = path_to_3d / "flow_frames_XY"
         if not path_to_flow_frames_3d_XY.exists(): 
+            from mhat.opticalflow.visualization import generate_flow_frames
+
             print(f"Flow frames path does not exist. Creating at: {path_to_3d / 'flow_frames_XY'}")
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
         flow_frames_3d_XY = da.from_zarr(path_to_flow_frames_3d_XY)
@@ -65,7 +75,7 @@ def main(config, compute: bool = False):
         if compute:
             flow_frames_3d_XY = flow_frames_3d_XY.compute()
         print(f"3D Flow frames XY shape: {flow_frames_3d_XY.shape}")
-        viewer.add_image(flow_frames_3d_XY, name="3D Flow Frames (XY component)", blending='additive')
+        viewer.add_image(flow_frames_3d_XY, name="3D Flow Frames (XY component)", blending='additive', scale=scale)
 
         path_to_flow_frames_3d_Z = path_to_3d / "flow_frames_Z"
         if not path_to_flow_frames_3d_Z.exists():
@@ -74,31 +84,44 @@ def main(config, compute: bool = False):
             T, Z, Y, X, _ = flow_raw.shape
             flow_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
             flow_zarr['flow_frames_Z'][:] = flow_raw[..., 2]
-        flow_frames_3d_Z = da.from_zarr(path_to_3d / "flow_frames_Z")
+        flow_frames_3d_Z = da.from_zarr(path_to_flow_frames_3d_Z)
 
         if compute:
             flow_frames_3d_Z = flow_frames_3d_Z.compute()
         print(f"3D Flow frames Z shape: {flow_frames_3d_Z.shape}")
-        viewer.add_image(flow_frames_3d_Z, name="3D Flow Frames (Z component)", colormap='berlin', blending='additive')
+        viewer.add_image(flow_frames_3d_Z, name="3D Flow Frames (Z component)", colormap='berlin', blending='additive', scale=scale)
     else:
         print(f"3D optical flow data not found at {path_to_3d}")
 
     if path_to_lk.exists():
         flow_zarr = zarr.open(path_to_lk, mode='a')
 
-        path_to_flow_frames_lk = path_to_lk / "flow_frames_XY"
-        if not path_to_flow_frames_lk.exists(): 
+        path_to_flow_frames_lk_XY = path_to_lk / "flow_frames_XY"
+        if not path_to_flow_frames_lk_XY.exists(): 
             from mhat.opticalflow.visualization import generate_flow_frames
+            
             print(f"Flow frames path does not exist. Creating at: {path_to_lk / 'flow_frames_XY'}")
-            flow_zarr = zarr.open(path_to_lk, mode='a')
             generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
-
-        flow_frames_lk = da.from_zarr(path_to_flow_frames_lk)
+        flow_frames_lk_XY = da.from_zarr(path_to_flow_frames_lk_XY)
 
         if compute:
-            flow_frames_lk = flow_frames_lk.compute()
-        print(f"Lucas-Kanade Flow frames shape: {flow_frames_lk.shape}")
-        viewer.add_image(flow_frames_lk, name="Lucas-Kanade Flow Frames", blending='additive')
+            flow_frames_lk_XY = flow_frames_lk_XY.compute()
+        print(f"Lucas-Kanade Flow frames shape: {flow_frames_lk_XY.shape}")
+        viewer.add_image(flow_frames_lk_XY, name="LK Flow Frames (XY component)", blending='additive', scale=scale)
+
+        path_to_flow_frames_lk_Z = path_to_lk / "flow_frames_Z"
+        if not path_to_flow_frames_lk_Z.exists():
+            print(f"Flow frames Z path does not exist. Creating at: {path_to_flow_frames_lk_Z}")
+            flow_raw = da.from_zarr(path_to_lk / "flow_raw")
+            T, Z, Y, X, _ = flow_raw.shape
+            flow_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
+            flow_zarr['flow_frames_Z'][:] = flow_raw[..., 2]
+        flow_frames_lk_Z = da.from_zarr(path_to_flow_frames_lk_Z)
+
+        if compute:
+            flow_frames_lk_Z = flow_frames_lk_Z.compute()
+        print(f"Lucas-Kanade Flow frames Z shape: {flow_frames_lk_Z.shape}")
+        viewer.add_image(flow_frames_lk_Z, name="LK Flow Frames (Z component)", colormap='berlin', blending='additive', scale=scale)
     else:
         print(f"Lucas-Kanade optical flow data not found at {path_to_lk}")
 
@@ -106,6 +129,6 @@ def main(config, compute: bool = False):
 
 
 if __name__ == "__main__":
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\primary_nk_cells\\01_cells\\opticalflow_3d\\2026-06-25_17-53-34\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-sparse-label\\01_nuclei_denoised\\opticalflow_2d\\2026-04-01_11-18-35\\config.toml"
     config = toml.load(path_to_config)
     main(config, compute=True)

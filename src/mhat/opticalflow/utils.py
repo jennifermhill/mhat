@@ -1,4 +1,5 @@
 import numpy as np
+import toml
 import torch
 import torch.nn.functional as F
 from pathlib import Path
@@ -22,6 +23,13 @@ def rename_flow_uid(rerun_uid: Path, exp_uid: str):
         new_path = rerun_uid.parent / exp_uid
         rerun_uid.rename(new_path)
         print(f"Renamed {rerun_uid} to {new_path}")
+
+        config_filepath = new_path / "config.toml"
+        if config_filepath.exists():
+            config = toml.load(config_filepath)
+            config["exp_uid"] = exp_uid
+            with open(config_filepath, 'w') as config_file:
+                toml.dump(config, config_file)
     else:
         print(f"Warning: Previous flow directory {rerun_uid} does not exist")
         

@@ -5,6 +5,7 @@ from skimage.measure import label
 from skimage.morphology import local_maxima
 from skimage.segmentation import watershed
 from skimage.filters import threshold_mean
+from skimage.filters import threshold_li
 
 
 def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
@@ -14,7 +15,7 @@ def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
     nuclei and granules with high signal intensity on low-intensity background.
 
     Args:
-        image (np.ndarrray): _description_
+        image (np.ndarrray): Input image.
         spot_sigma (float, optional): Controls how close detected cells can be by
             smoothing before detecting local maxima to use as watershed seeds.
             Defaults to 2.
@@ -77,5 +78,39 @@ def voronoi_mean_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
     # start from remaining spots and flood binary image with labels
     labeled_spots = label(remaining_spots)
     labels = watershed(binary_mean, labeled_spots, mask=binary_mean)
+
+    return labels
+
+def voronoi_li_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
+    """Simple segmentation algorithm that thresholds the image using the Li thresholding method.
+
+    Args:
+        image (np.ndarray): Input image.
+        spot_sigma (float, optional): Unused parameter for compatibility.
+            Defaults to 2.
+        outline_sigma (float, optional): Unused parameter for compatibility.
+            Defaults to 1.
+
+    Returns:
+        np.ndarray: Labels array of same shape as input and dtype int32.
+    """
+    image = np.asarray(image)
+
+    # blur and detect local maxima
+    blurred_spots = gaussian(image, spot_sigma)
+    spot_centroids = local_maxima(blurred_spots)
+
+    # blur and threshold
+    blurred_outline = gaussian(image, outline_sigma)
+    threshold = threshold_li(blurred_outline)
+
+    binary_li = blurred_outline > threshold
+
+    # determine local maxima within the thresholded area
+    remaining_spots = spot_centroids * binary_li
+
+    # start from remaining spots and flood binary image with labels
+    labeled_spots = label(remaining_spots)
+    labels = watershed(binary_li, labeled_spots, mask=binary_li)
 
     return labels

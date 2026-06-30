@@ -128,17 +128,21 @@ def nodes_from_fragments(
     raw_img: np.ndarray | None = None,
     flow_2d: np.ndarray | None = None,
     flow_3d: np.ndarray | None = None,
+    confidence_3d: np.ndarray | None = None,
+    z_flow_conf_threshold: float | None = None,
+    z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
     scale: list[float] = [1.0, 1.0, 1.0, 1.0],
 ) -> tuple[nx.DiGraph, list[tuple]]:
     """Compute the nodes of a candidate graph from a set of fragments and a
     merge history.
     Also defines two costs on each node:
-        "cohesion": LC , where LC is the cost of the last merge used to
-            create this node. Cohesion is 0 if the node is a fragment. (Higher is better)
-        "adhesion": 1 - NC, where NC is the cost of the next merge with this node
-            as a child,. Adhesion is 0.5 if the node is never merged with anything else
-            in the history. (Higher is better)
+        "cohesion": 1 - LC, where LC is the normalized cost of the last merge
+            used to create this node. Low previous merge cost → high cohesion.
+            Fragments (no merge) get cohesion = 1. (Higher is more favorable)
+        "adhesion": NC, where NC is the normalized cost of the next merge with
+            this node as a child. High next merge cost → high adhesion.
+            Top-level merges (no next merge) get adhesion = 1. (Higher is more favorable)
     Also calculates average flow in segment for each node if flow is provided.
         If both 2D and 3D flow are provided, uses 2D flow for XY motion and 
         3D flow for Z motion.
@@ -190,8 +194,11 @@ def nodes_from_fragments(
             # get the initial fragments we want to populate the cand graph with
             graph = nodes_from_segmentation(
                 fragments, raw_img=raw_img,
-                flow_3d=flow_3d, flow_2d=flow_2d, 
-                size_threshold=size_threshold, 
+                flow_3d=flow_3d, flow_2d=flow_2d,
+                confidence_3d=confidence_3d,
+                z_flow_conf_threshold=z_flow_conf_threshold,
+                z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+                size_threshold=size_threshold,
                 tp=tp, scale=scale
             )
 
@@ -208,9 +215,12 @@ def nodes_from_fragments(
             new_seg_only = np.zeros_like(fragments)
             new_seg_only[fragments == c] = c
             node_graph = nodes_from_segmentation(
-                new_seg_only, raw_img=raw_img, 
+                new_seg_only, raw_img=raw_img,
                 flow_3d=flow_3d, flow_2d=flow_2d,
-                size_threshold=size_threshold, 
+                confidence_3d=confidence_3d,
+                z_flow_conf_threshold=z_flow_conf_threshold,
+                z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+                size_threshold=size_threshold,
                 tp=tp, scale=scale
             )
             graph.add_nodes_from(node_graph.nodes(data=True))
@@ -219,10 +229,10 @@ def nodes_from_fragments(
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)
 
     for node in graph.nodes():
-        cohesion_cost = last_costs.get(node, 0.0)
-        adhesion_cost = 1 - next_costs.get(node, 0.5)
-        graph.nodes[node]["cohesion"] = cohesion_cost
-        graph.nodes[node]["adhesion"] = adhesion_cost
+        cohesion = 1 -last_costs.get(node, 0.0)
+        adhesion = next_costs.get(node, 1.0)
+        graph.nodes[node]["cohesion"] = cohesion
+        graph.nodes[node]["adhesion"] = adhesion
         graph.nodes[node]["num_leaves"] = leaf_counts.get(node, 1)
 
     exclusion_sets = []

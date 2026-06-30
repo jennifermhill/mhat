@@ -11,19 +11,19 @@ color_wheel = true
 
 # 2D flow parameters
 [2d]
-do_2d = true
+do_2d = false
 downsample_factor = 1
-pyr_scale = 0.8
-levels = 7
-winsize = 25
+pyr_scale = 0.2
+levels = 8
+winsize = 31
 iterations = 8
-poly_n = 9
+poly_n = 5
 poly_sigma = 1.5
 [2d.hyperparams]
 enhance_contrast = true
 temporal_smoothing = true
 temporal_smoothing_sigma = 0.7
-frame_averaging = 3
+frame_averaging = 1
 
 # 3D flow parameters
 [3d]
@@ -36,12 +36,12 @@ iterations = 8
 poly_n = 5
 poly_sigma = [ 0.37, 1.5, 1.5,]
 filter_type = "gaussian"
-presmoothing = 0.1
+presmoothing = 1.5
 [3d.hyperparams]
 enhance_contrast = true
 temporal_smoothing = true
 temporal_smoothing_sigma = 0.7
-frame_averaging = 3
+frame_averaging = 1
 
 # lucas kanade parameters
 [lucaskanade]

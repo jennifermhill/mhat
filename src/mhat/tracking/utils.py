@@ -9,7 +9,6 @@ import numpy as np
 import scipy
 from scipy import linalg
 import skimage
-from motile.variables import NodeSelected
 from line_profiler import profile
 
 
@@ -18,6 +17,9 @@ def nodes_from_segmentation(
     raw_img: np.ndarray | None = None,
     flow_3d: np.ndarray | None = None,
     flow_2d: np.ndarray | None = None,
+    confidence_3d: np.ndarray | None = None,
+    z_flow_conf_threshold: float | None = None,
+    z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
     tp: int = 0,
     scale: list[float] = [1.0, 1.0, 1.0, 1.0]
@@ -33,6 +35,22 @@ def nodes_from_segmentation(
 
         flow_2d (np.ndarray | None, optional): A numpy array with 2D flow vectors
             for each pixel in the segmentation. Defaults to None.
+
+        confidence_3d (np.ndarray | None, optional): A per-pixel confidence array
+            corresponding to flow_3d (shape matches flow_3d without the vector axis).
+            If provided with z_flow_conf_threshold, Z flow is computed only over
+            pixels whose |confidence| exceeds the threshold. Nodes with too few
+            passing pixels are marked as z_flow_reliable=False and their drift cost
+            is computed in XY only.
+
+        z_flow_conf_threshold (float | None, optional): Threshold on |confidence|
+            for including a pixel's Z flow in the node average. If None, all in-region
+            pixels are included (current default behavior). Defaults to None.
+
+        z_flow_min_pass_pixels (int, optional): Minimum number of pixels within a
+            node's region that must pass the confidence threshold for the Z flow
+            average to be trusted. Below this, the node is marked z_flow_reliable=False.
+            Defaults to 10.
 
         size_threshold (int): A minimum area for candidate nodes. Nodes smaller
             than this area will not be added to the graph.
@@ -54,16 +72,39 @@ def nodes_from_segmentation(
             continue
         node_id = int(regionprop.label)
         region = segmentation == node_id
-        centroid = (float(regionprop.centroid[0] * scale[1]), 
-                    float(regionprop.centroid[1] * scale[2]), 
+        centroid = (float(regionprop.centroid[0] * scale[1]),
+                    float(regionprop.centroid[1] * scale[2]),
                     float(regionprop.centroid[2] * scale[3]))
         region_raw = raw_img[region]
         intensity = np.mean(region_raw)
+        z_flow_reliable = True
         if flow_3d is not None:
-            if flow_2d is not None:
-                flow = (np.mean(flow_3d[region][:, 2]), np.mean(flow_2d[region][:, 1]), np.mean(flow_2d[region][:, 0]))
+            # Optical flow is stored in pixel units; scale to world units to match
+            # the voxel-scaled centroids above so drift_dist computations are consistent.
+            # Z component of flow can be filtered by confidence: only in-region pixels
+            # whose |confidence| exceeds z_flow_conf_threshold contribute to the average.
+            vz_pixels = flow_3d[region][:, 2]
+            if confidence_3d is not None and z_flow_conf_threshold is not None:
+                conf_pixels = np.abs(confidence_3d[region])
+                conf_mask = conf_pixels > z_flow_conf_threshold
+                n_passing = int(np.sum(conf_mask))
+                if n_passing >= z_flow_min_pass_pixels:
+                    flow_z = float(np.mean(vz_pixels[conf_mask]) * scale[1])
+                else:
+                    # Too few high-confidence pixels — mark Z unreliable.
+                    # Store 0 as a placeholder; add_flow_dist_attr will skip Z for this node.
+                    flow_z = 0.0
+                    z_flow_reliable = False
             else:
-                flow = (np.mean(flow_3d[region][:, 2]), np.mean(flow_3d[region][:, 1]), np.mean(flow_3d[region][:, 0]))
+                flow_z = float(np.mean(vz_pixels) * scale[1])
+            if flow_2d is not None:
+                flow = (flow_z,
+                        float(np.mean(flow_2d[region][:, 1]) * scale[2]),
+                        float(np.mean(flow_2d[region][:, 0]) * scale[3]))
+            else:
+                flow = (flow_z,
+                        float(np.mean(flow_3d[region][:, 1]) * scale[2]),
+                        float(np.mean(flow_3d[region][:, 0]) * scale[3]))
         else:
             flow = 0
         attrs = {
@@ -75,7 +116,8 @@ def nodes_from_segmentation(
             "label": node_id,
             "area": regionprop.area,
             "intensity": intensity,
-            "flow": flow
+            "flow": flow,
+            "z_flow_reliable": z_flow_reliable,
         }
         cand_graph.add_node(node_id, **attrs)
 
@@ -123,9 +165,7 @@ def add_cand_edges(
         max_edge_distance (float): Maximum distance that objects can travel between
             frames. All nodes within this distance in adjacent frames will by connected
             with a candidate edge.
-        node_frame_dict (dict[int, list[Any]] | None, optional): A mapping from frames
-            to node ids. If not provided, it will be computed from cand_graph. Defaults
-            to None.
+        max_children (int): Maximum number of candidate edges per node to the next frame.
     """
     node_frame_dict = _compute_node_frame_dict(cand_graph)
 
@@ -178,25 +218,10 @@ def relabel_segmentation(
             id with shape (t,1,[z],y,x)
     """
     tracked_masks = np.zeros_like(segmentation)
-    id_counter = 1
-    parent_nodes = [n for (n, d) in solution_nx_graph.out_degree() if d > 1]
-    child_nodes = [n for (n, d) in solution_nx_graph.in_degree() if d > 1]
-    soln_copy = solution_nx_graph.copy()
-    for parent_node in parent_nodes:
-        out_edges = solution_nx_graph.out_edges(parent_node)
-        soln_copy.remove_edges_from(out_edges)
-    for child_node in child_nodes:
-        in_edges = solution_nx_graph.in_edges(child_node)
-        for in_edge in in_edges:
-            if soln_copy.has_edge(in_edge[0], in_edge[1]):
-                soln_copy.remove_edge(in_edge[0], in_edge[1])
-    for node_set in nx.weakly_connected_components(soln_copy):
-        for node in node_set:
-            time_frame = solution_nx_graph.nodes[node]["time"]
-            previous_seg_id = node
-            previous_seg_mask = segmentation[time_frame] == previous_seg_id
-            tracked_masks[time_frame][previous_seg_mask] = id_counter
-        id_counter += 1
+    for node, data in solution_nx_graph.nodes(data=True):
+        time_frame = data["time"]
+        track_id = data["track_id"]
+        tracked_masks[time_frame][segmentation[time_frame] == node] = track_id
     return tracked_masks
 
 
@@ -280,6 +305,10 @@ def add_flow_dist_attr(cand_graph: motile.TrackGraph):
                 (sum(cand_graph.nodes[n]["y"] for n in vs)) / len(vs),
                 (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
             ])
+            # Source is reliable only if all source nodes are reliable.
+            z_reliable = all(
+                cand_graph.nodes[n].get("z_flow_reliable", True) for n in us
+            )
         else:
             u, v = edge
             node_u = cand_graph.nodes[u]
@@ -287,9 +316,17 @@ def add_flow_dist_attr(cand_graph: motile.TrackGraph):
             flow_u = node_u["flow"]
             pos_u = np.array([node_u["z"], node_u["y"], node_u["x"]])
             pos_v = np.array([node_v["z"], node_v["y"], node_v["x"]])
+            z_reliable = node_u.get("z_flow_reliable", True)
 
-        # Apply flow to pos_u and compute distance
-        flow_dist = linalg.norm(pos_u + np.array(flow_u) - pos_v)
+        # Apply flow to pos_u and compute distance. When Z flow is unreliable
+        # for this source, drop the Z component from both position and flow so
+        # drift_dist reflects XY motion only (not penalizing the edge for Z
+        # prediction error we can't estimate).
+        predicted = pos_u + np.array(flow_u)
+        if z_reliable:
+            flow_dist = linalg.norm(predicted - pos_v)
+        else:
+            flow_dist = linalg.norm(predicted[1:] - pos_v[1:])
         cand_graph.edges[edge]["drift_dist"] = flow_dist
 
 
@@ -383,18 +420,6 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
     candidate_graph.add_edges_from(hyperedges)
     
     return candidate_graph
-
-def scale_by_leaves(solver: motile.Solver) -> None:
-    """Scale the costs of the node variables by the number of leaves in the merge they represent."""
-    node_vars = solver.get_variables(NodeSelected)
-    # Access .costs to trigger computation and cache the result
-    costs = solver.costs
-    for node_id in node_vars:
-        index = node_vars._index_map[node_id]
-        num_leaves = solver.graph.nodes[node_id].get("num_leaves", 1)
-        if num_leaves > 1:
-            costs[index] *= num_leaves
-
 
 def to_nx_graph(graph, flatten_hyperedges: bool = True) -> nx.DiGraph:
     """Convert a this TrackGraph into a networkx DiGraph.

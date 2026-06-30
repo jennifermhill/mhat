@@ -95,7 +95,7 @@ def compute_farneback_flow_3d(config, zarr_img, output_zarr):
     T, Z, Y, X = zarr_img.shape
 
     # # Check if Z dim is large enough for 3D optical flow
-    min_z_size = (int(config['pyr_scale'])^(int(config['levels']) - 1)) * 3  # heuristic minimum size
+    min_z_size = (int(config['pyr_scale'][0])^(int(config['levels']) - 1)) * 3  # heuristic minimum size
     if Z < min_z_size:
         pad_z = min_z_size - Z
     else:
@@ -163,11 +163,13 @@ def compute_farneback_flow_3d(config, zarr_img, output_zarr):
         if any(f > 1 for f in ds_factor):
             # Zoom each component separately
             flow_upsampled = np.zeros((Z, Y, X, 3), dtype=np.float32)
+            confidence_upsampled = np.zeros((Z, Y, X), dtype=np.float32)
             
             # Zoom factors: (Z_factor, Y_factor, X_factor, 1 for channels)
             zoom_factors = (ds_factor[0], ds_factor[1], ds_factor[2], 1)
             
             flow_upsampled = zoom(flow, zoom_factors, order=1)  # order=1 is bilinear
+            confidence_upsampled = zoom(confidence_np, zoom_factors, order=1)  # order=1 is bilinear
             
             # Scale the flow magnitudes by the zoom factors
             flow_upsampled[..., 0] *= ds_factor[0]  # vz

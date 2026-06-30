@@ -87,24 +87,24 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
     )
     output_root['affinities'].attrs["axes"] = axes
 
-    affinities = np.zeros((T, 3, Z, Y, X), dtype=np.float32)
+    # affinities = np.zeros((T, 3, Z, Y, X), dtype=np.float32)
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
         if config["smoothing"] != 0:
             smoothing_sigma = tuple(config["smoothing"])
             frame = gaussian(frame, sigma=smoothing_sigma) 
-        affinities[tp] = compute_fluorescent_affinities(frame, neighborhood)
+        affinities = compute_fluorescent_affinities(frame, neighborhood)
 
-    # Normalize affinities to [0, 1] and invert
-    max_val = np.max(affinities)
-    min_val = np.min(affinities)
-    if max_val > 0:
-        affinities = (affinities - min_val) / (max_val - min_val)
-    
-    affinities = 1.0 - affinities
+        # Normalize affinities to [0, 1] and invert
+        max_val = np.max(affinities)
+        min_val = np.min(affinities)
+        if max_val > 0:
+            affinities = (affinities - min_val) / (max_val - min_val)
+        
+        affinities = 1.0 - affinities
 
-    output_root['affinities'][:] = affinities
+        output_root['affinities'][tp] = affinities
 
 # def watershed_from_boundary_distance(
 #     boundary_distances, boundary_mask, id_offset=0, min_seed_distance=50
@@ -220,7 +220,12 @@ if __name__ == "__main__":
     assert data_dir.is_dir()
 
     current_datetime = datetime.datetime.now()
-    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+    exp_uid = config.get("exp_uid", None)  # Use provided exp_uid if available
+    if exp_uid is None:
+        exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+        print(f"No exp_uid provided. Using current datetime as exp_uid: {exp_uid}")
+    else:
+        print(f"Using provided exp_uid: {exp_uid}")
     config["exp_uid"] = exp_uid
 
     output_dir = output_base_dir / experiment / dataset / exp_uid

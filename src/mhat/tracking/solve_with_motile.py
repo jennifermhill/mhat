@@ -83,19 +83,55 @@ def report_graph_statistics(config, track_graph):
     print("=" * 100 + "\n")
 
 
-def add_costs(solver, config):
-    """Add all ILP cost terms to the solver, gated by ablation flags.
+def add_costs(solver, config, force_all=False):
+    """Add ILP cost terms to the solver.
 
-    Each cost is included unless its corresponding `ablate_*` flag is true:
-    `ablate_drift`, `ablate_area`, `ablate_intensity`, `ablate_curvature`,
-    `ablate_cohesion_adhesion`. Appear/disappear costs are not ablatable.
+    Two inclusion regimes, selected by `force_all`:
 
-    A cost is added with whatever weight/constant the config specifies; weight=0
-    no longer skips a cost (use the ablation flag instead). This makes the cost
-    set deterministic from the flags, which matters for SSVM weight fitting where
-    the initial weights are zero but the cost terms must still be present.
+    - Runtime (`force_all=False`, the default): a cost is ablated by setting BOTH
+      its weight and constant to 0. A cost whose weight and constant are both 0 is
+      not added to the solver at all, so it adds no variables/constraints and
+      cannot affect the solution (this avoids phantom zero-cost terms changing the
+      solver's tie-breaking). This is the unified "0 weight + 0 constant = ablated"
+      convention; the legacy `ablate_*` flags are ignored on this path.
+
+      `base_edge_constant` (default 0) adds a constant-only per-edge selection cost
+      (weight 0). It is used for the "- All" condition -- where every feature cost
+      is zeroed -- to provide a tunable negative offset against appear/disappear so
+      the ILP still selects a non-empty solution. It is added whenever nonzero.
+
+    - Fit (`force_all=True`): used by SSVM weight fitting, where every weight and
+      constant starts at 0. The 0/0 rule would skip every cost, leaving nothing to
+      fit, so instead each feature cost is added unconditionally EXCEPT those
+      explicitly excluded via their `ablate_*` flag (`ablate_drift`, `ablate_area`,
+      `ablate_intensity`, `ablate_curvature`, `ablate_cohesion_adhesion`). The
+      flags exist here only to drop features from a fit for cost/perf reasons
+      (e.g. curvature dominates solve time on NC281-sparse), not as a runtime
+      ablation mechanism. `base_edge_constant` is a fixed (non-learnable) inference
+      offset and is never added on this path.
+
+    Appear/disappear costs are always added on both paths.
     """
-    if not config.get("ablate_drift", False):
+    def _include(ablate_key, weight_key, const_key):
+        """Decide whether to add a feature cost under the active regime."""
+        if force_all:
+            return not config.get(ablate_key, False)
+        return config.get(weight_key, 0) != 0 or config.get(const_key, 0) != 0
+
+    if not force_all:
+        base_edge_constant = config.get("base_edge_constant", 0.0)
+        if base_edge_constant != 0.0:
+            # Constant-only per-edge selection incentive for the "- All" condition.
+            solver.add_cost(
+                motile.costs.EdgeSelection(
+                    weight=0.0,
+                    attribute="drift_dist",
+                    constant=base_edge_constant,
+                ),
+                name="base_edge",
+            )
+
+    if _include("ablate_drift", "drift_weight", "drift_constant"):
         solver.add_cost(
             motile.costs.EdgeSelection(
                 weight=config["drift_weight"],
@@ -105,9 +141,9 @@ def add_costs(solver, config):
             name="drift",
         )
     else:
-        print("Ablating drift cost")
+        print("Skipping drift cost")
 
-    if not config.get("ablate_area", False):
+    if _include("ablate_area", "area_weight", "area_constant"):
         solver.add_cost(
             motile.costs.EdgeSelection(
                 weight=config["area_weight"],
@@ -117,9 +153,9 @@ def add_costs(solver, config):
             name="area",
         )
     else:
-        print("Ablating area cost")
+        print("Skipping area cost")
 
-    if not config.get("ablate_intensity", False):
+    if _include("ablate_intensity", "intensity_weight", "intensity_constant"):
         solver.add_cost(
             motile.costs.EdgeSelection(
                 weight=config["intensity_weight"],
@@ -129,9 +165,9 @@ def add_costs(solver, config):
             name="intensity",
         )
     else:
-        print("Ablating intensity cost")
+        print("Skipping intensity cost")
 
-    if not config.get("ablate_curvature", False):
+    if _include("ablate_curvature", "curvature_weight", "curvature_constant"):
         solver.add_cost(
             CurvatureCost(
                 weight=config["curvature_weight"],
@@ -141,9 +177,17 @@ def add_costs(solver, config):
             name="curvature",
         )
     else:
-        print("Ablating curvature cost")
+        print("Skipping curvature cost")
 
-    if not config.get("ablate_cohesion_adhesion", False):
+    # cohesion/adhesion share a single fit-time exclusion flag, but on the runtime
+    # path each is included independently by its own weight/constant.
+    if force_all:
+        add_cohesion = add_adhesion = not config.get("ablate_cohesion_adhesion", False)
+    else:
+        add_cohesion = config.get("cohesion_weight", 0) != 0 or config.get("cohesion_constant", 0) != 0
+        add_adhesion = config.get("adhesion_weight", 0) != 0 or config.get("adhesion_constant", 0) != 0
+
+    if add_cohesion:
         solver.add_cost(
             LeavesScaledNodeSelection(
                 weight=config["cohesion_weight"],
@@ -152,6 +196,10 @@ def add_costs(solver, config):
             ),
             name="cohesion",
         )
+    else:
+        print("Skipping cohesion cost")
+
+    if add_adhesion:
         solver.add_cost(
             LeavesScaledNodeSelection(
                 weight=config["adhesion_weight"],
@@ -161,7 +209,7 @@ def add_costs(solver, config):
             name="adhesion",
         )
     else:
-        print("Ablating cohesion and adhesion costs")
+        print("Skipping adhesion cost")
 
     solver.add_cost(
         motile.costs.Appear(

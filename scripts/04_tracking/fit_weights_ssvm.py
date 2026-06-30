@@ -274,7 +274,10 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
     solver = motile.Solver(track_graph)
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(1))
-    add_costs(solver, config)
+    # force_all=True: weights/constants start at 0 here, so the runtime
+    # "0 weight + 0 constant = ablated" rule would skip every cost and leave
+    # nothing to fit. Add every feature cost except those excluded via ablate_*.
+    add_costs(solver, config, force_all=True)
     # ExclusiveNodes must be added before fit_weights — the loss-augmented ILP
     # in SoftMarginLoss copies solver.constraints at construction time.
     solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))

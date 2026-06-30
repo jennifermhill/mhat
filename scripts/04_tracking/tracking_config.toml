@@ -2,29 +2,29 @@
 raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
-experiment = "Fluo-C3DL-MDA231"
+experiment = "primary_nk_cells"
 dataset = "01_cells"
 
-seg_result = "2026-02-20_11-31-01"
-flow_result = "2026-03-23_16-49-41"
-use_lk = true
+seg_result = "2026-06-25_17-40-15"
+flow_result = "2026-06-25_17-53-34"
+use_lk = false
 
 # ILP params
-drift_distance = [0.0, 3.0, 6.0]
-drift_weight = 10.0
-drift_constant = -1000.0
-area_weight = -1.0
-area_constant = -1000.0
-intensity_weight = 0.0
-intensity_constant = 0.0
+drift_distance = [ 0.0, 3.0, 6.0,]
+drift_weight = 100
+drift_constant = -1500
+area_weight = 1500
+area_constant = -1500
+intensity_weight = 25
+intensity_constant = -1000
 curvature_weight = 0.0
 curvature_constant = 0.0
-cohesion_weight = -3000
-cohesion_constant = -100
-adhesion_weight = -10
-adhesion_constant = -100
-appear_constant = 300.0
-disappear_constant = 300.0
+cohesion_weight = -500.0
+cohesion_constant = 500.0
+adhesion_weight = -1500
+adhesion_constant = 1500
+appear_constant = 50.0
+disappear_constant = 50.0
 
 # cand graph creation params
 max_children = 3
@@ -33,7 +33,7 @@ divisions = false
 min_merge_cost = 0.0
 max_merge_cost = 1.0
 # max distance traveled between frames
-max_edge_distance = 60
+max_edge_distance = 40
 
 # fragments smaller than size_threshold will be ignored
 size_threshold = 60

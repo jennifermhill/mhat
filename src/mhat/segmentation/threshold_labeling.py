@@ -1,6 +1,6 @@
 import numpy as np
 from skimage.filters import gaussian
-from skimage.filters import threshold_otsu as sk_threshold_otsu
+from skimage.filters import threshold_otsu
 from skimage.measure import label
 from skimage.morphology import local_maxima
 from skimage.segmentation import watershed
@@ -34,7 +34,7 @@ def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1
 
     # blur and threshold
     blurred_outline = gaussian(image, outline_sigma)
-    threshold = sk_threshold_otsu(blurred_outline)
+    threshold = threshold_otsu(blurred_outline)
     
     binary_otsu = blurred_outline > threshold
 
@@ -114,3 +114,53 @@ def voronoi_li_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
     labels = watershed(binary_li, labeled_spots, mask=binary_li)
 
     return labels
+
+
+def segment_cells_from_nuclei_frame(cell_img, nuclei_labels_img):
+    """Segment cells in a single frame using nuclei centroids as watershed seeds.
+
+    Args:
+        cell_img (np.ndarray): Raw cell-channel image for one timepoint, (z, y, x).
+        nuclei_labels_img (np.ndarray): Nuclei label image for the same timepoint,
+            (z, y, x). Output cell labels match these nuclei labels.
+
+    Returns:
+        np.ndarray: Cell label image, same shape as the inputs.
+    """
+    from skimage.measure import regionprops
+
+    nuclei_props = regionprops(nuclei_labels_img)
+    if len(nuclei_props) == 0:
+        return np.zeros_like(nuclei_labels_img)
+
+    centroids = np.array([prop.centroid for prop in nuclei_props]).astype(int)
+    labels = np.array([prop.label for prop in nuclei_props])
+
+    # Blur and threshold the raw cell image to get a binary mask
+    blurred = gaussian(cell_img, sigma=1)
+    threshold = threshold_otsu(blurred)
+    binary_mask = blurred > threshold
+
+    # Build marker array from centroids, dropping any outside the mask
+    markers = np.zeros_like(nuclei_labels_img)
+    for centroid, label in zip(centroids, labels):
+        coord = tuple(centroid)
+        if binary_mask[coord]:
+            markers[coord] = label
+
+    # Expand evenly from seeds (Voronoi partition within mask)
+    return watershed(np.zeros_like(cell_img), markers, mask=binary_mask)
+
+
+def segment_cells_from_nuclei(raw_cell_img, nuclei_seg):
+    """Segment cells across all timepoints from nuclei centroid seeds.
+
+    Builds the full segmentation in memory. For large datasets, drive
+    ``segment_cells_from_nuclei_frame`` in a loop that writes each frame to disk
+    instead of materializing the whole volume.
+    """
+    cell_seg = np.zeros_like(nuclei_seg)
+    for t in range(nuclei_seg.shape[0]):
+        cell_seg[t] = segment_cells_from_nuclei_frame(raw_cell_img[t], nuclei_seg[t])
+
+    return cell_seg

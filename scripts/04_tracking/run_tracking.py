@@ -11,9 +11,8 @@ import zarr
 import geff
 import networkx as nx
 
-from mhat.evaluation.eval_io import check_video_dir
+from mhat.segmentation.threshold_labeling import segment_cells_from_nuclei
 from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
-from mhat.tracking.tracks_io import save_tracks_to_csv
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 def get_solution_seg(fragments, merge_history, solution_graph):
@@ -49,40 +48,6 @@ def get_solution_seg(fragments, merge_history, solution_graph):
             solution_seg[fragments == child] = node
 
     return solution_seg
-
-
-def segment_cells_from_nuclei(raw_cell_img, solution_seg):
-    # Use watershed to segment cells from nuclei centroids as seeds
-    from skimage.segmentation import watershed
-    from skimage.measure import regionprops
-    from skimage.filters import gaussian
-    from skimage.filters import threshold_otsu
-
-    cell_seg = np.zeros_like(solution_seg)
-    for t in range(solution_seg.shape[0]):
-        cell_img = raw_cell_img[t]
-        nuclei_labels_img = solution_seg[t]
-
-        nuclei_props = regionprops(nuclei_labels_img)
-        centroids = np.array([prop.centroid for prop in nuclei_props]).astype(int)
-        labels = np.array([prop.label for prop in nuclei_props])
-
-        # Blur and threshold the raw cell image to get a binary mask
-        blurred = gaussian(cell_img, sigma=1)
-        threshold = threshold_otsu(blurred)
-        binary_mask = blurred > threshold
-
-        # Build marker array from centroids, dropping any outside the mask
-        markers = np.zeros_like(nuclei_labels_img)
-        for centroid, label in zip(centroids, labels):
-            coord = tuple(centroid)
-            if binary_mask[coord]:
-                markers[coord] = label
-
-        # Expand evenly from seeds (Voronoi partition within mask)
-        cell_seg[t] = watershed(np.zeros_like(cell_img), markers, mask=binary_mask)
-
-    return cell_seg
 
 
 def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path, raw_cell_dir: Path = None):

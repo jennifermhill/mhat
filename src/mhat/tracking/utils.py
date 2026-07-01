@@ -8,6 +8,7 @@ import networkx as nx
 import numpy as np
 import scipy
 from scipy import linalg
+from scipy import ndimage  # noqa: F401  (ensures scipy.ndimage is importable)
 import skimage
 from line_profiler import profile
 
@@ -360,19 +361,43 @@ def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
         cand_graph.edges[edge]["intensity_diff"] = intensity_diff
 
 
-def add_camp_signal_attr(solution_graph: motile.TrackGraph, raw_cell_img: np.ndarray, cell_seg: np.ndarray):
-    """Add mean CAMP signal from raw_cell_img as a node attribute to the solution graph. Occurs in-place on solution graph."""
+def add_camp_signal_attr(
+    solution_graph: motile.TrackGraph,
+    raw_cell_img,
+    cell_seg,
+    channel: int | None = None,
+):
+    """Add mean CAMP signal from raw_cell_img as a node attribute. In-place.
+
+    ``raw_cell_img`` and ``cell_seg`` only need to support ``[t]`` indexing that
+    returns a (z, y, x) frame, so zarr arrays can be passed directly to avoid
+    loading the whole volume into memory. Nodes are grouped by timepoint so each
+    frame is read once. The node id is used as the cell-segmentation label.
+
+    Args:
+        channel (int | None): If given, select this channel from each raw frame
+            (i.e. raw_cell_img[t][channel]). Use when the raw array still has a
+            channel axis, e.g. (T, C, Z, Y, X). Defaults to None.
+    """
+    nodes_by_time: dict[int, list] = {}
     for node_id, data in solution_graph.nodes(data=True):
         if "time" not in data:
             continue  # skip hypernodes
-        t = data["time"]
-        seg_id = node_id
-        cell_mask = cell_seg[t] == seg_id
-        if np.sum(cell_mask) == 0:
-            signal = 0.0
-        else:
-            signal = np.mean(raw_cell_img[t][cell_mask])
-        solution_graph.nodes[node_id]["camp_signal"] = signal
+        nodes_by_time.setdefault(data["time"], []).append(node_id)
+
+    for t, node_ids in nodes_by_time.items():
+        seg_frame = np.asarray(cell_seg[t])
+        raw_frame = raw_cell_img[t]
+        if channel is not None:
+            raw_frame = raw_frame[channel]
+        raw_frame = np.asarray(raw_frame)
+
+        # Single pass over the frame: mean raw intensity per label.
+        # Labels absent from the frame come back as NaN -> treated as 0.0.
+        means = scipy.ndimage.mean(raw_frame, labels=seg_frame, index=node_ids)
+        means = np.atleast_1d(np.nan_to_num(means, nan=0.0))
+        for node_id, signal in zip(node_ids, means):
+            solution_graph.nodes[node_id]["camp_signal"] = float(signal)
 
 
 @profile

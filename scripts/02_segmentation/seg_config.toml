@@ -15,7 +15,7 @@ seg_method = "mad"
 spot_sigma = 0.5
 outline_sigma = 0.5
 threshold = 500       # used when seg_method = "fixed"
-mad_k = 5.0           # used when seg_method = "mad" (threshold = median + mad_k * robust_sigma)
+mad_k = 7.0           # used when seg_method = "mad" (threshold = median + mad_k * robust_sigma)
 
 [seg_params.cellpose_params]
 flow_threshold = 0.4

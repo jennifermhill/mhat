@@ -1,17 +1,20 @@
 # IO
 input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
 output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/"
-experiment = "iXon_vol2"
-dataset = "01_nuclei_denoised"
+experiment = "NC281-sparse-label"
+dataset = "01_nuclei_denoised_train"
 
 overwrite = false
 merge_thresholds = [1.0]
 
 # segmentation parameters
+# seg_method: "cellpose", or a threshold method: "fixed", "otsu", "mean", "li", "triangle", "mad"
 [seg_params]
-seg_method = "otsu"
+seg_method = "mad"
 spot_sigma = 0.5
 outline_sigma = 0.5
+threshold = 500       # used when seg_method = "fixed"
+mad_k = 5.0           # used when seg_method = "mad" (threshold = median + mad_k * robust_sigma)
 
 [affinity_params]
 smoothing = [1, 1, 1]

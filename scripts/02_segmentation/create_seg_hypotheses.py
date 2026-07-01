@@ -14,7 +14,7 @@ from scipy.ndimage import label
 from skimage.segmentation import watershed
 from skimage.filters import gaussian
 
-from mhat.segmentation.threshold_labeling import voronoi_otsu_labeling, voronoi_mean_labeling
+from mhat.segmentation.threshold_labeling import threshold_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
 
@@ -48,6 +48,7 @@ def generate_fragments(data_zarr: Path, output_root, config):
     seg_method = config["seg_method"]
     if seg_method == 'cellpose':
         # Check for cuda availability
+        print("Using Cellpose for segmentation.")
         if torch.cuda.is_available():
             print("CUDA is available. Using GPU for Cellpose.")
             gpu = True
@@ -55,16 +56,23 @@ def generate_fragments(data_zarr: Path, output_root, config):
             print("CUDA is not available. Using CPU for Cellpose.")
             gpu = False
         cellpose_kwargs = config.get("cellpose_params", {})
+    else:
+        print(f"Using '{seg_method}' threshold segmentation method.")
 
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
         if seg_method == 'cellpose':
             labels = segment_with_cellpose(frame, gpu=gpu, **cellpose_kwargs)
-        elif seg_method == 'voronoi_mean':
-            labels = voronoi_mean_labeling(frame, spot_sigma=config["spot_sigma"], outline_sigma=config["outline_sigma"])
         else:
-            labels = voronoi_otsu_labeling(frame, spot_sigma=config["spot_sigma"], outline_sigma=config["outline_sigma"])
+            labels = threshold_labeling(
+                frame,
+                method=seg_method,
+                spot_sigma=config["spot_sigma"],
+                outline_sigma=config["outline_sigma"],
+                threshold=config.get("threshold"),
+                mad_k=config.get("mad_k", 9.0),
+            )
         
         if tp != 0:
             labels[labels != 0] += max_node_id

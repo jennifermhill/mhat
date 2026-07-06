@@ -1,117 +1,106 @@
 import numpy as np
 from skimage.filters import gaussian
 from skimage.filters import threshold_otsu
+from skimage.filters import threshold_mean
+from skimage.filters import threshold_li
+from skimage.filters import threshold_triangle
 from skimage.measure import label
 from skimage.morphology import local_maxima
 from skimage.segmentation import watershed
-from skimage.filters import threshold_mean
-from skimage.filters import threshold_li
 
 
-def voronoi_otsu_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
-    """Copied from napari-segment-blobs-and-things-with-membranes
-    https://github.com/haesleinhuepf/napari-segment-blobs-and-things-with-membranes/blob/2f04ac40383ff1c7df390e21975584f6dad64c11/napari_segment_blobs_and_things_with_membranes/__init__.py#L516
-    Voronoi-Otsu-Labeling is a segmentation algorithm for blob-like structures such as
-    nuclei and granules with high signal intensity on low-intensity background.
+# Threshold methods that derive a scalar cutoff from the (blurred) image.
+# "fixed" uses a user-supplied value; the rest are computed from the data.
+THRESHOLD_METHODS = ("fixed", "otsu", "mean", "li", "triangle", "mad")
 
-    Args:
-        image (np.ndarrray): Input image.
-        spot_sigma (float, optional): Controls how close detected cells can be by
-            smoothing before detecting local maxima to use as watershed seeds.
-            Defaults to 2.
-        outline_sigma (float, optional): Controls how precise segmented objects are
-            outlined by smoothing before performing otsu thresholding to get fg/bg mask.
-            Defaults to 1.
 
-    Returns:
-        np.ndarray: Labels array of same shape as input and dtype int32.
-    """
-    image = np.asarray(image)
-
-    # blur and detect local maxima
-    blurred_spots = gaussian(image, spot_sigma)
-    spot_centroids = local_maxima(blurred_spots)
-
-    # blur and threshold
-    blurred_outline = gaussian(image, outline_sigma)
-    threshold = threshold_otsu(blurred_outline)
-    
-    binary_otsu = blurred_outline > threshold
-
-    # determine local maxima within the thresholded area
-    remaining_spots = spot_centroids * binary_otsu
-
-    # start from remaining spots and flood binary image with labels
-    labeled_spots = label(remaining_spots)
-    labels = watershed(binary_otsu, labeled_spots, mask=binary_otsu)
-
-    return labels
-
-def voronoi_mean_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
-    """Simple segmentation algorithm that thresholds the image at its mean intensity.
+def compute_threshold(image, method: str, threshold: float = None, mad_k: float = 9.0):
+    """Compute a scalar foreground threshold for ``image`` via the named method.
 
     Args:
-        image (np.ndarray): Input image.
-        spot_sigma (float, optional): Unused parameter for compatibility.
-            Defaults to 2.
-        outline_sigma (float, optional): Unused parameter for compatibility.
-            Defaults to 1.
+        image (np.ndarray): Image to threshold (typically already blurred).
+        method (str): One of ``THRESHOLD_METHODS``.
+            - "fixed": return the user-supplied ``threshold``.
+            - "otsu"/"mean"/"li"/"triangle": skimage automatic thresholds.
+            - "mad": robust background estimate, ``median + mad_k * (1.4826 * MAD)``,
+              where MAD is the median absolute deviation. Immune to the sparse-
+              foreground class-imbalance failure that pulls otsu/li onto the
+              background peak.
+        threshold (float, optional): Cutoff value; required for method="fixed".
+        mad_k (float, optional): Multiplier on the robust background sigma for
+            method="mad". Defaults to 9.0.
 
     Returns:
-        np.ndarray: Labels array of same shape as input and dtype int32.
+        float: The threshold value.
     """
-    image = np.asarray(image)
+    if method == "fixed":
+        if threshold is None:
+            raise ValueError("A `threshold` value must be provided when method='fixed'.")
+        return threshold
+    if method == "otsu":
+        return threshold_otsu(image)
+    if method == "mean":
+        return threshold_mean(image)
+    if method == "li":
+        return threshold_li(image)
+    if method == "triangle":
+        return threshold_triangle(image)
+    if method == "mad":
+        median = np.median(image)
+        mad_std = np.median(np.abs(image - median)) * 1.4826
+        return median + mad_k * mad_std
+    raise ValueError(
+        f"Unknown threshold method {method!r}. Choose from {THRESHOLD_METHODS}."
+    )
 
-    # blur and detect local maxima
-    blurred_spots = gaussian(image, spot_sigma)
-    spot_centroids = local_maxima(blurred_spots)
 
-    # blur and threshold
-    blurred_outline = gaussian(image, outline_sigma)
-    threshold = threshold_mean(blurred_outline)
+def threshold_labeling(
+    image,
+    method: str = "fixed",
+    spot_sigma: float = 2,
+    outline_sigma: float = 1,
+    threshold: float = None,
+    mad_k: float = 9.0,
+):
+    """Voronoi-Otsu-style labeling with a configurable thresholding method.
 
-    binary_mean = blurred_outline > threshold
-
-    # determine local maxima within the thresholded area
-    remaining_spots = spot_centroids * binary_mean
-
-    # start from remaining spots and flood binary image with labels
-    labeled_spots = label(remaining_spots)
-    labels = watershed(binary_mean, labeled_spots, mask=binary_mean)
-
-    return labels
-
-def voronoi_li_labeling(image, spot_sigma: float = 2, outline_sigma: float = 1):
-    """Simple segmentation algorithm that thresholds the image using the Li thresholding method.
+    Blurs the image to find local maxima (watershed seeds), thresholds a second
+    blurred copy to get a foreground mask, and floods the seeds within that mask
+    via watershed. The only thing that varies between methods is how the
+    foreground/background cutoff is chosen (see ``compute_threshold``).
 
     Args:
         image (np.ndarray): Input image.
-        spot_sigma (float, optional): Unused parameter for compatibility.
+        method (str, optional): Thresholding method, one of ``THRESHOLD_METHODS``.
+            Defaults to "fixed".
+        spot_sigma (float, optional): Gaussian sigma for seed detection.
             Defaults to 2.
-        outline_sigma (float, optional): Unused parameter for compatibility.
+        outline_sigma (float, optional): Gaussian sigma for the foreground mask.
             Defaults to 1.
+        threshold (float, optional): Cutoff value; required for method="fixed".
+        mad_k (float, optional): Multiplier on the robust background sigma for
+            method="mad". Defaults to 9.0.
 
     Returns:
-        np.ndarray: Labels array of same shape as input and dtype int32.
+        np.ndarray: Integer label image of the same shape as ``image``.
     """
     image = np.asarray(image)
 
-    # blur and detect local maxima
+    # blur and detect local maxima to use as watershed seeds
     blurred_spots = gaussian(image, spot_sigma)
     spot_centroids = local_maxima(blurred_spots)
 
-    # blur and threshold
+    # blur and threshold to get the foreground mask
     blurred_outline = gaussian(image, outline_sigma)
-    threshold = threshold_li(blurred_outline)
+    thresh = compute_threshold(blurred_outline, method, threshold=threshold, mad_k=mad_k)
+    binary = blurred_outline > thresh
 
-    binary_li = blurred_outline > threshold
-
-    # determine local maxima within the thresholded area
-    remaining_spots = spot_centroids * binary_li
+    # keep only local maxima that fall within the thresholded area
+    remaining_spots = spot_centroids * binary
 
     # start from remaining spots and flood binary image with labels
     labeled_spots = label(remaining_spots)
-    labels = watershed(binary_li, labeled_spots, mask=binary_li)
+    labels = watershed(binary, labeled_spots, mask=binary)
 
     return labels
 

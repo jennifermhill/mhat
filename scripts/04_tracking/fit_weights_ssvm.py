@@ -220,7 +220,6 @@ def write_learned_config(input_config, solver, learned_path):
 
 def get_solution_seg(fragments, merge_history, solution_graph):
     """Same logic as run_tracking.get_solution_seg — duplicated to avoid script-to-script imports."""
-    solution_seg = np.zeros_like(fragments)
     merge_dict = {}
     for merge in merge_history:
         a, b, c, _cost, _tp = merge
@@ -232,6 +231,14 @@ def get_solution_seg(fragments, merge_history, solution_graph):
             children.extend(merge_dict[b])
         merge_dict[c] = children
     frag_ids = set(np.unique(fragments).tolist()) - {0}
+
+    # Build a lookup table mapping each leaf fragment id -> owning solution node id,
+    # then apply it in a single vectorized pass. Merged/intermediate ids are all
+    # > max(fragments) (see renumber_merge_history), so they never index into the
+    # volume and only leaf slots are needed.
+    max_frag_id = int(fragments.max())
+    lookup = np.zeros(max_frag_id + 1, dtype=fragments.dtype)
+
     for node in solution_graph.nodes():
         if node in merge_dict:
             children = merge_dict[node]
@@ -239,8 +246,19 @@ def get_solution_seg(fragments, merge_history, solution_graph):
             assert node in frag_ids, f"Node {node} not in merge dict or frag ids"
             children = [node]
         for child in children:
-            solution_seg[fragments == child] = node
-    return solution_seg
+            if child > max_frag_id:
+                continue  # intermediate/merged id, never present in the volume
+            # Each leaf fragment may be claimed by at most one selected node (the ILP
+            # ExclusiveNodes invariant). This preserves the original per-fragment
+            # assertion as an O(children) check instead of a full-volume scan.
+            assert lookup[child] == 0, (
+                f"Child {child} fragment already assigned to node {lookup[child]}, "
+                f"cannot reassign to {node}"
+            )
+            lookup[child] = node
+
+    # Single O(n_pixels) vectorized remap.
+    return lookup[fragments]
 
 
 def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):

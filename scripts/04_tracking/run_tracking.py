@@ -75,8 +75,6 @@ def report_graph_statistics(config, track_graph):
 
 
 def get_solution_seg(fragments, merge_history, solution_graph):
-    solution_seg = np.zeros_like(fragments)
-
     merge_dict = {}
     for merge in merge_history:
         a, b, c, cost, tp = merge
@@ -91,8 +89,15 @@ def get_solution_seg(fragments, merge_history, solution_graph):
         merge_dict[c] = children
 
     frag_ids = set(np.unique(fragments))
-    frag_ids.remove(0)
-    
+    frag_ids.discard(0)
+
+    # Build a lookup table mapping each leaf fragment id -> owning solution node id,
+    # then apply it in a single vectorized pass. Merged/intermediate ids are all
+    # > max(fragments) (see renumber_merge_history), so they never index into the
+    # volume and only leaf slots are needed.
+    max_frag_id = int(fragments.max())
+    lookup = np.zeros(max_frag_id + 1, dtype=fragments.dtype)
+
     for node in solution_graph.nodes():
         if node in merge_dict:
             children = merge_dict[node]
@@ -101,12 +106,19 @@ def get_solution_seg(fragments, merge_history, solution_graph):
             children = [node]
 
         for child in children:
-            assert np.all(
-                [solution_seg[fragments == child] == 0]
-            ), f"Child {child} fragment is already selected"
-            solution_seg[fragments == child] = node
+            if child > max_frag_id:
+                continue  # intermediate/merged id, never present in the volume
+            # Each leaf fragment may be claimed by at most one selected node (the ILP
+            # ExclusiveNodes invariant). This preserves the original per-fragment
+            # assertion as an O(children) check instead of a full-volume scan.
+            assert lookup[child] == 0, (
+                f"Child {child} fragment already assigned to node {lookup[child]}, "
+                f"cannot reassign to {node}"
+            )
+            lookup[child] = node
 
-    return solution_seg
+    # Single O(n_pixels) vectorized remap.
+    return lookup[fragments]
 
 
 def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path):

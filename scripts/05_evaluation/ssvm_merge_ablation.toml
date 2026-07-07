@@ -1,0 +1,52 @@
+# SSVM-fit merge ablation plot input (MDA231 01_cells).
+#
+# Same structure/labels as merge_ablation.toml (condition order + palette are
+# hardcoded in merge_ablation_figure.py: baseline/no_cohesion/no_affinities/
+# no_merges). Every tracking_uid points at an SSVM-fit run. Merge conditions
+# vary the segmentation (and drop cohesion/adhesion where affinity-derived, as
+# in the hand-tuned configs). Drive with:
+#   conda run -n mhat2 --no-capture-output \
+#     python scripts/05_evaluation/merge_ablation_figure.py \
+#     scripts/05_evaluation/ssvm_merge_ablation.toml --dataset mda231
+
+[mda231]
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "01_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_results_mda231_ssvm.png"
+suptitle = "Fluo-C3DL-MDA231 Merge Ablation (SSVM-fit)"
+
+[mda231.metrics.TRA]
+display_name = "TRA"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+
+[mda231.metrics.DET]
+display_name = "DET"
+json_path = ["CTCMetrics", "DET"]
+reduction = "scalar"
+
+[mda231.metrics.LNK]
+display_name = "LNK"
+json_path = ["CTCMetrics", "LNK"]
+reduction = "scalar"
+
+[mda231.conditions.baseline]
+label = "Baseline"
+seg_uid = "2026-04-03_11-09-49"
+tracking_uid = "ssvm_full"
+
+[mda231.conditions.no_cohesion]
+label = "- Coh/Adh"
+seg_uid = "2026-04-03_11-09-49"
+tracking_uid = "ssvm_no_cohesion"
+
+[mda231.conditions.no_affinities]
+label = "- Affinities"
+seg_uid = "2026-06-23_17-04-19"
+tracking_uid = "ssvm_no_affinities"
+
+[mda231.conditions.no_merges]
+label = "- Merges"
+seg_uid = "2026-04-23_11-58-21"
+tracking_uid = "ssvm_no_merges"

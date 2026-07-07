@@ -1,0 +1,347 @@
+# Solver addition: running notes + plotting input.
+#
+# See SOLVER_EXPERIMENTS.md (repo root) for the recipe. Solver addition starts
+# from the EMPTY model ("None" = every `ablate_*` flag true) and adds ONE tuned
+# ILP cost term at a time, up to "Full" (every `ablate_*` flag false = the
+# dataset's full tuned baseline). Segmentation is held FIXED (the baseline
+# seg_uid) -- only tracking_config changes.
+#
+# Each "+ X" bar uses its own hand-tuned weight/constant values. Per the agreed
+# convention we store only tracking_uid here; the canonical tuned values live in
+# that run's saved config.toml. `note` is an informational reminder of which
+# cost is active and the rough tuned magnitude.
+#
+# Drive the plot with:
+#   conda run -n mhat2 --no-capture-output \
+#     python scripts/05_evaluation/solver_figure.py \
+#     scripts/05_evaluation/solver_addition.toml --dataset {mda231,mda231_02cells,nc281,nc281_sparse}
+#
+# Wong colorblind-friendly palette, per-concept consistent across all figures:
+#   full #0072B2 | intensity #56B4E9 | volume #E69F00 | drift #009E73
+#   coh/adh #CC79A7 | curvature #D55E00 | none #999999
+
+# =============================================================================
+# Fluo-C3DL-MDA231 / 01_cells
+# =============================================================================
+[mda231]
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "01_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/solver_addition_results_mda231.png"
+suptitle = "Fluo-C3DL-MDA231 Solver Addition"
+reference = "last"
+xtick_rotation = 30
+condition_order = ["none", "plus_cohesion", "plus_intensity", "plus_volume", "plus_curvature", "plus_drift", "full"]
+
+[mda231.metrics.TRA]
+display_name = "TRA"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+
+[mda231.metrics.DET]
+display_name = "DET"
+json_path = ["CTCMetrics", "DET"]
+reduction = "scalar"
+
+[mda231.metrics.LNK]
+display_name = "LNK"
+json_path = ["CTCMetrics", "LNK"]
+reduction = "scalar"
+
+# mda231 addition conditions re-optimized 2026-06-25 under weight/constant gating
+# on baseline seg 2026-04-03_11-09-49. The active term is set; all other costs are
+# zeroed (skipped). None uses base_edge_constant (= - All). Full = the full model
+# (2026-04-15_09-42-38). `note` is informational.
+[mda231.conditions.none]
+label = "None"
+color = "#999999"
+note = "base_edge_constant=-1000 (identical to - All)"
+tracking_uid = "2026-06-25_11-07-43"
+config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/none_config.toml"
+
+[mda231.conditions.plus_cohesion]
+label = "+ Coh/Adh"
+color = "#CC79A7"
+note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
+tracking_uid = "2026-06-25_14-37-13"
+config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_cohesion_config.toml"
+
+[mda231.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#56B4E9"
+note = "active: intensity (w=2, c=-1000)"
+tracking_uid = "2026-06-25_11-46-22"
+config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_intensity_config.toml"
+
+[mda231.conditions.plus_volume]
+label = "+ Volume"
+color = "#E69F00"
+note = "active: area (w=1000, c=-500)"
+tracking_uid = "2026-06-25_12-04-53"
+config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_volume_config.toml"
+
+[mda231.conditions.plus_curvature]
+label = "+ Curvature"
+color = "#D55E00"
+note = "active: curvature (w=10, c=-500)"
+tracking_uid = "2026-06-25_12-21-17"
+config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_curvature_config.toml"
+
+[mda231.conditions.plus_drift]
+label = "+ Drift"
+color = "#009E73"
+note = "active: drift (w=30, c=-1000)"
+tracking_uid = "2026-06-25_12-39-18"
+config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_drift_config.toml"
+
+[mda231.conditions.full]
+label = "Full"
+color = "#0072B2"
+note = "full tuned baseline (all costs active)"
+tracking_uid = "2026-05-15_10-55-56"
+config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
+
+# =============================================================================
+# Fluo-C3DL-MDA231 / 02_cells
+# Same condition set as 01_cells; separate tracking runs.
+# =============================================================================
+[mda231_02cells]
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "02_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/solver_addition_results_mda231_02.png"
+suptitle = "Fluo-C3DL-MDA231 02_cells Solver Addition"
+reference = "last"
+xtick_rotation = 30
+condition_order = ["none", "plus_cohesion", "plus_intensity", "plus_volume", "plus_curvature", "plus_drift", "full"]
+
+[mda231_02cells.metrics.TRA]
+display_name = "TRA"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+
+[mda231_02cells.metrics.DET]
+display_name = "DET"
+json_path = ["CTCMetrics", "DET"]
+reduction = "scalar"
+
+[mda231_02cells.metrics.LNK]
+display_name = "LNK"
+json_path = ["CTCMetrics", "LNK"]
+reduction = "scalar"
+
+# Conditions transferred 2026-06-25 from the re-optimized 01_cells addition params
+# (weight/constant gating), run on the 02_cells baseline seg 2026-05-29_10-47-41 +
+# flow 2026-05-29_10-59-37. None uses base_edge_constant (= - All). Full reuses the
+# merge baseline run 2026-06-01_14-41-03.
+[mda231_02cells.conditions.none]
+label = "None"
+color = "#999999"
+note = "base_edge_constant=-1000 (identical to - All)"
+tracking_uid = "2026-06-25_15-32-46"
+config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/none_config.toml"
+
+[mda231_02cells.conditions.plus_cohesion]
+label = "+ Coh/Adh"
+color = "#CC79A7"
+note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
+tracking_uid = "2026-06-25_15-37-58"
+config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_cohesion_config.toml"
+
+[mda231_02cells.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#56B4E9"
+note = "active: intensity (w=2, c=-1000)"
+tracking_uid = "2026-06-25_15-43-31"
+config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_intensity_config.toml"
+
+[mda231_02cells.conditions.plus_volume]
+label = "+ Volume"
+color = "#E69F00"
+note = "active: area (w=1000, c=-500)"
+tracking_uid = "2026-06-25_15-48-34"
+config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_volume_config.toml"
+
+[mda231_02cells.conditions.plus_curvature]
+label = "+ Curvature"
+color = "#D55E00"
+note = "active: curvature (w=10, c=-500)"
+tracking_uid = "2026-06-25_15-53-32"
+config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_curvature_config.toml"
+
+[mda231_02cells.conditions.plus_drift]
+label = "+ Drift"
+color = "#009E73"
+note = "active: drift (w=30, c=-1000)"
+tracking_uid = "2026-06-25_15-58-43"
+config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_drift_config.toml"
+
+[mda231_02cells.conditions.full]
+label = "Full"
+color = "#0072B2"
+note = "full tuned baseline (all costs active)"
+tracking_uid = "2026-06-01_14-41-03"
+config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
+
+# =============================================================================
+# NC281-Fl2mSiH2B / 03_nuclei
+# =============================================================================
+[nc281]
+experiment = "NC281-Fl2mSiH2B"
+dataset_dir = "03_nuclei"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/solver_addition_results_nc281.png"
+suptitle = "NC28.1-Fl2mSiH2B Solver Addition"
+# Point-matched TE/TF in track_metrics.json (see solver_ablation.toml note).
+metrics_filename = "track_metrics.json"
+reference = "last"
+xtick_rotation = 30
+condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
+
+[nc281.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+# All nc281 conditions are the original solver figure runs (seg 2026-02-25_11-56-23),
+# copied from C: (the curvature run was already on Y:). Like mda231, the active
+# term was isolated by zeroing the other weights; exact tuned weights are in each
+# run's saved tracking_config.toml. Full = full model (drift_w=30, cohesion_w=-500).
+[nc281.conditions.none]
+label = "None"
+color = "#999999"
+note = "empty model (no cost weights)"
+tracking_uid = "2026-04-27_18-44-11"
+config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/none_config.toml"
+
+[nc281.conditions.plus_cohesion]
+label = "+ Cohesion"
+color = "#CC79A7"
+note = "active: cohesion+adhesion (cohesion_w=-500)"
+tracking_uid = "2026-04-27_19-03-50"
+config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_cohesion_config.toml"
+
+[nc281.conditions.plus_volume]
+label = "+ Volume"
+color = "#E69F00"
+note = "active: area (w=2350)"
+tracking_uid = "2026-04-27_19-18-02"
+config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_volume_config.toml"
+
+[nc281.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#56B4E9"
+note = "active: intensity (w=7)"
+tracking_uid = "2026-04-27_19-36-39"
+config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_intensity_config.toml"
+
+# curvature batch nc281curvadd_2026-04-29_16-49-06 R3 (cluster run, on Y:).
+[nc281.conditions.plus_curvature]
+label = "+ Curvature"
+color = "#D55E00"
+note = "active: curvature (w=100, c=-800)"
+tracking_uid = "2026-04-29_16-49-06_R3"
+config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_curvature_config.toml"
+
+[nc281.conditions.plus_drift]
+label = "+ Drift"
+color = "#009E73"
+note = "active: drift (w=30)"
+tracking_uid = "2026-04-27_18-49-31"
+config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_drift_config.toml"
+
+[nc281.conditions.full]
+label = "Full"
+color = "#0072B2"
+note = "full tuned baseline (drift_w=30, cohesion_w=-500)"
+tracking_uid = "2026-04-23_15-11-00"
+config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_solver_config.toml"
+
+# =============================================================================
+# NC281-sparse-label / 01_nuclei_denoised
+# Dense GT (despite "sparse-label" name) -- purity is a reliable signal here.
+# =============================================================================
+[nc281_sparse]
+experiment = "NC281-sparse-label"
+dataset_dir = "01_nuclei_denoised"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/solver_addition_results_nc281-sparse.png"
+# Point-matched (dataset's documented matcher); see solver_ablation.toml note.
+suptitle = "NC28.1-sparse-label Solver Addition"
+metrics_filename = "track_metrics.json"
+reference = "last"
+xtick_rotation = 30
+condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
+
+[nc281_sparse.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+# Sweep winners chosen per the prior figure: coh=w20k, vol=w1300, int=w6,
+# curv=w100, drift=w100 (the batch also has w5k/w10k, w2500/w5000, etc.).
+[nc281_sparse.conditions.none]
+label = "None"
+color = "#999999"
+note = "all ablate_* = true (empty model, appear/disappear only)"
+tracking_uid = "2026-05-01_10-02-14_add_none"
+config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/none_config.toml"
+
+[nc281_sparse.conditions.plus_cohesion]
+label = "+ Cohesion"
+color = "#CC79A7"
+note = "active: cohesion+adhesion (w~20k); all other ablate_* = true"
+tracking_uid = "2026-05-01_10-02-14_add_coh_w20k"
+config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_cohesion_config.toml"
+
+[nc281_sparse.conditions.plus_volume]
+label = "+ Volume"
+color = "#E69F00"
+note = "active: area (w~1300); all other ablate_* = true"
+tracking_uid = "2026-05-01_10-02-14_add_vol_w1300"
+config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_volume_config.toml"
+
+[nc281_sparse.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#56B4E9"
+note = "active: intensity (w~6); all other ablate_* = true"
+tracking_uid = "2026-05-01_10-02-14_add_int_w6"
+config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_intensity_config.toml"
+
+[nc281_sparse.conditions.plus_curvature]
+label = "+ Curvature"
+color = "#D55E00"
+note = "active: curvature (w~100); all other ablate_* = true"
+tracking_uid = "2026-05-01_10-02-14_add_curv_w100"
+config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_curvature_config.toml"
+
+[nc281_sparse.conditions.plus_drift]
+label = "+ Drift"
+color = "#009E73"
+note = "active: drift (w~100); all other ablate_* = true"
+tracking_uid = "2026-05-01_10-02-14_add_drift_w100"
+config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_drift_config.toml"
+
+# Full tuned model (drift+coh+adh); point metrics in track_metrics_point.json.
+[nc281_sparse.conditions.full]
+label = "Full"
+color = "#0072B2"
+note = "all ablate_* = false (full tuned baseline)"
+tracking_uid = "2026-04-29_11-36-23_R1"
+config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config.toml"
+metrics_filename = "track_metrics_point.json"

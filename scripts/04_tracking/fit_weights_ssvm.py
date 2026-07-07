@@ -204,6 +204,10 @@ _LEARNED_WEIGHT_TO_TOML = {
     ("adhesion", "constant"): "adhesion_constant",
     ("Appear", "constant"): "appear_constant",
     ("Disappear", "constant"): "disappear_constant",
+    # Only the no-features baseline adds this (see add_costs). Its learned constant
+    # transfers to the runtime base_edge (weight=0 there too, so it stays constant-
+    # only); the inert weight on the all-zero attribute is intentionally not mapped.
+    ("base_edge", "constant"): "base_edge_constant",
 }
 
 

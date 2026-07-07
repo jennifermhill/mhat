@@ -220,6 +220,36 @@ def add_costs(solver, config, force_all=False, no_merges=False):
     else:
         print("Skipping adhesion cost")
 
+    # Fit path only: if NO feature cost is active (the no-features "None" / "- All"
+    # baseline), the only remaining terms are appear/disappear -- both positive --
+    # so the ILP's optimum is the empty solution and the SSVM has nothing to fit
+    # linking against. Add a learnable, feature-agnostic per-edge selection cost so
+    # linking has a lever to learn (the fit analogue of the runtime
+    # base_edge_constant). The attribute is 0 on every edge, so the learned weight
+    # is inert and only the learned constant (-> base_edge_constant) matters.
+    if force_all:
+        feature_active = (
+            _include("ablate_drift", "drift_weight", "drift_constant")
+            or _include("ablate_area", "area_weight", "area_constant")
+            or _include("ablate_intensity", "intensity_weight", "intensity_constant")
+            or _include("ablate_curvature", "curvature_weight", "curvature_constant")
+            or add_cohesion
+            or add_adhesion
+        )
+        if not feature_active:
+            for edge in solver.graph.edges:
+                solver.graph.edges[edge]["base_edge"] = 0.0
+            solver.add_cost(
+                motile.costs.EdgeSelection(
+                    weight=0.0, attribute="base_edge", constant=0.0
+                ),
+                name="base_edge",
+            )
+            print(
+                "No feature costs active; added learnable base_edge cost so the "
+                "SSVM fit does not collapse to an empty solution"
+            )
+
     solver.add_cost(
         motile.costs.Appear(
             constant=config["appear_constant"], ignore_attribute="ignore_appear"

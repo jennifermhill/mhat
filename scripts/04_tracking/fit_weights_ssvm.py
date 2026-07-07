@@ -393,7 +393,7 @@ if __name__ == "__main__":
     if not config.get("exp_uid"):
         config["exp_uid"] = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    output_dir = output_base_dir / "tracking" / experiment / dataset / "ssvm_fit"
+    output_dir = output_base_dir / "tracking" / experiment / dataset / config.get("output_name", "ssvm_fit")
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving fit results to {output_dir}")
 

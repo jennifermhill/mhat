@@ -108,7 +108,10 @@ def main():
             continue
         c = strip_prefix(key)
         m = load_metrics(abl, cond["tracking_uid"], metric_specs, mfile_for(cond, abl))
-        costs.setdefault(c, {})["abl"] = {k: full[k] - m[k] for k in metric_specs}
+        # Signed change from removing the cost: metric(Full - X) - metric(Full).
+        # Negative when removing hurts, so an essential cost spans a wide range
+        # (big negative removal + big positive addition) and a useless one hugs 0.
+        costs.setdefault(c, {})["abl"] = {k: m[k] - full[k] for k in metric_specs}
         costs[c]["abl_missing"] = cond["tracking_uid"] in MISSING
         costs[c].setdefault("label", nice_label(cond.get("label")))
         costs[c].setdefault("color", cond.get("color", "#444444"))
@@ -123,11 +126,16 @@ def main():
         costs[c].setdefault("color", cond.get("color", "#444444"))
     none_missing = none_uid in MISSING
 
-    # Order rows by ablation TRA loss (essential at top); ablation-less costs last.
+    # Order rows by total spread (addition gain minus signed ablation change) on
+    # the first metric, so the most essential cost is at the top.
     tra = list(metric_specs)[0]
-    order = sorted(
-        costs, key=lambda c: costs[c].get("abl", {}).get(tra, -np.inf), reverse=False
-    )
+
+    def spread(c):
+        a = costs[c].get("abl", {}).get(tra, 0.0)
+        d = costs[c].get("add", {}).get(tra, 0.0)
+        return d - a  # add is +gain, abl is -loss -> essential = large spread
+
+    order = sorted(costs, key=spread)  # ascending -> largest spread on top
 
     n = len(metric_specs)
     fig, axes = plt.subplots(1, n, figsize=(4.2 * n + 1, 0.7 * len(order) + 2.2), sharey=True)
@@ -165,7 +173,7 @@ def main():
                     ax.scatter(a, i, s=95, color=col, zorder=3)
         ax.axvline(0, color="gray", lw=0.9, ls="--", alpha=0.7)
         ax.set_title(spec["display_name"], fontsize=13, fontweight="bold")
-        ax.set_xlabel(f"Δ {spec['display_name']}  (contribution)")
+        ax.set_xlabel(f"Δ {spec['display_name']}   (− removed · + added)")
         ax.margins(x=0.18)
         ax.grid(axis="x", alpha=0.25)
     axes[0].set_yticks(y)
@@ -174,9 +182,9 @@ def main():
     handles = [
         plt.Line2D([], [], marker="o", ls="", markerfacecolor="white",
                    markeredgecolor="#333", markeredgewidth=2, markersize=10,
-                   label="added to None (marginal gain)"),
+                   label="added to None → gain (+)"),
         plt.Line2D([], [], marker="o", ls="", color="#333", markersize=10,
-                   label="removed from Full (marginal loss)"),
+                   label="removed from Full → loss (−)"),
     ]
     if MISSING:
         handles.append(plt.Line2D([], [], marker="x", ls="", color="#d62728",

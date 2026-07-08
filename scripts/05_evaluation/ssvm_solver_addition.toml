@@ -17,7 +17,10 @@ output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/
 suptitle = "Fluo-C3DL-MDA231 Solver Addition (SSVM-fit)"
 reference = "last"
 xtick_rotation = 30
-condition_order = ["none", "plus_cohesion", "plus_intensity", "plus_volume", "plus_curvature", "plus_drift", "full"]
+# plus_curvature is intentionally omitted: curvature is an edge-PAIR cost and
+# cannot be SSVM-fit in isolation (collapses to an empty solution). See the SSVM
+# Weight Fitting section of CLAUDE.md.
+condition_order = ["none", "plus_cohesion", "plus_intensity", "plus_volume", "plus_drift", "full"]
 
 [mda231.metrics.TRA]
 display_name = "TRA"
@@ -54,10 +57,7 @@ label = "+ Volume"
 color = "#E69F00"
 tracking_uid = "ssvm_plus_volume"
 
-[mda231.conditions.plus_curvature]
-label = "+ Curvature"
-color = "#D55E00"
-tracking_uid = "ssvm_plus_curvature"
+# [mda231.conditions.plus_curvature] omitted -- see condition_order note above.
 
 [mda231.conditions.plus_drift]
 label = "+ Drift"

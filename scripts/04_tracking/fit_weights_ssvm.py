@@ -315,14 +315,30 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
     report_graph_statistics(config, track_graph)
 
     print("\nFitting weights via SSVM (this may take a while)...")
-    # Use stock motile fit_weights — ε converges from above to ≈0 with the
-    # post-2026-05-15 ilpy. No post-hoc adjustments needed; see CLAUDE.md.
-    solver.fit_weights(
-        gt_attribute="gt_selected",
-        regularizer_weight=config.get("ssvm_reg", 0.1),
-        max_iterations=config.get("ssvm_max_iter", 100),
-        eps=config.get("ssvm_eps", 1e-6),
-    )
+    if config.get("ssvm_standardize", False):
+        # Per-feature standardized fit: recondition the QP by dividing each feature
+        # column by its std before fitting, then inverse-scale the learned weights.
+        # Mathematically the same objective, but avoids the max-margin direction
+        # being dominated by large-scale features (e.g. curvature angle vs. the
+        # constant's unit column). Sets solver.weights like solver.fit_weights does.
+        print("Using per-feature standardization (ssvm_standardize=true).")
+        optimal_weights = fit_weights_standardized(
+            solver,
+            gt_attribute="gt_selected",
+            regularizer_weight=config.get("ssvm_reg", 0.1),
+            max_iterations=config.get("ssvm_max_iter", 100),
+            eps=config.get("ssvm_eps", 1e-6),
+        )
+        solver.weights.from_ndarray(optimal_weights)
+    else:
+        # Use stock motile fit_weights — ε converges from above to ≈0 with the
+        # post-2026-05-15 ilpy. No post-hoc adjustments needed; see CLAUDE.md.
+        solver.fit_weights(
+            gt_attribute="gt_selected",
+            regularizer_weight=config.get("ssvm_reg", 0.1),
+            max_iterations=config.get("ssvm_max_iter", 100),
+            eps=config.get("ssvm_eps", 1e-6),
+        )
 
     print("\nLearned weights:")
     print(solver.weights)

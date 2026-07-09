@@ -345,3 +345,163 @@ note = "all ablate_* = false (full tuned baseline)"
 tracking_uid = "2026-04-29_11-36-23_R1"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config.toml"
 metrics_filename = "track_metrics_point.json"
+
+# =============================================================================
+# NC281-sparse-label / 02_nuclei_denoised_train  (train/test split)
+# Params tuned on TRAIN only (small ~3-value sweeps; select by mean(TE, purity),
+# tie-break TF). Point-matched (matcher="point", match_threshold=10). Fill
+# tracking_uid as each train sweep winner is chosen.
+# =============================================================================
+[nc281_sparse_train]
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_train"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/solver_addition_results_nc281-sparse_train.png"
+suptitle = "NC28.1-sparse-label (train) Solver Addition"
+metrics_filename = "track_metrics.json"
+reference = "last"
+xtick_rotation = 30
+condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
+
+[nc281_sparse_train.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse_train.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse_train.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+[nc281_sparse_train.conditions.none]
+label = "None"
+color = "#999999"
+note = "empty model (drift_weight=0, drift_constant=-2000 flat edge cost); sel=0.326"
+tracking_uid = "add_none_dc2000"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/none_config.toml"
+
+[nc281_sparse_train.conditions.plus_cohesion]
+label = "+ Cohesion"
+color = "#CC79A7"
+note = "active: cohesion+adhesion (cohesion_weight=-10000); sel=0.438"
+tracking_uid = "add_coh_w10k"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_cohesion_config.toml"
+
+[nc281_sparse_train.conditions.plus_volume]
+label = "+ Volume"
+color = "#E69F00"
+note = "active: area (area_weight=1300); sel=0.611"
+tracking_uid = "add_vol_w1300"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_volume_config.toml"
+
+[nc281_sparse_train.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#56B4E9"
+note = "active: intensity (intensity_weight=3); sel=0.639"
+tracking_uid = "add_int_w3"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_intensity_config.toml"
+
+[nc281_sparse_train.conditions.plus_curvature]
+label = "+ Curvature"
+color = "#D55E00"
+note = "active: curvature (curvature_weight=100, constant=-1700); sel=0.861"
+tracking_uid = "add_curv_w100"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_curvature_config.toml"
+
+[nc281_sparse_train.conditions.plus_drift]
+label = "+ Drift"
+color = "#009E73"
+note = "active: drift (drift_weight=100, constant=-2000); sel=0.862"
+tracking_uid = "add_drift_w100"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_drift_config.toml"
+
+[nc281_sparse_train.conditions.full]
+label = "Full"
+color = "#0072B2"
+note = "all costs active (full tuned baseline; Step-0 train tune, drift_w=100, coh=-500/450); sel=0.861"
+tracking_uid = "s0_dw100_cw500"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
+
+# =============================================================================
+# NC281-sparse-label / 02_nuclei_denoised_test  (final eval; params copied
+# verbatim from the train winners above -- NO tuning on test).
+# =============================================================================
+[nc281_sparse_test]
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_test"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/solver_addition_results_nc281-sparse_test.png"
+suptitle = "NC28.1-sparse-label (test) Solver Addition"
+metrics_filename = "track_metrics.json"
+reference = "last"
+xtick_rotation = 30
+condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
+
+[nc281_sparse_test.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse_test.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse_test.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+[nc281_sparse_test.conditions.none]
+label = "None"
+color = "#999999"
+note = "train params applied to test (empty model); sel=0.316"
+tracking_uid = "test_none"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/none_config.toml"
+
+[nc281_sparse_test.conditions.plus_cohesion]
+label = "+ Cohesion"
+color = "#CC79A7"
+note = "train params applied to test (cohesion_weight=-10000); sel=0.365"
+tracking_uid = "test_plus_coh"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_cohesion_config.toml"
+
+[nc281_sparse_test.conditions.plus_volume]
+label = "+ Volume"
+color = "#E69F00"
+note = "train params applied to test (area_weight=1300); sel=0.618"
+tracking_uid = "test_plus_vol"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_volume_config.toml"
+
+[nc281_sparse_test.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#56B4E9"
+note = "train params applied to test (intensity_weight=3); sel=0.629"
+tracking_uid = "test_plus_int"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_intensity_config.toml"
+
+[nc281_sparse_test.conditions.plus_curvature]
+label = "+ Curvature"
+color = "#D55E00"
+note = "train params applied to test (curvature_weight=100); sel=0.839"
+tracking_uid = "test_plus_curv"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_curvature_config.toml"
+
+[nc281_sparse_test.conditions.plus_drift]
+label = "+ Drift"
+color = "#009E73"
+note = "train params applied to test (drift_weight=100); sel=0.857"
+tracking_uid = "test_plus_drift"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_drift_config.toml"
+
+[nc281_sparse_test.conditions.full]
+label = "Full"
+color = "#0072B2"
+note = "train params applied to test (full tuned baseline); sel=0.858"
+tracking_uid = "test_full"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"

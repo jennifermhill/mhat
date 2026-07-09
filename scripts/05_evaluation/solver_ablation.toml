@@ -281,3 +281,119 @@ color = "#999999"
 ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature = ablate_cohesion_adhesion = true"
 tracking_uid = "2026-05-01_10-02-14_ablat_no_all"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_all_config.toml"
+
+# =============================================================================
+# NC281-sparse-label / 02_nuclei_denoised_train  (train/test split)
+# Baseline = Step-0 full-model train tune. Each ablation removes one cost from
+# that model (+ small compensating sweep). Point-matched. Fill tracking_uid as
+# train winners are chosen. Reuse: no_all == solver_addition none.
+# =============================================================================
+[nc281_sparse_train]
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_train"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/solver_ablation_results_nc281-sparse_train.png"
+suptitle = "NC28.1-sparse-label (train) Solver Ablation"
+metrics_filename = "track_metrics.json"
+reference = "first"
+condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]
+
+[nc281_sparse_train.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse_train.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse_train.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+[nc281_sparse_train.conditions.baseline]
+label = "Baseline"
+color = "#0072B2"
+ablate_flags = ""
+tracking_uid = "s0_dw100_cw500"  # Step-0 full-model train winner (= addition.full)
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
+
+[nc281_sparse_train.conditions.no_cohesion]
+label = "- Cohesion"
+color = "#CC79A7"
+ablate_flags = "cohesion+adhesion weight&constant = 0; drift_weight=100"
+tracking_uid = "nocoh2_dw100"  # sel=0.862 (= merge no_cohesion); cohesion inert
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_cohesion_config.toml"
+
+[nc281_sparse_train.conditions.no_drift]
+label = "- Drift"
+color = "#009E73"
+ablate_flags = "drift weight&constant = 0; base_edge_constant=-2000; cohesion=-250/225"
+tracking_uid = "nodrift2_cw250"  # sel=0.423 (drift removed, base-edge floor kept)
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_drift_config.toml"
+
+[nc281_sparse_train.conditions.no_all]
+label = "- All"
+color = "#999999"
+ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature = ablate_cohesion_adhesion = true"
+tracking_uid = "add_none_dc2000"  # reuse solver_addition none winner (empty model); sel=0.326
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_all_config.toml"
+
+# =============================================================================
+# NC281-sparse-label / 02_nuclei_denoised_test  (final eval; train params
+# copied verbatim -- NO tuning on test).
+# =============================================================================
+[nc281_sparse_test]
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_test"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/solver_ablation_results_nc281-sparse_test.png"
+suptitle = "NC28.1-sparse-label (test) Solver Ablation"
+metrics_filename = "track_metrics.json"
+reference = "first"
+condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]
+
+[nc281_sparse_test.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse_test.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse_test.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+[nc281_sparse_test.conditions.baseline]
+label = "Baseline"
+color = "#0072B2"
+ablate_flags = ""
+tracking_uid = "test_full"  # train baseline params on test; sel=0.858
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"
+
+[nc281_sparse_test.conditions.no_cohesion]
+label = "- Cohesion"
+color = "#CC79A7"
+ablate_flags = "cohesion+adhesion weight&constant = 0; drift_weight=100"
+tracking_uid = "test_nocoh2"  # sel=0.857 (= baseline; cohesion inert)
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_cohesion_config.toml"
+
+[nc281_sparse_test.conditions.no_drift]
+label = "- Drift"
+color = "#009E73"
+ablate_flags = "drift weight&constant = 0; base_edge_constant=-2000; cohesion=-250/225"
+tracking_uid = "test_nodrift2"  # sel=0.546 (drift removed; big drop from baseline 0.858)
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_drift_config.toml"
+
+[nc281_sparse_test.conditions.no_all]
+label = "- All"
+color = "#999999"
+ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature = ablate_cohesion_adhesion = true"
+tracking_uid = "test_none"  # reuse empty model; sel=0.316
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_all_config.toml"

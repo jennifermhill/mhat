@@ -269,3 +269,143 @@ seg_uid = "2026-05-07_11-15-00"
 seg_overrides = "skip_merges = true"
 tracking_uid = "2026-05-11_15-05-11_no_mrg_R2"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_merges_config.toml"
+
+# =============================================================================
+# NC281-sparse-label / 02_nuclei_denoised_train  (train/test split)
+# Segmentation varies per condition (user provides seg_uid per variant); tracking
+# is re-optimized PER segmentation over active solver costs only (drift, coh/adh
+# where they apply) -- never size_threshold. Point-matched track_metrics.json
+# carries both TrackOverlapMetrics (TE/TF/Purity) and BasicMetrics (recalls).
+# NOTE: if the merge figure should match the historical IoU@0.8 convention,
+# additionally produce track_metrics_iou08.json and switch the *_filename keys.
+# Fill seg_uid (from cluster) and tracking_uid (train winner) as they arrive.
+# =============================================================================
+[nc281_sparse_train]
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_train"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/merge_ablation_results_nc281-sparse_train.png"
+suptitle = "NC28.1-sparse-label (train) Merge Ablation"
+metrics_filename = "track_metrics.json"
+recall_metrics_filename = "track_metrics.json"
+recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/merge_ablation_recall_nc281-sparse_train.png"
+
+[nc281_sparse_train.recall_metrics.NodeRecall]
+display_name = "Node Recall"
+json_path = ["BasicMetrics", "Node Recall"]
+reduction = "scalar"
+
+[nc281_sparse_train.recall_metrics.EdgeRecall]
+display_name = "Edge Recall"
+json_path = ["BasicMetrics", "Edge Recall"]
+reduction = "scalar"
+
+[nc281_sparse_train.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse_train.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse_train.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+[nc281_sparse_train.conditions.baseline]
+label = "Baseline"
+seg_uid = "2026-07-02_10-32-29"
+seg_overrides = ""
+tracking_uid = "s0_dw100_cw500"  # Step-0 full-model train winner
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
+
+[nc281_sparse_train.conditions.no_cohesion]
+label = "- Cohesion"
+seg_uid = "2026-07-02_10-32-29"
+seg_overrides = ""
+tracking_uid = "nocoh2_dw100"  # = solver_ablation no_cohesion (cohesion+adhesion zeroed, drift_w=100); sel=0.862
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_cohesion_merge_config.toml"
+
+[nc281_sparse_train.conditions.no_affinities]
+label = "- Affinities"
+seg_uid = "2026-07-08_14-35-01"
+seg_overrides = "scoring_function = 'symmetric'"
+tracking_uid = "noaff2_dw200"  # cohesion+adhesion zeroed, drift_w=200; sel=0.862
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_affinities_config.toml"
+
+[nc281_sparse_train.conditions.no_merges]
+label = "- Merges"
+seg_uid = "2026-07-08_14-37-54"
+seg_overrides = "skip_merges = true"
+tracking_uid = "nomrg2_dw100"  # cohesion+adhesion zeroed, drift_w=100 (no-merge seg); sel=0.861
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_merges_config.toml"
+
+# =============================================================================
+# NC281-sparse-label / 02_nuclei_denoised_test  (final eval; train params
+# copied verbatim -- NO tuning on test). seg_uid = the test seg variants.
+# =============================================================================
+[nc281_sparse_test]
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_test"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/merge_ablation_results_nc281-sparse_test.png"
+suptitle = "NC28.1-sparse-label (test) Merge Ablation"
+metrics_filename = "track_metrics.json"
+recall_metrics_filename = "track_metrics.json"
+recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/merge_ablation_recall_nc281-sparse_test.png"
+
+[nc281_sparse_test.recall_metrics.NodeRecall]
+display_name = "Node Recall"
+json_path = ["BasicMetrics", "Node Recall"]
+reduction = "scalar"
+
+[nc281_sparse_test.recall_metrics.EdgeRecall]
+display_name = "Edge Recall"
+json_path = ["BasicMetrics", "Edge Recall"]
+reduction = "scalar"
+
+[nc281_sparse_test.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+
+[nc281_sparse_test.metrics.TF]
+display_name = "Track Fraction"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+reduction = "mean"
+
+[nc281_sparse_test.metrics.Purity]
+display_name = "Track Purity"
+json_path = ["TrackOverlapMetrics", "track_purity"]
+reduction = "scalar"
+
+[nc281_sparse_test.conditions.baseline]
+label = "Baseline"
+seg_uid = "2026-07-08_14-40-36"
+seg_overrides = ""
+tracking_uid = "test_full"  # train baseline params on test; sel=0.858
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"
+
+[nc281_sparse_test.conditions.no_cohesion]
+label = "- Cohesion"
+seg_uid = "2026-07-08_14-40-36"
+seg_overrides = ""
+tracking_uid = "test_nocoh2"  # = solver_ablation no_cohesion on test (coh+adh zeroed); sel=0.857
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_cohesion_merge_config.toml"
+
+[nc281_sparse_test.conditions.no_affinities]
+label = "- Affinities"
+seg_uid = "2026-07-08_14-42-25"
+seg_overrides = "scoring_function = 'symmetric'"
+tracking_uid = "test_noaff2"  # coh+adh zeroed, drift_w=200 on symmetric-scoring test seg; sel=0.846
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_affinities_config.toml"
+
+[nc281_sparse_test.conditions.no_merges]
+label = "- Merges"
+seg_uid = "2026-07-08_14-43-25"
+seg_overrides = "skip_merges = true"
+tracking_uid = "test_nomrg2"  # coh+adh zeroed, drift_w=100 on no-merge test seg; sel=0.850
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_merges_config.toml"

@@ -135,7 +135,17 @@ def main():
         d = costs[c].get("add", {}).get(tra, 0.0)
         return d - a  # add is +gain, abl is -loss -> essential = large spread
 
-    order = sorted(costs, key=spread)  # ascending -> largest spread on top
+    # Explicit top-to-bottom order from the TOML (`cost_order`, stripped cost keys)
+    # if given; any unlisted costs fall to the bottom, spread-sorted. Otherwise the
+    # default is spread-sorted with the largest spread on top. y=0 is the bottom
+    # row, so the plotting order is the reverse of top-to-bottom.
+    cost_order = abl.get("cost_order")
+    if cost_order:
+        listed = [c for c in cost_order if c in costs]
+        extras = sorted((c for c in costs if c not in listed), key=spread)
+        order = list(reversed(listed + extras))
+    else:
+        order = sorted(costs, key=spread)  # ascending -> largest spread on top
 
     n = len(metric_specs)
     fig, axes = plt.subplots(1, n, figsize=(4.2 * n + 1, 0.7 * len(order) + 2.2), sharey=True)

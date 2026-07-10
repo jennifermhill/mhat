@@ -265,10 +265,11 @@ or `last`=Full), and `xtick_rotation`. Output path comes from the TOML's
 still `<fill in>` produce a warning and are skipped, so partial-progress plotting
 works.
 
-Colors follow the Wong colorblind-friendly palette, consistent per concept
-across all figures: baseline/full `#0072B2`, intensity `#56B4E9`, volume
-`#E69F00`, drift `#009E73`, coh/adh `#CC79A7`, curvature `#D55E00`, all/none
-`#999999`.
+Colors follow the Wong colorblind-friendly palette, matched to the figure's cost
+concepts: drift/Flow `#009E73` (green), volume `#E69F00` (yellow),
+curvature/Momentum `#D55E00` (orange), intensity `#CC79A7` (pink), coh/adh
+`#56B4E9` (light blue), baseline/full `#0072B2` (blue), all/none `#999999`. Drift is labelled
+"Flow" and curvature "Momentum" to match the rest of the figure.
 
 > The old hardcoded `solver_ablation_figure_*.py` / `solver_addition_figure_*.py`
 > scripts are superseded by the TOML-driven `solver_figure.py` and can be removed

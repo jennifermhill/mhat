@@ -151,6 +151,60 @@ def fit_weights_standardized(
 
     return w_original
 
+def fit_weights_hamming_weighted(
+    solver,
+    gt_attribute,
+    regularizer_weight,
+    max_iterations,
+    eps,
+    hamming_cost_weight,
+):
+    """Fit weights with a Hamming cost term weighted by `hamming_cost_weight`.
+
+    This is a variant of motile.Solver.fit_weights that adds a weighted Hamming
+    cost to the soft margin loss. The Hamming cost penalizes misclassifications
+    in the ground truth, and the weight allows tuning its influence relative to
+    the other feature costs.
+
+    Returns the optimal weights in the original space.
+    """
+    features = solver.features.to_ndarray()
+    mask = np.zeros((solver.num_variables,), dtype=np.float32)
+    ground_truth = np.zeros((solver.num_variables,), dtype=np.float32)
+
+    for node, index in solver.get_variables(NodeSelected).items():
+        gt = solver.graph.nodes[node].get(gt_attribute, None)
+        if gt is not None:
+            mask[index] = 1.0
+            ground_truth[index] = gt
+    for edge, index in solver.get_variables(EdgeSelected).items():
+        gt = solver.graph.edges[edge].get(gt_attribute, None)
+        if gt is not None:
+            mask[index] = 1.0
+            ground_truth[index] = gt
+
+    loss = ssvm.SoftMarginLoss(
+        solver.constraints,
+        features.T,
+        ground_truth,
+        ssvm.HammingCosts(ground_truth, mask, weight=hamming_cost_weight),
+    )
+    bundle = ssvm.BundleMethod(
+        loss.value_and_gradient,
+        dims=features.shape[1],
+        regularizer_weight=regularizer_weight,
+        eps=eps,
+    )
+    w_optimal = bundle.optimize(max_iterations)
+
+    logger = logging.getLogger(__name__)
+    weight_names = list(solver.weights._weights_by_name.keys())
+    logger.info("Weights (with Hamming cost weight {:.4g}):".format(hamming_cost_weight))
+    for name, w in zip(weight_names, w_optimal):
+        logger.info(f"  {str(name):<35} weight={w:+.4g}")
+
+    return w_optimal
+
 
 def configure_logging(output_dir):
     """Surface structsvm bundle-method convergence output to a logfile only."""
@@ -328,6 +382,17 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
             regularizer_weight=config.get("ssvm_reg", 0.1),
             max_iterations=config.get("ssvm_max_iter", 100),
             eps=config.get("ssvm_eps", 1e-6),
+        )
+        solver.weights.from_ndarray(optimal_weights)
+    elif config.get("ssvm_hamming_weight", False):
+        print("Weighting Hamming cost in soft margin loss.")
+        optimal_weights = fit_weights_hamming_weighted(
+            solver,
+            gt_attribute="gt_selected",
+            regularizer_weight=config.get("ssvm_reg", 0.1),
+            max_iterations=config.get("ssvm_max_iter", 100),
+            eps=config.get("ssvm_eps", 1e-6),
+            hamming_cost_weight=config.get("ssvm_hamming_weight", 1.0),
         )
         solver.weights.from_ndarray(optimal_weights)
     else:

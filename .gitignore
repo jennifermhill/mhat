@@ -13,6 +13,7 @@ CLAUDE.md
 /funtracks
 /motile_tracker
 /ctc
+/structsvm
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

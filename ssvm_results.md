@@ -24,6 +24,54 @@ Code state as of this update: `fit_weights_ssvm.py` uses stock `solver.fit_weigh
 
 ---
 
+## 2026-07-17: Hamming-cost margin weight sweep
+
+Swept a scalar `weight` on the SSVM Hamming margin (new `weight` param on `structsvm.HammingCosts`, on the `hamming-costs-weight` branch of the in-repo `structsvm` clone; driven from config key `ssvm_hamming_weight` via `fit_weights_hamming_weighted` in `fit_weights_ssvm.py`). Four points on MDA231 / `01_cells`, all with `ssvm_reg = 0.1`, `ssvm_max_iter = 100`, `iogt_threshold = 0.5`, no post-hoc offset, no standardization. CTC matcher.
+
+The margin scales all learned cost magnitudes: `curvature_weight` grows 0.41 → 3.43 from w=1 → w=100, while `appear`/`disappear` constants shrink.
+
+| `ssvm_hamming_weight` | TRA | DET | LNK | fp_nodes | fn_nodes | fn_edges |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 0.1 | 0.605 | 0.638 | 0.366 | 99 | 118 | 208 |
+| **1.0** ⭐ | **0.797** | **0.841** | **0.478** | 149 | 37 | 172 |
+| 10.0 | 0.781 | 0.842 | 0.331 | 169 | 36 | 212 |
+| 100.0 | 0.767 | 0.842 | 0.213 | 179 | 36 | 241 |
+| *Hand-tuned (ref)* | 0.881 | 0.886 | 0.845 | 101 | 28 | — |
+
+**Consistency check:** `weight = 1.0` through the new code path reproduces the stock `fit_weights()` result exactly (TRA 0.7974, DET 0.8409, LNK 0.4783, fp 149, fn 37, fn_edges 172), confirming `weight=1` ≡ default path.
+
+**Conclusion:** TRA peaks at **w=1** and falls off on both sides — the response is non-monotonic with a single interior optimum at the stock setting. Small weight (0.1) collapses **detection** via under-selection (`fn_nodes` 37 → 118, `fp_nodes` drops to 99); large weight (≥10) collapses **linking** (LNK 0.478 → 0.213, `fn_edges` climbs) while DET stays flat (~0.842). No sweep point beats stock SSVM, and all remain short of hand-tuned (gap dominated by LNK). Scaling the Hamming margin is not a productive lever on this dataset.
+
+Reproducibility: fit configs `scripts/04_tracking/MDA231_ssvm_hamming_w{0p1,1,10,100}.toml`; outputs under `experiments/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_hamming_w{0p1,1,10,100}/`; eval configs under `experiments/tracking/Fluo-C3DL-MDA231/01_cells/eval_configs/`; metrics under `experiments/evaluation/Fluo-C3DL-MDA231/01_cells/ssvm_hamming_w*/track_metrics.json`.
+
+---
+
+## 2026-07-17: Does SSVM win on its own objective? (Hamming cost of the two solutions)
+
+**Question.** SSVM fits weights by minimizing a structured loss whose task term is the **Hamming distance** to the GT annotation (`gt_selected` on candidate nodes/edges), whereas hand-tuning was optimized against CTC TRA/DET. Hypothesis: the SSVM solution should have a *lower* Hamming cost than hand-tuned even though its TRA/DET are worse — i.e. the two methods each win their own game and the TRA gap is pure objective mismatch.
+
+**Method.** Rebuilt the MDA231 `01_cells` candidate graph (deterministic; no ILP solve), annotated `gt_selected` via `annotate_gt_on_candidate_graph` (`iogt_threshold=0.5`), then loaded the two already-saved solution graphs and counted, over all candidate variables, where each solution's selection differs from `gt_selected`. No re-solving. Baseline solution = `2026-05-15_10-55-56` (hand-tuned, TRA 0.881); SSVM solution = `ssvm_refit` (default all-features fit reproduced on Y:, TRA ≈ 0.797). Node-ID coverage of both solutions in the rebuilt candidate graph was 100%, and the direct mismatch count matches the affine form `H = Σgt + Σ(1−2·gt)·y` exactly.
+
+Candidate graph: **636 nodes + 1271 edges = 1907** labeled variables; GT-positive = **339 nodes, 298 edges**.
+
+| | selected nodes | selected edges | node FP | node FN | node Hamming | edge FP | edge FN | edge Hamming | **total Hamming** | normalized |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Hand-tuned** | 430 | 385 | 122 | 31 | 153 | 128 | 41 | 169 | **322** | 0.169 |
+| **SSVM (ssvm_refit)** | 464 | 263 | 187 | 62 | 249 | 128 | 163 | 291 | **540** | 0.283 |
+| Δ (ssvm − base) | +34 | −122 | +65 | +31 | +96 | 0 | +122 | +122 | **+218** | +0.114 |
+
+FP = selected but `gt=0` (over-selection); FN = unselected but `gt=1` (under-selection).
+
+**Result: hypothesis falsified.** The hand-tuned solution has the *lower* Hamming cost (322 vs 540) — SSVM loses even on the objective it is trained to minimize. So the TRA/DET gap is **not** a case of "each method wins its own metric": hand-tuning produces a solution that is closer to GT by Hamming *and* by CTC.
+
+**Where SSVM loses.** Almost entirely on **edges / linking**: it recovers only 135/298 GT edges (163 edge FN) vs the baseline's 257/298 (41 FN), while selecting far fewer edges overall (263 vs 385). This is the same under-linking that shows up as SSVM's low LNK (0.478 vs 0.845). It also over-selects nodes slightly (464 vs 430, +65 node FP).
+
+**Why SSVM can lose on its own loss.** `fit_weights` minimizes a *regularized structured max-margin* objective (`½·ssvm_reg·‖w‖² + hinge`), not the inference Hamming of the resulting weights. The learned weights are shrunk by `ssvm_reg=0.1` and balanced against the margin, so their inference argmin can sit well away from GT. Combined with heavy edge class imbalance (973 negative vs 298 positive candidate edges) and positive appear/disappear constants (~0.68) outweighing the weak learned edge-selection incentive, the inference optimum systematically under-links. The takeaway: the lever to close the gap is the **fit objective / edge-selection incentive** (margin balancing, per-class Hamming weighting, or the appear/disappear vs drift trade-off), not a post-hoc constant offset — consistent with the Hamming-margin sweep above, where no scalar reweighting beat the stock setting.
+
+Reproducibility: one-off analysis script (candidate rebuild + `gt_selected` annotation + solution load), not committed. Solution sources as above; the numbers are internally consistent (node TP+FN=339, edge TP+FN=298 for both).
+
+---
+
 The sections below document the pre-fix experiment series, kept for historical context.
 
 ## Primary comparison

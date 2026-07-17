@@ -14,26 +14,25 @@ with its experiment group (_merge / _solver).
 Also prints a (toml, experiment, dataset, condition) -> archive path mapping, used
 to add `config` pointers to the TOMLs (build_config_archive.py --print-map).
 
-Usage: python scripts/05_evaluation/build_config_archive.py [--print-map]
+Usage: python scripts/build_config_archive.py [--print-map]
 """
 import argparse
 import os
 import shutil
-import sys
 from collections import OrderedDict
 
 import toml
 
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EVAL = os.path.join(REPO, "experiments", "evaluation")
 SEG = os.path.join(REPO, "experiments", "segmentation")
 FLOW = os.path.join(REPO, "experiments", "opticalflow")
 CONFIGS = os.path.join(REPO, "configs")
 
 TOMLS = OrderedDict([
-    ("merge", "scripts/05_evaluation/merge_ablation.toml"),
-    ("solver_ablation", "scripts/05_evaluation/solver_ablation.toml"),
-    ("solver_addition", "scripts/05_evaluation/solver_addition.toml"),
+    ("merge", "configs/evaluation/merge_ablation.toml"),
+    ("solver_ablation", "configs/evaluation/solver_ablation.toml"),
+    ("solver_addition", "configs/evaluation/solver_addition.toml"),
 ])
 GROUP = {"merge": "merge", "solver_ablation": "solver", "solver_addition": "solver"}
 
@@ -43,7 +42,7 @@ def parse_refs():
     refs = []
     for ttype, rel in TOMLS.items():
         cfg = toml.load(os.path.join(REPO, rel))
-        for dskey, d in cfg.items():
+        for d in cfg.values():
             if not isinstance(d, dict) or "conditions" not in d:
                 continue
             exp, ds = d["experiment"], d["dataset_dir"]
@@ -70,7 +69,7 @@ def name_tracking(refs):
     for key, nm in base.items():
         name_to_keys.setdefault((key[0], key[1], nm), []).append(key)
     final = {}
-    for (exp, ds, nm), keys in name_to_keys.items():
+    for (_exp, _ds, nm), keys in name_to_keys.items():
         if len(keys) == 1:
             final[keys[0]] = nm
         else:

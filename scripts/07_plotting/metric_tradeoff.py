@@ -11,8 +11,8 @@ works for CTC datasets (DET / LNK / TRA) and overlap datasets (TE / Purity / TF)
 Defaults: x=DET|TE, y=LNK|Purity, colour=TRA|TF; override with --x/--y/--color.
 
 Usage:
-    python metric_tradeoff.py --ablation solver_ablation.toml \
-        --addition solver_addition.toml --dataset mda231 \
+    python scripts/07_plotting/metric_tradeoff.py --ablation configs/evaluation/solver_ablation.toml \
+        --addition configs/evaluation/solver_addition.toml --dataset mda231 \
         [--x DET --y LNK --color TRA] [--mode both|ablation|addition] [--output f.png]
 """
 import argparse

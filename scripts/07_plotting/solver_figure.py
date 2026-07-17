@@ -9,8 +9,8 @@ Unlike merge_ablation_figure.py, the condition set varies per dataset, so the
 order, labels, and per-bar colors are read from the TOML rather than hardcoded.
 
 Usage:
-    python solver_figure.py solver_ablation.toml --dataset mda231
-    python solver_figure.py solver_addition.toml --dataset nc281 --output foo.png
+    python scripts/07_plotting/solver_figure.py configs/evaluation/solver_ablation.toml --dataset mda231
+    python scripts/07_plotting/solver_figure.py configs/evaluation/solver_addition.toml --dataset nc281 --output foo.png
 """
 import argparse
 import json

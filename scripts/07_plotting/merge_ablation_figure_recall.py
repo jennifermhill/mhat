@@ -1,10 +1,12 @@
-"""Unified merge ablation plot.
+"""Merge ablation plot for Node Recall + Edge Recall (BasicMetrics).
 
-Reads tracking_uids and metric specs from merge_ablation.toml, loads each
-condition's track_metrics.json, and renders a bar chart per metric.
+Sibling of merge_ablation_figure.py. Reads condition tracking_uids from
+merge_ablation.toml as before, but uses the per-dataset
+``recall_metrics_filename`` and ``[<dataset>.recall_metrics]`` section
+to locate BasicMetrics JSON files and the metric specs to plot.
 
 Usage:
-    python merge_ablation_figure.py merge_ablation.toml --dataset {mda231,nc281}
+    python scripts/07_plotting/merge_ablation_figure_recall.py configs/evaluation/merge_ablation.toml --dataset {mda231,nc281,nc281_sparse}
 """
 import argparse
 import json
@@ -14,15 +16,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import toml
 
-# Fixed condition order so the palette mapping stays stable.
 CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
-# Wong colorblind-friendly palette, per-concept consistent across figures.
 PALETTE = {
-    "baseline": "#0072B2",       # blue
-    "no_cohesion": "#CC79A7",    # reddish purple
-    "no_affinities": "#F0E442",  # yellow
-    "no_merges": "#000000",      # black
+    "baseline": "#0072B2",
+    "no_cohesion": "#CC79A7",
+    "no_affinities": "#F0E442",
+    "no_merges": "#000000",
 }
 
 PLACEHOLDER = "<fill in>"
@@ -52,7 +52,7 @@ def load_condition_metrics(cond_cfg, dataset_cfg, metric_specs):
     tracking_uid = cond_cfg["tracking_uid"]
     if tracking_uid == PLACEHOLDER:
         return None
-    metrics_filename = dataset_cfg.get("metrics_filename", "track_metrics.json")
+    metrics_filename = dataset_cfg["recall_metrics_filename"]
     metrics_path = (
         Path(dataset_cfg["eval_base_dir"])
         / dataset_cfg["experiment"]
@@ -61,7 +61,7 @@ def load_condition_metrics(cond_cfg, dataset_cfg, metric_specs):
         / metrics_filename
     )
     if not metrics_path.is_file():
-        raise FileNotFoundError(f"track_metrics.json not found at {metrics_path}")
+        raise FileNotFoundError(f"recall metrics file not found at {metrics_path}")
     with open(metrics_path) as f:
         track_metrics = json.load(f)
     return {
@@ -73,8 +73,8 @@ def load_condition_metrics(cond_cfg, dataset_cfg, metric_specs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", help="Path to merge_ablation.toml")
-    parser.add_argument("--dataset", required=True, help="Top-level dataset key in the TOML (e.g., mda231, nc281)")
-    parser.add_argument("--output", default=None, help="Override output_png from TOML")
+    parser.add_argument("--dataset", required=True, help="Top-level dataset key in the TOML")
+    parser.add_argument("--output", default=None, help="Override output PNG path")
     args = parser.parse_args()
 
     config = toml.load(args.config)
@@ -82,10 +82,14 @@ def main():
         raise KeyError(f"dataset {args.dataset!r} not in {args.config}; available: {list(config.keys())}")
     dataset_cfg = config[args.dataset]
 
-    metric_specs = dataset_cfg["metrics"]
+    if "recall_metrics" not in dataset_cfg:
+        raise KeyError(f"dataset {args.dataset!r} missing [<dataset>.recall_metrics] section")
+    if "recall_metrics_filename" not in dataset_cfg:
+        raise KeyError(f"dataset {args.dataset!r} missing recall_metrics_filename")
+
+    metric_specs = dataset_cfg["recall_metrics"]
     conditions = dataset_cfg["conditions"]
 
-    # Collect per-condition values for each metric, in fixed order.
     labels = []
     colors = []
     metric_values = {key: [] for key in metric_specs}
@@ -131,10 +135,11 @@ def main():
                 fontsize=8,
             )
 
-    fig.suptitle(dataset_cfg["suptitle"], fontsize=14, fontweight="bold")
+    suptitle = dataset_cfg.get("recall_suptitle", dataset_cfg["suptitle"] + " — Recall")
+    fig.suptitle(suptitle, fontsize=14, fontweight="bold")
     plt.tight_layout()
 
-    output_path = Path(args.output or dataset_cfg["output_png"])
+    output_path = Path(args.output or dataset_cfg["recall_output_png"])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     print(f"Saved {output_path}")

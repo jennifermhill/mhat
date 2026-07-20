@@ -3,15 +3,16 @@
 Renders a single grouped bar chart: one x-group per dataset, two bars per group
 (hand-tuned, SSVM-fit). Because the primary metric differs per dataset (TRA for a
 CTC-matched dataset, TE for a point-matched one), each dataset carries its own
-`json_path`, and its group label names the metric. Bar colors encode the
+`json_path`, and its group label names the dataset. Bar colors encode the
 condition (hand-tuned vs SSVM), shared across datasets, so a single legend reads
-the whole figure.
+the whole figure. Formatting matches the MHAT-vs-other-methods figures: light
+y-grid, no bar outlines, darker blue first / orange second, no title.
 
 Config schema (TOML) -- see configs/evaluation/ssvm_vs_handtuned.toml:
 
     output_png   = "..."
-    suptitle     = "..."
-    ylabel       = "Score"
+    suptitle     = ""           # empty -> no title
+    ylabel       = "Score (higher is better)"
     dataset_order = ["mda231", "nc281_train"]
 
     [conditions.hand_tuned]  # shared style for the hand-tuned bar
@@ -19,10 +20,10 @@ Config schema (TOML) -- see configs/evaluation/ssvm_vs_handtuned.toml:
     color = "#0072B2"
     [conditions.ssvm]
     label = "SSVM-fit"
-    color = "#D55E00"
+    color = "#E69F00"
 
     [datasets.mda231]
-    name        = "MDA231 (01_cells)\nTRA"
+    name        = "MDA231"
     experiment  = "Fluo-C3DL-MDA231"
     dataset_dir = "01_cells"
     eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
@@ -118,8 +119,8 @@ def main():
             width,
             label=cond_style[ck]["label"],
             color=cond_style[ck]["color"],
-            edgecolor="black",
-            linewidth=0.5,
+            edgecolor="white",
+            linewidth=1.0,  # 2px surface gap between touching bars, no black outline
         )
         for bar, v in zip(bars, vals):
             if v is None:
@@ -129,15 +130,19 @@ def main():
                         rotation=90, ha="center", va="bottom", fontsize=7, color="#444")
             else:
                 ax.text(bar.get_x() + bar.get_width() / 2, v + 0.01, f"{v:.3f}",
-                        ha="center", va="bottom", fontsize=9)
+                        ha="center", va="bottom", fontsize=9, color="#333333")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(group_labels, fontsize=10)
+    ax.set_xticklabels(group_labels, fontsize=11)
     ax.set_ylim(0, 1.0)
-    ax.set_ylabel(cfg.get("ylabel", "Score"))
-    ax.set_title(cfg.get("suptitle", "Hand-tuned vs SSVM-fit"), fontsize=13, fontweight="bold")
+    ax.set_ylabel(cfg.get("ylabel", "Score (higher is better)"))
+    if cfg.get("suptitle"):
+        ax.set_title(cfg["suptitle"], fontsize=13, fontweight="bold")
     ax.legend(frameon=False, fontsize=10)
+
     ax.spines[["top", "right"]].set_visible(False)
+    ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)
+    ax.set_axisbelow(True)
     plt.tight_layout()
 
     output_path = Path(args.output or cfg["output_png"])

@@ -1,23 +1,25 @@
-# Hand-tuned vs SSVM-fit comparison figure — TEST sets (weight transfer).
-# Weights learned on each dataset's train set, applied as-is to the held-out test set.
-# MDA231: 01_cells-learned weights -> 02_cells. NC281: train-learned -> test.
-# Rendered by ssvm_vs_handtuned_figure.py.
+# Hand-tuned vs SSVM-fit comparison figure -- TEST sets (held-out).
+# Same weights as the train figure (hand-tuned params / SSVM weights both fit on
+# the train set), now evaluated on each dataset's held-out test set:
+#   MDA231 -> 02_cells (TRA, CTC matcher); NC281-sparse -> 02_nuclei_denoised_test
+#   (TE, point matcher). Rendered by ssvm_vs_handtuned_figure.py.
 
 output_png = "Y:/jennifer/mhat/experiments/evaluation/ssvm_vs_handtuned_test.png"
-suptitle = "Hand-tuned vs SSVM-fit weights (test sets)"
+suptitle = ""
 ylabel = "Score (higher is better)"
 dataset_order = ["mda231", "nc281_test"]
 
+# Colors match the MHAT-vs-other-methods figures: darker blue first, orange second.
 [conditions.hand_tuned]
 label = "Hand-tuned"
-color = "#E69F00"
+color = "#0072B2"
 
 [conditions.ssvm]
 label = "SSVM-fit"
-color = "#56B4E9"
+color = "#E69F00"
 
 [datasets.mda231]
-name = "MDA231 / 02_cells\n(TRA, CTC matcher)"
+name = "MDA231"
 experiment = "Fluo-C3DL-MDA231"
 dataset_dir = "02_cells"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
@@ -29,7 +31,7 @@ tracking_uid = "handtuned_test"
 tracking_uid = "ssvm_test"
 
 [datasets.nc281_test]
-name = "NC281-sparse / test\n(TE, point matcher)"
+name = "NC28.1"
 experiment = "NC281-sparse-label"
 dataset_dir = "02_nuclei_denoised_test"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"

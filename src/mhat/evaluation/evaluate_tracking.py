@@ -1,13 +1,14 @@
+import re
 from pathlib import Path
 
 import geff
 import numpy as np
+import tifffile
+import zarr
 
 from traccuracy import TrackingGraph, run_metrics
 import traccuracy.matchers as matchers
 import traccuracy.metrics as metrics
-
-from traccuracy.matchers._compute_overlap import get_labels_with_overlap, graph_bbox_and_labels
 
 from funtracks.import_export import import_from_geff
 
@@ -56,72 +57,84 @@ def remap_seg_to_track_ids(geff_path, graph, segmentation):
     return remapped
 
 
-def compute_seg_metric(gt_graph, pred_graph):
-    """Compute CTC SEG: average Jaccard index of matched reference objects.
+def _slice_seg_jaccard(ref, pred):
+    """Sum of CTC-SEG Jaccard scores over the reference objects in one 2D slice.
 
-    For each GT label, finds the predicted label with IoGT > 0.5 (the CTC
-    detection criterion). If matched, computes the Jaccard similarity index
-    (IoU) for that pair. Unmatched GT labels contribute J=0. SEG is the
-    mean of all J values across all GT labels in all frames.
+    For each reference label R (background 0 excluded), the predicted label S
+    with the largest overlap is a match iff |R ∩ S| > 0.5 |R| (the CTC detection
+    criterion, which at most one predicted label can satisfy). A matched pair
+    contributes J = |R ∩ S| / |R ∪ S|; unmatched reference objects contribute 0.
+
+    Returns (jaccard_sum, n_reference_objects).
     """
-    gt_label_key = gt_graph.label_key
-    pred_label_key = pred_graph.label_key
-    mask_gt = gt_graph.segmentation
-    mask_pred = pred_graph.segmentation
+    jaccard_sum = 0.0
+    ref_labels = np.unique(ref)
+    ref_labels = ref_labels[ref_labels != 0]
+    for rl in ref_labels:
+        ref_mask = ref == rl
+        ref_area = int(ref_mask.sum())
+        overlap_pred = pred[ref_mask]
+        overlap_pred = overlap_pred[overlap_pred != 0]
+        if overlap_pred.size:
+            vals, counts = np.unique(overlap_pred, return_counts=True)
+            best = vals[np.argmax(counts)]
+            inter = int(counts.max())
+            if inter > 0.5 * ref_area:  # CTC detection criterion
+                pred_area = int((pred == best).sum())
+                union = ref_area + pred_area - inter
+                jaccard_sum += inter / union
+    return jaccard_sum, len(ref_labels)
+
+
+def compute_ctc_seg(seg_gt_dir, pred_seg_path):
+    """Compute the CTC SEG measure from sparse ``man_seg`` reference slices.
+
+    The CTC segmentation ground truth (the ``SEG`` folder) is sparse: only a
+    subset of objects/slices are pixel-accurately annotated, unlike the coarse
+    ``TRA`` markers. For 3D data each file is a single annotated 2D z-slice
+    named ``man_seg_{t}_{z}.tif``; for 2D data it is ``man_seg{t}.tif``. Each
+    reference slice is scored against the matching slice of the predicted
+    segmentation, and SEG is the mean Jaccard over all annotated reference
+    objects.
+
+    Args:
+        seg_gt_dir: Path to the CTC ``SEG`` folder holding ``man_seg*.tif``.
+        pred_seg_path: Path to ``pred_seg.zarr`` with axes (t, z, y, x) for 3D
+            or (t, y, x) for 2D.
+
+    Returns:
+        The SEG score in [0, 1], or None if no reference slices were found.
+    """
+    seg_gt_dir = Path(seg_gt_dir)
+    pred_seg = zarr.open(str(pred_seg_path), mode="r")
+
+    # man_seg_{t}_{z}.tif (3D sparse slice) or man_seg{t}.tif (2D frame)
+    pat_3d = re.compile(r"man_seg_(\d+)_(\d+)\.tif$")
+    pat_2d = re.compile(r"man_seg_?(\d+)\.tif$")
 
     total_jaccard = 0.0
-    total_gt_labels = 0
+    total_objs = 0
+    n_slices = 0
+    for tif in sorted(seg_gt_dir.glob("man_seg*.tif")):
+        m3 = pat_3d.search(tif.name)
+        if m3 is not None:
+            t, z = int(m3.group(1)), int(m3.group(2))
+            pred_slice = np.asarray(pred_seg[t, z])
+        else:
+            m2 = pat_2d.search(tif.name)
+            if m2 is None:
+                continue
+            t = int(m2.group(1))
+            pred_slice = np.asarray(pred_seg[t])
+        ref = tifffile.imread(tif)
+        j_sum, n = _slice_seg_jaccard(ref, pred_slice)
+        total_jaccard += j_sum
+        total_objs += n
+        n_slices += 1
 
-    for t in range(gt_graph.start_frame, gt_graph.end_frame):
-        i = t - gt_graph.start_frame
-        gt_frame = mask_gt[i]
-        pred_frame = mask_pred[i]
-        gt_frame_nodes = gt_graph.nodes_by_frame[t]
-        pred_frame_nodes = pred_graph.nodes_by_frame[t]
-
-        gt_boxes, gt_labels = graph_bbox_and_labels(
-            gt_graph.graph, gt_frame_nodes, gt_label_key)
-        pred_boxes, pred_labels = graph_bbox_and_labels(
-            pred_graph.graph, pred_frame_nodes, pred_label_key)
-
-        # Get IoGT overlaps to determine matches (CTC detection criterion)
-        iogt_overlaps = get_labels_with_overlap(
-            gt_frame, pred_frame,
-            gt_boxes=gt_boxes, res_boxes=pred_boxes,
-            gt_labels=gt_labels, res_labels=pred_labels,
-            overlap="iogt",
-        )
-
-        # For each GT label, find the pred label with IoGT > 0.5
-        # (at most one can satisfy this per the CTC spec)
-        matched = {}  # gt_label -> pred_label
-        for gt_lab, pred_lab, iogt in iogt_overlaps:
-            if iogt > 0.5:
-                matched[gt_lab] = pred_lab
-
-        # Get IoU overlaps for the matched pairs
-        iou_overlaps = get_labels_with_overlap(
-            gt_frame, pred_frame,
-            gt_boxes=gt_boxes, res_boxes=pred_boxes,
-            gt_labels=gt_labels, res_labels=pred_labels,
-            overlap="iou",
-        )
-
-        # Index IoU by (gt_label, pred_label)
-        iou_map = {}
-        for gt_lab, pred_lab, iou in iou_overlaps:
-            iou_map[(gt_lab, pred_lab)] = iou
-
-        # Compute Jaccard for each GT label
-        gt_labels_set = {gt_graph.graph.nodes[n][gt_label_key]
-                         for n in gt_frame_nodes}
-        for lab in gt_labels_set:
-            if lab in matched:
-                total_jaccard += iou_map.get((lab, matched[lab]), 0.0)
-            # else: unmatched, contributes J=0
-            total_gt_labels += 1
-
-    return total_jaccard / total_gt_labels if total_gt_labels > 0 else 0.0
+    if n_slices == 0 or total_objs == 0:
+        return None
+    return total_jaccard / total_objs
 
 
 def evaluate_tracking(
@@ -223,11 +236,7 @@ def evaluate_tracking(
         metrics=[metrics_dict[m]() for m in metrics],
     )
 
-    if "ctc" in metrics and gt_seg is not None and pred_seg is not None:
-        seg_score = compute_seg_metric(gt_graph, pred_graph)
-        for r in results:
-            if r["metric"]["name"] == "CTCMetrics":
-                r["results"]["SEG"] = seg_score
-                break
-
+    # The CTC SEG measure uses the sparse `SEG` ground truth folder, not the
+    # coarse `TRA` markers loaded here, so it is computed separately by the
+    # caller (see compute_ctc_seg / run_evaluation).
     return results

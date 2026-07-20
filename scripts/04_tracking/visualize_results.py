@@ -141,8 +141,8 @@ def main(config, ground_truth: bool = False):
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\01_cells\\2026-03-16_16-23-04\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\Fluo-C3DL-MDA231\\02_cells\\2026-06-01_14-41-03\\config.toml"
     # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\03_nuclei\\2026-03-11_17-40-24\\config.toml"
     # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
     track_config = toml.load(path_to_config)
-    main(track_config, ground_truth=True)
+    main(track_config, ground_truth=False)

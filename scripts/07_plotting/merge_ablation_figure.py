@@ -4,7 +4,7 @@ Reads tracking_uids and metric specs from merge_ablation.toml, loads each
 condition's track_metrics.json, and renders a bar chart per metric.
 
 Usage:
-    python merge_ablation_figure.py merge_ablation.toml --dataset {mda231,nc281}
+    python scripts/07_plotting/merge_ablation_figure.py configs/evaluation/merge_ablation.toml --dataset {mda231,nc281}
 """
 import argparse
 import json

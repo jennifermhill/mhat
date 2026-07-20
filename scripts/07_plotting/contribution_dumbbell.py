@@ -18,8 +18,8 @@ files by stripping the no_/plus_ prefix (curvature has no ablation twin -> only
 its addition dot is drawn).
 
 Usage:
-    python contribution_dumbbell.py --ablation solver_ablation.toml \
-        --addition solver_addition.toml --dataset mda231 [--output foo.png]
+    python scripts/07_plotting/contribution_dumbbell.py --ablation configs/evaluation/solver_ablation.toml \
+        --addition configs/evaluation/solver_addition.toml --dataset mda231 [--output foo.png]
 """
 import argparse
 import json

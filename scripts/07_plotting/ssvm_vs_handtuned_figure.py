@@ -7,7 +7,7 @@ CTC-matched dataset, TE for a point-matched one), each dataset carries its own
 condition (hand-tuned vs SSVM), shared across datasets, so a single legend reads
 the whole figure.
 
-Config schema (TOML) -- see ssvm_vs_handtuned.toml:
+Config schema (TOML) -- see configs/evaluation/ssvm_vs_handtuned.toml:
 
     output_png   = "..."
     suptitle     = "..."
@@ -34,7 +34,7 @@ Config schema (TOML) -- see ssvm_vs_handtuned.toml:
     tracking_uid = "ssvm_refit"
 
 Usage:
-    python ssvm_vs_handtuned_figure.py ssvm_vs_handtuned.toml [--output foo.png]
+    python scripts/07_plotting/ssvm_vs_handtuned_figure.py configs/evaluation/ssvm_vs_handtuned.toml [--output foo.png]
 """
 import argparse
 import json

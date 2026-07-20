@@ -2,8 +2,15 @@
 *.ipynb
 /data
 /experiments
-/configs
 /workshop_paper
+
+# configs/ is version-controlled on this branch (unlike mhat_dicty).
+# Exclude the ssvm-specific evaluation configs — their figure scripts live on ssvm-fit, not here.
+/configs/evaluation/ssvm_merge_ablation.toml
+/configs/evaluation/ssvm_solver_ablation.toml
+/configs/evaluation/ssvm_solver_addition.toml
+/configs/evaluation/ssvm_vs_handtuned.toml
+/configs/evaluation/ssvm_vs_handtuned_test.toml
 
 # Claude files
 /.claude

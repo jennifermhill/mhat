@@ -7,7 +7,7 @@ import toml
 import geff
 import zarr
 
-from mhat.evaluation.evaluate_tracking import evaluate_tracking
+from mhat.evaluation.evaluate_tracking import compute_ctc_seg, evaluate_tracking
 from mhat.evaluation.from_ctc_to_geff import from_ctc_to_geff
 
 
@@ -17,6 +17,8 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
     pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
 
     (pred_graph, pred_metadata) = geff.read(pred_tracks_path)
+
+    ctc_gt = config.get("ctc_gt", "01_GT")
 
     # Check for CTC metrics
     if "ctc" in config.get("metrics", []):
@@ -41,6 +43,18 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
         metric_name = metric['metric']['name']
         metric_results = metric['results']
         track_metrics[metric_name] = metric_results
+
+    # CTC SEG uses the sparse `SEG` ground-truth folder (pixel-accurate,
+    # per-slice), not the coarse `TRA` markers used for TRA/DET/LNK matching.
+    if "ctc" in config.get("metrics", []):
+        seg_gt_dir = gt_data_dir / ctc_gt / "SEG"
+        pred_seg_path = pred_data_dir / "pred_seg.zarr"
+        if seg_gt_dir.is_dir() and pred_seg_path.exists():
+            seg_score = compute_ctc_seg(seg_gt_dir, pred_seg_path)
+            if seg_score is not None:
+                track_metrics.setdefault("CTCMetrics", {})["SEG"] = seg_score
+        else:
+            print(f"Skipping SEG: missing {seg_gt_dir} or {pred_seg_path}")
 
     return track_metrics
 

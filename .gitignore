@@ -2,8 +2,11 @@
 *.ipynb
 /data
 /experiments
-/configs
 /workshop_paper
+
+# configs/ is version-controlled on this branch (unlike mhat_dicty).
+# Exclude the trackmate figure config — its consumer script isn't on this branch.
+/configs/evaluation/trackmate_vs_mhat.toml
 
 # Claude files
 /.claude

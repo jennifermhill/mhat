@@ -1,0 +1,70 @@
+# SSVM-fit solver addition plot input (MDA231 01_cells).
+#
+# Same structure/labels/colors as solver_addition.toml, but every tracking_uid
+# points at an SSVM-fit run. Start from the empty model (None = only
+# appear/disappear fit) and add ONE cost at a time up to Full (the 4-cost SSVM
+# model). Note: None here == solver ablation's - All (both = ssvm_no_all).
+# Drive with:
+#   conda run -n mhat2 --no-capture-output \
+#     python scripts/05_evaluation/solver_figure.py \
+#     scripts/05_evaluation/ssvm_solver_addition.toml --dataset mda231
+
+[mda231]
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "01_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/solver_addition_results_mda231_ssvm.png"
+suptitle = "Fluo-C3DL-MDA231 Solver Addition (SSVM-fit)"
+reference = "last"
+xtick_rotation = 30
+# plus_curvature is intentionally omitted: curvature is an edge-PAIR cost and
+# cannot be SSVM-fit in isolation (collapses to an empty solution). See the SSVM
+# Weight Fitting section of CLAUDE.md.
+condition_order = ["none", "plus_cohesion", "plus_intensity", "plus_volume", "plus_drift", "full"]
+
+[mda231.metrics.TRA]
+display_name = "TRA"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+
+[mda231.metrics.DET]
+display_name = "DET"
+json_path = ["CTCMetrics", "DET"]
+reduction = "scalar"
+
+[mda231.metrics.LNK]
+display_name = "LNK"
+json_path = ["CTCMetrics", "LNK"]
+reduction = "scalar"
+
+[mda231.conditions.none]
+label = "None"
+color = "#999999"
+tracking_uid = "ssvm_no_all"
+
+[mda231.conditions.plus_cohesion]
+label = "+ Coh/Adh"
+color = "#CC79A7"
+tracking_uid = "ssvm_plus_cohesion"
+
+[mda231.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#56B4E9"
+tracking_uid = "ssvm_plus_intensity"
+
+[mda231.conditions.plus_volume]
+label = "+ Volume"
+color = "#E69F00"
+tracking_uid = "ssvm_plus_volume"
+
+# [mda231.conditions.plus_curvature] omitted -- see condition_order note above.
+
+[mda231.conditions.plus_drift]
+label = "+ Drift"
+color = "#009E73"
+tracking_uid = "ssvm_plus_drift"
+
+[mda231.conditions.full]
+label = "Full"
+color = "#0072B2"
+tracking_uid = "ssvm_full"

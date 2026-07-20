@@ -1,0 +1,63 @@
+# ssvm_no_all: SSVM weight-fitting config (auto-generated).
+# Initial weights/constants are 0 -- the bundle method starts at w=0 internally.
+# Active costs in the fit: (none -- appear/disappear only)
+
+# IO
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
+output_name = "ssvm_no_all"
+
+seg_result = "2026-04-03_11-09-49"
+flow_result = "2026-02-17_15-55-00"
+use_lk = false
+
+# ILP params (initial values for SSVM; overwritten with learned values)
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.0
+drift_constant = 0.0
+area_weight = 0.0
+area_constant = 0.0
+intensity_weight = 0.0
+intensity_constant = 0.0
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = 0.0
+cohesion_constant = 0.0
+adhesion_weight = 0.0
+adhesion_constant = 0.0
+appear_constant = 0.0
+disappear_constant = 0.0
+# No-features baseline: with only appear/disappear (positive) the ILP optimum is
+# the empty solution, so add_costs auto-adds a learnable per-edge base cost during
+# the fit. Its learned value is written back here (weight stays 0 -> constant-only,
+# so it transfers to the runtime base_edge as a pure per-edge offset).
+base_edge_constant = 0.0
+
+# cand graph creation params (same as MDA231_baseline.toml)
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 60
+size_threshold = 60
+
+# Confidence-based Z flow filtering
+z_flow_conf_threshold = 0.0
+z_flow_min_pass_pixels = 10
+
+# Ablation flags (true = cost excluded from the fit)
+ablate_drift = true
+ablate_area = true
+ablate_intensity = true
+ablate_curvature = true
+ablate_cohesion_adhesion = true
+
+# SSVM params
+ssvm_reg = 0.1
+ssvm_max_iter = 100
+ssvm_eps = 1.0e-6
+iogt_threshold = 0.5

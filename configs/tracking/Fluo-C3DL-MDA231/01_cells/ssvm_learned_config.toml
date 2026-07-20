@@ -1,0 +1,37 @@
+# Tracking on MDA231 01_cells using the SSVM weights learned on 01_cells.
+# This reproduces the SSVM-fit inference result on the TRAIN dataset, for
+# comparison against the 01_cells hand-tuned baseline.
+# Data / structural params: from 01_cells baseline_config.toml (same seg/flow/
+#   edge-distance/size-threshold used during the fit).
+# Cost weights + constants: from experiments/tracking/Fluo-C3DL-MDA231/01_cells/
+#   ssvm_fit/learned_weights.toml (fit exp_uid 2026-05-15_10-05-25).
+raw_base_dir = "Y:/jennifer/mhat/data/"
+input_base_dir = "Y:/jennifer/mhat/experiments/"
+output_base_dir = "Y:/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
+seg_result = "2026-04-03_11-09-49"
+flow_result = "2026-02-17_15-55-00"
+use_lk = false
+drift_distance = [ 0.0, 3.0, 6.0,]
+drift_weight = 0.025205871180887334
+drift_constant = -0.6747080726265144
+area_weight = 0.1142882316381032
+area_constant = -0.6747080726265144
+intensity_weight = -0.0011387868975627044
+intensity_constant = -0.6747080726265144
+curvature_weight = 0.41387928600281204
+curvature_constant = 0.13221104668585543
+cohesion_weight = -0.020574030324355636
+cohesion_constant = -0.08676406429279392
+adhesion_weight = -0.1407019155079296
+adhesion_constant = -0.08676406429279392
+appear_constant = 0.677087890773323
+disappear_constant = 0.6246494319454966
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 60
+size_threshold = 60

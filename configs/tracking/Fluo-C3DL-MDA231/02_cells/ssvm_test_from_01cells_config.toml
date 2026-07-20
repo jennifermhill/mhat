@@ -1,0 +1,39 @@
+# MDA231 02_cells (TEST) tracking using SSVM weights LEARNED on 01_cells (ssvm_refit).
+# Cross-dataset weight transfer: 01_cells-learned SSVM weights applied as-is to 02_cells.
+# Weights/constants copied verbatim from
+#   experiments/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_refit/learned_weights.toml.
+# Data/structural params from 02_cells baseline_config.toml (seg/flow are 02_cells').
+# NOTE: run_tracking.py writes to a hardcoded "test_run" dir; rename to "ssvm_test" after.
+raw_base_dir = "Y:/jennifer/mhat/data/"
+input_base_dir = "Y:/jennifer/mhat/experiments/"
+output_base_dir = "Y:/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "02_cells"
+seg_result = "2026-05-29_10-47-41"
+flow_result = "2026-05-29_10-59-37"
+use_lk = false
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.024702305535992494
+drift_constant = -0.6741682878787937
+area_weight = 0.11403913017085414
+area_constant = -0.6741682878787937
+intensity_weight = -0.001135904656813059
+intensity_constant = -0.6741682878787937
+curvature_weight = 0.41397937743293217
+curvature_constant = 0.1320844062279211
+cohesion_weight = -0.019367849483188877
+cohesion_constant = -0.08555804973211181
+adhesion_weight = -0.1394959030328655
+adhesion_constant = -0.08555804973211181
+appear_constant = 0.677754238709044
+disappear_constant = 0.6253158515901572
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 60
+size_threshold = 60
+z_flow_conf_threshold = 0.0
+z_flow_min_pass_pixels = 10
+exp_uid = "ssvm_test"

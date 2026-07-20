@@ -1,0 +1,39 @@
+# NC281-sparse 02_nuclei_denoised_test (TEST) tracking using SSVM weights LEARNED on
+# 02_nuclei_denoised_train (ssvm_fit). Cross train->test weight transfer.
+# Weights/constants copied verbatim from
+#   experiments/tracking/NC281-sparse-label/02_nuclei_denoised_train/ssvm_fit/learned_weights.toml.
+# Data/structural params from 02_nuclei_denoised_test baseline_config.toml (test seg/flow).
+# NOTE: run_tracking.py writes to a hardcoded "test_run" dir; rename to "ssvm_test" after.
+raw_base_dir = "Y:/jennifer/mhat/data/"
+input_base_dir = "Y:/jennifer/mhat/experiments/"
+output_base_dir = "Y:/jennifer/mhat/experiments/"
+experiment = "NC281-sparse-label"
+dataset = "02_nuclei_denoised_test"
+seg_result = "2026-07-08_14-40-36"
+flow_result = "2026-07-08_14-46-03"
+use_lk = false
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.24322485820272768
+drift_constant = -0.48652371036082165
+area_weight = 0.14084712500204405
+area_constant = -0.48652371036082165
+intensity_weight = 0.004440135930310333
+intensity_constant = -0.48652371036082165
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = -0.4042174165065714
+cohesion_constant = -0.2952714920530042
+adhesion_weight = -0.09695046296903718
+adhesion_constant = -0.2952714920530042
+appear_constant = 0.17997538902439159
+disappear_constant = 0.18346189530397405
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 35
+size_threshold = 0
+z_flow_conf_threshold = 1e-7
+z_flow_min_pass_pixels = 10
+exp_uid = "ssvm_test"

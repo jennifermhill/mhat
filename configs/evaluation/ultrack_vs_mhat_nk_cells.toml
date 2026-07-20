@@ -1,0 +1,39 @@
+# Ultrack vs MHAT comparison figure on primary_nk_cells / 01_cells.
+# Mirrors trackmate_vs_mhat.toml (NC281-sparse / train) but: (1) no track purity
+# -- sparse GT annotations make purity unreliable, so only TE and TF are shown;
+# (2) Ultrack replaces TrackMate. Ultrack results don't exist yet, so its
+# tracking_uid points at a not-yet-present directory and the figure renders its
+# bars empty ("no result") as a placeholder. MHAT = current best size80 result.
+# Rendered by trackmate_vs_mhat_figure.py (same script as the NC281 figure).
+
+output_png = "Y:/jennifer/mhat/experiments/evaluation/primary_nk_cells/01_cells/ultrack_vs_mhat_nk_cells.png"
+title = ""
+ylabel = "Score (higher is better)"
+
+experiment = "primary_nk_cells"
+dataset_dir = "01_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+
+# x-groups: target effectiveness and track fractions only (no track purity).
+metric_order = ["target_effectiveness", "track_fractions"]
+
+[metrics.target_effectiveness]
+label = "Target\neffectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+
+[metrics.track_fractions]
+label = "Track\nfractions"
+json_path = ["TrackOverlapMetrics", "track_fractions"]
+
+# series: Ultrack (values TBD -> empty bars) vs MHAT (current best, size80).
+method_order = ["ultrack", "mhat"]
+
+[methods.ultrack]
+label = "Ultrack"
+color = "#0072B2"
+tracking_uid = "ultrack"  # placeholder: no result yet -> renders as empty "no result" bars
+
+[methods.mhat]
+label = "MHAT"
+color = "#E69F00"
+tracking_uid = "size80"  # current best nk cells result

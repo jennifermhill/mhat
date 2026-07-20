@@ -5,7 +5,7 @@
 # Rendered by trackmate_vs_mhat_figure.py.
 
 output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/trackmate_vs_handtuned_nc281_sparse_train.png"
-title = "NC281-sparse / train: TrackMate vs MHAT"
+title = ""
 ylabel = "Score (higher is better)"
 
 experiment = "NC281-sparse-label"

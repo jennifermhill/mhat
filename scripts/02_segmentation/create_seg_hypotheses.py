@@ -241,9 +241,10 @@ if __name__ == "__main__":
     print(f"Loading data from {data_dir}")
     assert data_dir.is_dir()
 
-    current_datetime = datetime.datetime.now()
-    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    config["exp_uid"] = exp_uid
+    exp_uid = config.get("exp_uid")
+    if not exp_uid:
+        exp_uid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        config["exp_uid"] = exp_uid
 
     output_dir = output_base_dir / experiment / dataset / exp_uid
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -12,53 +12,86 @@ hurts every metric.
 
 Data provenance
 ---------------
-All values load live from each condition's track_metrics.json (CTCMetrics), so
-the 2026-07-20 SEG fix -- which required re-evaluating every non-baseline
-condition -- is reflected. tracking_uids are the mda231_02cells conditions in
-configs/evaluation/merge_ablation.toml. Palette matches merge_ablation_figure.py.
+Condition tracking_uids, labels, and the eval directory are read live from
+configs/evaluation/merge_ablation.toml (the mda231_02cells section by default),
+so this figure stays in sync with the other merge figures when the TOML's uids
+change. Values load from each condition's track_metrics.json (CTCMetrics), so the
+2026-07-20 SEG fix is reflected. SEG is used in place of LNK and isn't in the
+TOML metric list, so the three metrics are defined locally here; the palette is
+keyed by condition name to match merge_ablation_figure.py.
+
+Usage:
+    python scripts/07_plotting/merge_ablation_delta_mda231_02.py \
+        [config] [--dataset mda231_02cells] [--output foo.png]
 """
+import argparse
 import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import toml
 
-EVAL_DIR = Path(
-    "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells"
-)
+# Baseline first, then the three delta bars (matches merge_ablation_figure.py).
+CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
-BASELINE_UID = "2026-06-01_14-41-03"
-# label -> (tracking_uid, color)  (merge_ablation_figure.py Wong palette)
-CONDITIONS = [
-    ("- Coh/Adh",    "2026-06-25_15-22-14", "#CC79A7"),  # reddish purple
-    ("- Affinities", "2026-06-01_16-00-08", "#F0E442"),  # yellow
-    ("- Merges",     "2026-06-01_16-01-29", "#000000"),  # black
-]
-BASELINE_COLOR = "#0072B2"  # blue
+# Wong colorblind-friendly palette, per-concept, consistent with the other merge
+# figures. Baseline is the Δ=0 reference line, not a bar.
+PALETTE = {
+    "baseline": "#0072B2",       # blue
+    "no_cohesion": "#CC79A7",    # reddish purple
+    "no_affinities": "#F0E442",  # yellow
+    "no_merges": "#000000",      # black
+}
+
+# SEG replaces LNK here (all three read from CTCMetrics).
 METRICS = ["TRA", "DET", "SEG"]
 
 
-def load_ctc(uid):
-    path = EVAL_DIR / uid / "track_metrics.json"
+def load_ctc(eval_dir, uid):
+    path = eval_dir / uid / "track_metrics.json"
     return json.loads(path.read_text())["CTCMetrics"]
 
 
 def main():
-    base = load_ctc(BASELINE_UID)
-    # deltas[label][metric] = metric_condition - metric_baseline
-    deltas = {}
-    for label, uid, _ in CONDITIONS:
-        m = load_ctc(uid)
-        deltas[label] = {k: m[k] - base[k] for k in METRICS}
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("config", nargs="?",
+                        default="configs/evaluation/merge_ablation.toml",
+                        help="Path to merge_ablation.toml")
+    parser.add_argument("--dataset", default="mda231_02cells",
+                        help="Top-level dataset key in the TOML")
+    parser.add_argument("--output", default=None, help="Override output PNG path")
+    args = parser.parse_args()
+
+    config = toml.load(args.config)
+    if args.dataset not in config:
+        raise KeyError(f"dataset {args.dataset!r} not in {args.config}; "
+                       f"available: {list(config.keys())}")
+    dataset_cfg = config[args.dataset]
+    eval_dir = (
+        Path(dataset_cfg["eval_base_dir"])
+        / dataset_cfg["experiment"]
+        / dataset_cfg["dataset_dir"]
+    )
+    conditions = dataset_cfg["conditions"]
+
+    base = load_ctc(eval_dir, conditions["baseline"]["tracking_uid"])
+    # (label, color, deltas) for each non-baseline condition, in fixed order.
+    rows = []
+    for cond_name in CONDITION_ORDER[1:]:
+        cond = conditions[cond_name]
+        m = load_ctc(eval_dir, cond["tracking_uid"])
+        deltas = {k: m[k] - base[k] for k in METRICS}
+        rows.append((cond["label"], PALETTE[cond_name], deltas))
 
     x = np.arange(len(METRICS))
-    n = len(CONDITIONS)
+    n = len(rows)
     width = 0.8 / n
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    for i, (label, _uid, color) in enumerate(CONDITIONS):
+    for i, (label, color, deltas) in enumerate(rows):
         offset = (i - (n - 1) / 2) * width
-        heights = [deltas[label][k] for k in METRICS]
+        heights = [deltas[k] for k in METRICS]
         bars = ax.bar(x + offset, heights, width, label=label, color=color,
                       edgecolor="white", linewidth=1.0)
         for bar, v in zip(bars, heights):
@@ -66,16 +99,17 @@ def main():
                     rotation=90, ha="center", va="top",
                     fontsize=7.5, color="#333333")
 
-    ax.axhline(0, color=BASELINE_COLOR, linestyle="--", linewidth=1.0)
+    baseline_color = PALETTE["baseline"]
+    ax.axhline(0, color=baseline_color, linestyle="--", linewidth=1.0)
     ax.set_xticks(x)
     ax.set_xticklabels(METRICS, fontsize=12, fontweight="bold")
     ax.set_ylabel("Δ vs Baseline")
-    ymin = min(deltas[l][k] for l, _, _ in CONDITIONS for k in METRICS)
+    ymin = min(d[k] for _, _, d in rows for k in METRICS)
     ax.set_ylim(ymin * 1.25, abs(ymin) * 0.18)
 
-    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for _, _, c in CONDITIONS]
-    labels = [l for l, _, _ in CONDITIONS]
-    handles.append(plt.Line2D([], [], color=BASELINE_COLOR, linestyle="--",
+    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for _, c, _ in rows]
+    labels = [l for l, _, _ in rows]
+    handles.append(plt.Line2D([], [], color=baseline_color, linestyle="--",
                               linewidth=1.0))
     labels.append("Baseline (Δ=0)")
     ax.legend(handles, labels, frameon=False, loc="upper center",
@@ -87,7 +121,8 @@ def main():
     ax.set_axisbelow(True)
 
     fig.tight_layout()
-    out = EVAL_DIR / "merge_ablation_delta_mda231_02.png"
+    out = Path(args.output or eval_dir / "merge_ablation_delta_mda231_02.png")
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"Saved {out}")
 

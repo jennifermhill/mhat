@@ -8,8 +8,10 @@ figure; bars touch within a group.
 
 Data provenance
 ---------------
-* MHAT: loaded live from the 02_cells baseline eval (exp_uid 2026-06-01_14-41-03),
-  hand-tuned config transferred from 01_cells. TRA/DET/SEG read from
+* MHAT: loaded live from the 02_cells baseline eval. The baseline uid and eval
+  directory come from an ablation TOML (default: merge_ablation.toml
+  [mda231_02cells].conditions.baseline) so this figure tracks the same baseline
+  as the other 02_cells figures. TRA/DET/SEG read from that run's
   track_metrics.json so a re-eval (e.g. the 2026-07-20 SEG fix) is picked up.
 * CTC methods: public benchmark spreadsheets (snapshot 2025-08-15),
   CellTrackingBenchmark.xlsx / CellSegmentationBenchmark.xlsx. Method labels are
@@ -18,18 +20,34 @@ Data provenance
   not on identical sequences -- this is an informal positioning against the field).
   TRA is from the Cell Tracking Benchmark; DET from the Cell Segmentation
   Benchmark; SEG pooled across both (identical where they overlap).
+
+Usage:
+    python scripts/07_plotting/leaderboard_comparison_mda231.py \
+        [config] [--dataset mda231_02cells] [--output foo.png]
 """
+import argparse
 import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import toml
 
-# --- MHAT baseline eval (loaded live) -------------------------------------
-MHAT_METRICS_JSON = Path(
-    "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells"
-    "/2026-06-01_14-41-03/track_metrics.json"
-)
+# The MHAT baseline pointer is read from an ablation TOML (below); only the CTC
+# leaderboard values stay hardcoded -- they're external published scores.
+DEFAULT_CONFIG = "configs/evaluation/merge_ablation.toml"
+DEFAULT_DATASET = "mda231_02cells"
+
+
+def baseline_eval_dir(config_path, dataset):
+    """(eval_dir, baseline_uid) for the dataset's conditions.baseline."""
+    cfg = toml.load(config_path)[dataset]
+    eval_dir = (
+        Path(cfg["eval_base_dir"])
+        / cfg["experiment"]
+        / cfg["dataset_dir"]
+    )
+    return eval_dir, cfg["conditions"]["baseline"]["tracking_uid"]
 
 # --- CTC top-3 competitors per metric, MDA231 leaderboard averages (mean over
 # videos 01+02; snapshot 2025-08-15). Ordered highest -> lowest within each metric.
@@ -54,7 +72,17 @@ LEGEND_ORDER = ["MHAT", "KIT-GE (3)", "KTH-SE (1)", "LEID-NL", "CALT-US (*)", "M
 
 
 def main():
-    mhat = json.loads(MHAT_METRICS_JSON.read_text())["CTCMetrics"]
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("config", nargs="?", default=DEFAULT_CONFIG,
+                    help="ablation TOML providing the MHAT baseline uid")
+    ap.add_argument("--dataset", default=DEFAULT_DATASET,
+                    help="dataset key whose conditions.baseline uid to use")
+    ap.add_argument("--output", default=None, help="Override output PNG path")
+    args = ap.parse_args()
+
+    eval_dir, baseline_uid = baseline_eval_dir(args.config, args.dataset)
+    mhat = json.loads((eval_dir / baseline_uid / "track_metrics.json")
+                      .read_text())["CTCMetrics"]
 
     # Per group: MHAT first, then that metric's top-3 competitors (already sorted).
     groups = {m: [("MHAT", mhat[m])] + CTC_TOP3[m] for m in METRICS}
@@ -92,10 +120,7 @@ def main():
     ax.set_axisbelow(True)
 
     fig.tight_layout()
-    out = Path(
-        "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells"
-        "/leaderboard_comparison_mda231_02.png"
-    )
+    out = Path(args.output or eval_dir / "leaderboard_comparison_mda231_02.png")
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"Saved {out}")
 

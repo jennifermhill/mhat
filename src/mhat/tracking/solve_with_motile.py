@@ -211,7 +211,7 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(1))
 
-    add_costs(solver, config)
+    add_costs(solver, config, no_merges=no_merges)
 
     report_graph_statistics(config, graph)
 

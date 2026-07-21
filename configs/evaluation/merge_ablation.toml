@@ -46,33 +46,33 @@ reduction = "scalar"
 
 [mda231.conditions.baseline]
 label = "Baseline"
-seg_uid = "2026-04-03_11-09-49"
+seg_uid = "seg_cp_20260720_fs1_cpm6"
 seg_overrides = ""
 # Shared run for baseline (= solver baseline/full); identical config, full data on Y:.
-tracking_uid = "2026-05-15_10-55-56"
+tracking_uid = "trk_cp_20260720_fs1_cpm6"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "2026-04-03_11-09-49"
+seg_uid = "seg_cp_20260720_fs1_cpm6"
 seg_overrides = ""
 # Ported from the solver - Coh/Adh re-opt (new zero-cost ablation, drift_w=100,
 # z_flow absent). Same seg/flow as the merge baseline.
-tracking_uid = "2026-06-25_13-45-51"
+tracking_uid = "fs1cpm6_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 [mda231.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "2026-06-23_17-04-19"
+seg_uid = "fs1cpm6_seg_noaff"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "2026-06-23_17-15-28"
+tracking_uid = "fs1cpm6_no_affinities"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_affinities_config.toml"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-04-23_11-58-21"
+seg_uid = "fs1cpm6_seg_nomrg"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "2026-05-12_10-15-29"
+tracking_uid = "fs1cpm6_no_merges"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 
 # =============================================================================
@@ -115,31 +115,31 @@ reduction = "scalar"
 
 [mda231_02cells.conditions.baseline]
 label = "Baseline"
-seg_uid = "2026-05-29_10-47-41"
+seg_uid = "holdout_fs1_cpm6"
 seg_overrides = ""
-tracking_uid = "2026-06-01_14-41-03"
+tracking_uid = "holdout_fs1_cpm6"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "2026-05-29_10-47-41"
+seg_uid = "holdout_fs1_cpm6"
 seg_overrides = ""
 # Consolidated with the solver - Coh/Adh re-opt (drift_w=100, zeroed coh/adh).
-tracking_uid = "2026-06-25_15-22-14"
+tracking_uid = "fs1cpm6_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "2026-06-01_15-40-35"
+seg_uid = "fs1cpm6_seg_noaff"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "2026-06-01_16-00-08"
+tracking_uid = "fs1cpm6_no_affinities"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_affinities_config.toml"
 
 [mda231_02cells.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-06-01_15-44-39"
+seg_uid = "fs1cpm6_seg_nomrg"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "2026-06-01_16-01-29"
+tracking_uid = "fs1cpm6_no_merges"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_merges_config.toml"
 
 # =============================================================================

@@ -48,50 +48,50 @@ display_name = "LNK"
 json_path = ["CTCMetrics", "LNK"]
 reduction = "scalar"
 
-# mda231 ablation conditions re-optimized 2026-06-25 under weight/constant gating
-# (skip-entirely) on baseline seg 2026-04-03_11-09-49. Baseline = full model
-# (2026-04-15_09-42-38). `params` is informational; canonical config is in each
-# run's saved config.toml.
+# mda231 ablation conditions re-run 2026-07-21 under weight/constant gating
+# (skip-entirely) on the fs1_cpm6 baseline seg seg_cp_20260720_fs1_cpm6
+# (cellprob=-6, flow3D_smooth=1). Baseline = full model (trk_cp_20260720_fs1_cpm6).
+# `params` is informational; canonical config is in each run's saved config.toml.
 [mda231.conditions.baseline]
 label = "Baseline"
 color = "#0072B2"
 params = "full model"
-tracking_uid = "2026-05-15_10-55-56"
+tracking_uid = "trk_cp_20260720_fs1_cpm6"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_intensity]
 label = "- Intensity"
 color = "#CC79A7"
 params = "intensity zeroed; drift_constant=-3000"
-tracking_uid = "2026-06-25_13-01-26"
+tracking_uid = "fs1cpm6_no_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_intensity_config.toml"
 
 [mda231.conditions.no_volume]
 label = "- Volume"
 color = "#E69F00"
 params = "area zeroed; drift_constant=-4000"
-tracking_uid = "2026-06-25_13-19-59"
+tracking_uid = "fs1cpm6_no_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_volume_config.toml"
 
 [mda231.conditions.no_drift]
 label = "- Flow"
 color = "#009E73"
 params = "drift zeroed; area_constant=-3500"
-tracking_uid = "2026-06-25_13-34-44"
+tracking_uid = "fs1cpm6_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_drift_config.toml"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
 color = "#56B4E9"
 params = "cohesion+adhesion zeroed; drift_weight=100"
-tracking_uid = "2026-06-25_13-45-51"
+tracking_uid = "fs1cpm6_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 [mda231.conditions.no_all]
 label = "- All"
 color = "#999999"
 params = "all feature costs zeroed; base_edge_constant=-1000"
-tracking_uid = "2026-06-25_13-56-47"
+tracking_uid = "fs1cpm6_no_all"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_all_config.toml"
 
 # =============================================================================
@@ -124,50 +124,50 @@ display_name = "LNK"
 json_path = ["CTCMetrics", "LNK"]
 reduction = "scalar"
 
-# Non-baseline conditions transferred 2026-06-25 from the re-optimized 01_cells
-# solver params (weight/constant gating, skip-entirely), run on the 02_cells
-# baseline seg 2026-05-29_10-47-41 + flow 2026-05-29_10-59-37. Baseline reuses the
-# merge baseline run 2026-06-01_14-41-03 (full model).
+# Non-baseline conditions transferred from the 01_cells solver params (weight/
+# constant gating, skip-entirely, same weights), re-run 2026-07-21 on the 02_cells
+# fs1_cpm6 baseline seg holdout_fs1_cpm6 (cellprob=-6, flow3D_smooth=1) + flow
+# 2026-05-29_10-59-37. Baseline = full model (holdout_fs1_cpm6).
 [mda231_02cells.conditions.baseline]
 label = "Baseline"
 color = "#0072B2"
 params = "full model"
-tracking_uid = "2026-06-01_14-41-03"
+tracking_uid = "holdout_fs1_cpm6"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_intensity]
 label = "- Intensity"
 color = "#CC79A7"
 params = "intensity zeroed; drift_constant=-3000"
-tracking_uid = "2026-06-25_15-06-03"
+tracking_uid = "fs1cpm6_no_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_intensity_config.toml"
 
 [mda231_02cells.conditions.no_volume]
 label = "- Volume"
 color = "#E69F00"
 params = "area zeroed; drift_constant=-4000"
-tracking_uid = "2026-06-25_15-11-31"
+tracking_uid = "fs1cpm6_no_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_volume_config.toml"
 
 [mda231_02cells.conditions.no_drift]
 label = "- Flow"
 color = "#009E73"
 params = "drift zeroed; area_constant=-3500"
-tracking_uid = "2026-06-25_15-16-55"
+tracking_uid = "fs1cpm6_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_drift_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
 color = "#56B4E9"
 params = "cohesion+adhesion zeroed; drift_weight=100"
-tracking_uid = "2026-06-25_15-22-14"
+tracking_uid = "fs1cpm6_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_all]
 label = "- All"
 color = "#999999"
 params = "all feature costs zeroed; base_edge_constant=-1000"
-tracking_uid = "2026-06-25_15-27-31"
+tracking_uid = "fs1cpm6_no_all"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_all_config.toml"
 
 # =============================================================================

@@ -49,57 +49,57 @@ display_name = "LNK"
 json_path = ["CTCMetrics", "LNK"]
 reduction = "scalar"
 
-# mda231 addition conditions re-optimized 2026-06-25 under weight/constant gating
-# on baseline seg 2026-04-03_11-09-49. The active term is set; all other costs are
-# zeroed (skipped). None uses base_edge_constant (= - All). Full = the full model
-# (2026-04-15_09-42-38). `note` is informational.
+# mda231 addition conditions re-run 2026-07-21 on the fs1_cpm6 baseline seg
+# seg_cp_20260720_fs1_cpm6 (cellprob=-6, flow3D_smooth=1). The active term is set;
+# all other costs are zeroed (skipped). None uses base_edge_constant (= - All).
+# Full = the full model (trk_cp_20260720_fs1_cpm6). `note` is informational.
 [mda231.conditions.none]
 label = "None"
 color = "#999999"
 note = "base_edge_constant=-1000 (identical to - All)"
-tracking_uid = "2026-06-25_11-07-43"
+tracking_uid = "fs1cpm6_none"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/none_config.toml"
 
 [mda231.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#56B4E9"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "2026-06-25_14-37-13"
+tracking_uid = "fs1cpm6_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_cohesion_config.toml"
 
 [mda231.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#CC79A7"
 note = "active: intensity (w=2, c=-1000)"
-tracking_uid = "2026-06-25_11-46-22"
+tracking_uid = "fs1cpm6_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_intensity_config.toml"
 
 [mda231.conditions.plus_volume]
 label = "+ Volume"
 color = "#E69F00"
 note = "active: area (w=1000, c=-500)"
-tracking_uid = "2026-06-25_12-04-53"
+tracking_uid = "fs1cpm6_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_volume_config.toml"
 
 [mda231.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#D55E00"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "2026-06-25_12-21-17"
+tracking_uid = "fs1cpm6_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_curvature_config.toml"
 
 [mda231.conditions.plus_drift]
 label = "+ Flow"
 color = "#009E73"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "2026-06-25_12-39-18"
+tracking_uid = "fs1cpm6_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_drift_config.toml"
 
 [mda231.conditions.full]
 label = "Full"
 color = "#0072B2"
 note = "full tuned baseline (all costs active)"
-tracking_uid = "2026-05-15_10-55-56"
+tracking_uid = "trk_cp_20260720_fs1_cpm6"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 # =============================================================================
@@ -131,57 +131,57 @@ display_name = "LNK"
 json_path = ["CTCMetrics", "LNK"]
 reduction = "scalar"
 
-# Conditions transferred 2026-06-25 from the re-optimized 01_cells addition params
-# (weight/constant gating), run on the 02_cells baseline seg 2026-05-29_10-47-41 +
-# flow 2026-05-29_10-59-37. None uses base_edge_constant (= - All). Full reuses the
-# merge baseline run 2026-06-01_14-41-03.
+# Conditions transferred from the 01_cells addition params (weight/constant gating,
+# same weights), re-run 2026-07-21 on the 02_cells fs1_cpm6 baseline seg
+# holdout_fs1_cpm6 (cellprob=-6, flow3D_smooth=1) + flow 2026-05-29_10-59-37. None
+# uses base_edge_constant (= - All). Full = holdout_fs1_cpm6.
 [mda231_02cells.conditions.none]
 label = "None"
 color = "#999999"
 note = "base_edge_constant=-1000 (identical to - All)"
-tracking_uid = "2026-06-25_15-32-46"
+tracking_uid = "fs1cpm6_none"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/none_config.toml"
 
 [mda231_02cells.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#56B4E9"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "2026-06-25_15-37-58"
+tracking_uid = "fs1cpm6_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_cohesion_config.toml"
 
 [mda231_02cells.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#CC79A7"
 note = "active: intensity (w=2, c=-1000)"
-tracking_uid = "2026-06-25_15-43-31"
+tracking_uid = "fs1cpm6_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_intensity_config.toml"
 
 [mda231_02cells.conditions.plus_volume]
 label = "+ Volume"
 color = "#E69F00"
 note = "active: area (w=1000, c=-500)"
-tracking_uid = "2026-06-25_15-48-34"
+tracking_uid = "fs1cpm6_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_volume_config.toml"
 
 [mda231_02cells.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#D55E00"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "2026-06-25_15-53-32"
+tracking_uid = "fs1cpm6_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_curvature_config.toml"
 
 [mda231_02cells.conditions.plus_drift]
 label = "+ Flow"
 color = "#009E73"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "2026-06-25_15-58-43"
+tracking_uid = "fs1cpm6_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_drift_config.toml"
 
 [mda231_02cells.conditions.full]
 label = "Full"
 color = "#0072B2"
 note = "full tuned baseline (all costs active)"
-tracking_uid = "2026-06-01_14-41-03"
+tracking_uid = "holdout_fs1_cpm6"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 # =============================================================================

@@ -5,7 +5,7 @@ dataset = "02_cells"
 overwrite = false
 merge_thresholds = [ 1.0,]
 skip_merges = false
-exp_uid = "2026-06-01_15-40-35"
+exp_uid = "fs1cpm6_seg_noaff"
 
 [seg_params]
 seg_method = "cellpose"
@@ -21,6 +21,7 @@ scoring_function = "symmetric"
 
 [seg_params.cellpose_params]
 flow_threshold = 0.4
-cellprob_threshold = -3.0
+cellprob_threshold = -6
 batch_size = 32
 do_3D = true
+flow3D_smooth = 1

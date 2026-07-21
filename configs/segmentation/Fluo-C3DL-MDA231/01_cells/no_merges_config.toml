@@ -5,7 +5,7 @@ dataset = "01_cells"
 overwrite = false
 merge_thresholds = [ 1.0,]
 skip_merges = true
-exp_uid = "2026-04-23_11-58-21"
+exp_uid = "fs1cpm6_seg_nomrg"
 
 [seg_params]
 seg_method = "cellpose"
@@ -18,3 +18,10 @@ neighborhood = [ [ 0, 0, 1,], [ 0, 1, 0,], [ 1, 0, 0,],]
 
 [waterz_params]
 scoring_function = "random"
+
+[seg_params.cellpose_params]
+cellprob_threshold = -6
+flow3D_smooth = 1
+do_3D = true
+batch_size = 32
+flow_threshold = 0.4

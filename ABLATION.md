@@ -2,7 +2,11 @@
 
 Branch-specific instructions for running ablation experiments on the `seg_ablation` branch.
 
-> **Branch note**: The `ablate_*` flags in `scripts/04_tracking/tracking_config.toml` and the `skip_merges` / `scoring_function = "symmetric"` segmentation overrides only exist on `seg_ablation` (added in commit `9271610`). Running these experiments from `main` will fail.
+> **Branch note**: The `skip_merges` / `scoring_function = "symmetric"` segmentation overrides only exist on `seg_ablation` and its descendants (added in commit `9271610`). Running these experiments from `main` will fail.
+
+> **Superseded 2026-07-29 — the `ablate_*` flags are gone.** Commit `9ff60e6` removed them; `add_costs` now skips a cost iff its **weight and constant are both 0**. Every `ablate_cohesion_adhesion = true` in this file and in the archived configs is **dead** — a run carrying it alongside `cohesion_weight = 2000` actually solved with cohesion fully active. Zero the weight *and* the constant instead. This bit the MDA231 `- Affinities` condition, which ran with coh/adh on while `- Coh/Adh` and `- Merges` had them off.
+
+> **Path note 2026-07-29**: the figure TOMLs moved to `configs/evaluation/` and the plotting scripts to `scripts/07_plotting/`; `build_config_archive.py` is at `scripts/`. Paths below that say `scripts/05_evaluation/` are stale.
 
 ---
 
@@ -12,12 +16,12 @@ The merge ablation experiment compares four conditions to isolate the contributi
 
 ### The four conditions
 
-| Condition | Segmentation | `seg_config.toml` overrides | Tracking flag |
+| Condition | Segmentation | `seg_config.toml` overrides | Tracking cohesion/adhesion |
 |-----------|--------------|------------------------------|---------------|
-| `baseline` | reuse current best seg | (none — default) | `ablate_cohesion_adhesion = false` |
-| `- cohesion` | same seg as baseline | (none — default) | `ablate_cohesion_adhesion = true` |
-| `- affinities` | regenerate | `scoring_function = "symmetric"` (under `[waterz_params]`) | `ablate_cohesion_adhesion = true` |
-| `- merges` | regenerate | `skip_merges = true` | `ablate_cohesion_adhesion = true` |
+| `baseline` | reuse current best seg | (none — default) | active (tuned weights) |
+| `- cohesion` | same seg as baseline | (none — default) | `cohesion_weight = cohesion_constant = adhesion_weight = adhesion_constant = 0` |
+| `- affinities` | regenerate | `scoring_function = "symmetric"` (under `[waterz_params]`) | all four zeroed |
+| `- merges` | regenerate | `skip_merges = true` | all four zeroed (also force-skipped by `no_merges=True`, which `run_tracking.py` infers from the empty merge history) |
 
 ### Recipe per condition
 
@@ -33,7 +37,7 @@ All commands run from the repo root in the `mhat-sandbox` conda env (`conda run 
 
 4. Edit `scripts/04_tracking/tracking_config.toml`:
    - Set `seg_result` to the `seg_uid` for this condition (baseline and `- cohesion` share the same seg_uid).
-   - Set `ablate_cohesion_adhesion = true` for the three non-baseline conditions; `false` for baseline.
+   - Zero `cohesion_weight`, `cohesion_constant`, `adhesion_weight`, `adhesion_constant` for the three non-baseline conditions; leave them at the tuned values for baseline.
 5. Run tracking: `python scripts/04_tracking/run_tracking.py scripts/04_tracking/tracking_config.toml`.
 6. Read the `exp_uid` from `experiments/tracking/<experiment>/<dataset>/test_run/config.toml`.
 7. Update `scripts/05_evaluation/eval_config.toml` — set `track_result` to that `exp_uid`.

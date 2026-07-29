@@ -125,7 +125,7 @@ All commands run from the repo root. **On `Y:` use the `mhat2` env**
 6. Confirm `experiments/evaluation/<experiment>/<dataset>/<exp_uid>/<metrics_file>.json`
    was written.
 7. Record the `tracking_uid` in the matching TOML
-   (`scripts/05_evaluation/solver_ablation.toml` or `solver_addition.toml`),
+   (`configs/evaluation/solver_ablation.toml` or `solver_addition.toml`),
    under the dataset and condition.
 
 ---
@@ -135,8 +135,8 @@ All commands run from the repo root. **On `Y:` use the `mhat2` env**
 The single source of truth for which `tracking_uid` corresponds to each
 (dataset, condition) is the per-experiment TOML:
 
-- `scripts/05_evaluation/solver_ablation.toml`
-- `scripts/05_evaluation/solver_addition.toml`
+- `configs/evaluation/solver_ablation.toml`
+- `configs/evaluation/solver_addition.toml`
 
 We store `tracking_uid` and a `config` pointer (to the archived static config —
 see Config archive below) per condition; the canonical ILP parameters live in
@@ -187,6 +187,20 @@ sparse-label solver runs (done on the cluster) are reachable here.
   (all feature costs zeroed + a tuned negative `base_edge_constant`), set from the
   01_cells mini-optimization.
 
+> **Superseded (2026-07-29) — MDA231 re-optimization on the new segmentation.**
+> The 2026-07-21 `fs1_cpm6` runs re-ran every condition on the improved MDA231
+> segmentation but **kept the ILP weights tuned on the old one**. That left the
+> full model beaten by two of its own ablations on 01_cells (`- Coh/Adh` 0.9090
+> and `+ Momentum` 0.9089 vs Baseline 0.9061; on 02_cells `- Intensity` 0.9419 vs
+> 0.9369), i.e. negative measured contributions. Every condition — Baseline
+> included — is being re-swept on 01_cells via
+> `configs/sweeps/mda231_01cells_stage{A,B}.toml`, then transferred verbatim to
+> 02_cells. Two definitional fixes went in at the same time: the dead
+> `ablate_cohesion_adhesion = true` flag meant `- Affinities` had actually been
+> solving with cohesion/adhesion **active**, so it now zeroes them like the other
+> merge-ablated bars; and `- Merges` states the zeros explicitly rather than
+> relying on `no_merges=True`.
+
 > **Superseded (2026-06-25):** the per-condition values above were the original
 > back-fill. **mda231 (01_cells and 02_cells) has since been re-optimized** under
 > the new weight/constant gating (see Implementation note) — 01_cells via a
@@ -230,10 +244,10 @@ configs/
 
 ```
 conda run -n mhat2 --no-capture-output \
-  python scripts/05_evaluation/build_config_archive.py
+  python scripts/build_config_archive.py
 ```
 
-`build_config_archive.py` parses the three TOMLs, dedups by `tracking_uid`,
+`scripts/build_config_archive.py` parses the three TOMLs, dedups by `tracking_uid`,
 applies the naming rule above, and copies each run's saved config verbatim
 (asserting byte-identical). The per-condition `config` pointers in the TOMLs use
 deterministic paths, so a rebuild keeps them valid without re-inserting; pass
@@ -252,8 +266,8 @@ One generic script drives both experiments (the TOML schema is identical):
 
 ```
 conda run -n mhat2 --no-capture-output \
-  python scripts/05_evaluation/solver_figure.py \
-  scripts/05_evaluation/solver_ablation.toml \
+  python scripts/07_plotting/solver_figure.py \
+  configs/evaluation/solver_ablation.toml \
   --dataset {mda231,mda231_02cells,nc281,nc281_sparse}
 ```
 
@@ -271,6 +285,6 @@ curvature/Momentum `#D55E00` (orange), intensity `#CC79A7` (pink), coh/adh
 `#56B4E9` (light blue), baseline/full `#0072B2` (blue), all/none `#999999`. Drift is labelled
 "Flow" and curvature "Momentum" to match the rest of the figure.
 
-> The old hardcoded `solver_ablation_figure_*.py` / `solver_addition_figure_*.py`
-> scripts are superseded by the TOML-driven `solver_figure.py` and can be removed
+> The old hardcoded `scripts/07_plotting/solver_ablation_figure_*.py` /
+> `solver_addition_figure_*.py` scripts are superseded by the TOML-driven `solver_figure.py` and can be removed
 > once their numbers are reproduced through the new pipeline.

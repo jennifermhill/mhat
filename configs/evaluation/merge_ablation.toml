@@ -10,6 +10,23 @@
 # =============================================================================
 # Fluo-C3DL-MDA231 / 01_cells
 # =============================================================================
+# ---------------------------------------------------------------------------
+# 2026-07-29 re-optimization. The 2026-07-21 fs1_cpm6 runs re-ran every condition
+# on the improved segmentation but kept the ILP weights tuned on the OLD one,
+# which left two ablations beating the full model. Every condition was re-swept
+# on 01_cells (sweeps figopt0729A..G, ~200 runs; specs in configs/sweeps/) and
+# the winners transferred verbatim to 02_cells. uids are now fs1cpm6v2_<cond>;
+# the exact parameters per bar are in configs/sweeps/mda231_0{1,2}_cells_final.toml
+# and in each run's saved config.toml. Baseline 01_cells 0.9061 -> 0.9122.
+#
+# Two definitional fixes went in with it: the retired ablate_cohesion_adhesion
+# flag meant `- Affinities` had actually been solving with cohesion/adhesion
+# ACTIVE, and it plus `- Merges` also carried z_flow_conf_threshold = 0.0, which
+# no other condition sets and which is NOT a no-op (the 3D flow zarr does have a
+# confidence array, so Z flow was being gated). Both are gone, so every merge bar
+# now differs from Baseline in exactly one way.
+# ---------------------------------------------------------------------------
+
 [mda231]
 experiment = "Fluo-C3DL-MDA231"
 dataset_dir = "01_cells"
@@ -49,7 +66,7 @@ label = "Baseline"
 seg_uid = "seg_cp_20260720_fs1_cpm6"
 seg_overrides = ""
 # Shared run for baseline (= solver baseline/full); identical config, full data on Y:.
-tracking_uid = "trk_cp_20260720_fs1_cpm6"
+tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_cohesion]
@@ -58,21 +75,21 @@ seg_uid = "seg_cp_20260720_fs1_cpm6"
 seg_overrides = ""
 # Ported from the solver - Coh/Adh re-opt (new zero-cost ablation, drift_w=100,
 # z_flow absent). Same seg/flow as the merge baseline.
-tracking_uid = "fs1cpm6_no_cohesion"
+tracking_uid = "fs1cpm6v2_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 [mda231.conditions.no_affinities]
 label = "- Affinities"
 seg_uid = "fs1cpm6_seg_noaff"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "fs1cpm6_no_affinities"
+tracking_uid = "fs1cpm6v2_no_affinities"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_affinities_config.toml"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
 seg_uid = "fs1cpm6_seg_nomrg"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "fs1cpm6_no_merges"
+tracking_uid = "fs1cpm6v2_no_merges"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 
 # =============================================================================
@@ -117,7 +134,7 @@ reduction = "scalar"
 label = "Baseline"
 seg_uid = "holdout_fs1_cpm6"
 seg_overrides = ""
-tracking_uid = "holdout_fs1_cpm6"
+tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
@@ -125,21 +142,21 @@ label = "- Coh/Adh"
 seg_uid = "holdout_fs1_cpm6"
 seg_overrides = ""
 # Consolidated with the solver - Coh/Adh re-opt (drift_w=100, zeroed coh/adh).
-tracking_uid = "fs1cpm6_no_cohesion"
+tracking_uid = "fs1cpm6v2_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_affinities]
 label = "- Affinities"
 seg_uid = "fs1cpm6_seg_noaff"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "fs1cpm6_no_affinities"
+tracking_uid = "fs1cpm6v2_no_affinities"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_affinities_config.toml"
 
 [mda231_02cells.conditions.no_merges]
 label = "- Merges"
 seg_uid = "fs1cpm6_seg_nomrg"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "fs1cpm6_no_merges"
+tracking_uid = "fs1cpm6v2_no_merges"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_merges_config.toml"
 
 # =============================================================================

@@ -124,3 +124,102 @@ vs baseline seg (affinity): cohesion mean=0.984, std=0.259; adhesion mean=0.903,
 **Hypothesis falsified:** the symmetric scoring seg does *not* outperform the affinity scoring seg on MDA231 when both are run with full cohesion/adhesion costs. The TRA gap is 0.008 (mostly LNK -0.036), and none of the parameter variations closed it.
 
 Notable cross-experiment finding: **drift_w=100, which was the consistent winner across all three merge-ablated conditions, hurts in the full-cost regime** (R4 dropped LNK by 0.009 vs R1). The optimal drift weight depends on whether cohesion/adhesion are active.
+
+---
+
+# 2026-07-29: full re-optimization on the new fs1_cpm6 segmentation
+
+Scope: all 13 unique conditions behind the **merge_ablation**, **solver_addition**
+and **solver_ablation** figures, on `Fluo-C3DL-MDA231/01_cells` (train), then
+transferred verbatim to `02_cells` (test).
+
+**Why.** The 2026-07-21 runs re-ran every condition on the improved segmentation
+(`seg_cp_20260720_fs1_cpm6`) but kept the ILP weights tuned on the old one. That
+left `- Coh/Adh` (0.9090) and `+ Momentum` (0.9089) beating Baseline (0.9061) on
+01_cells, and `- Intensity` (0.9419) beating Baseline (0.9369) on 02_cells --
+i.e. the ablation figure reported negative contributions. The new segmentation
+had shifted the attribute distributions (`intensity_diff` mean 207 -> 160,
+cohesion sd 0.165 -> 0.185), so the transferred weights were mis-scaled.
+
+**Method.** Coordinate-wise sweeps via the new `scripts/04_tracking/launch_sweep.py`,
+specs in `configs/sweeps/mda231_01cells_stage{A,A2,B,C,D,E,F,G}.toml`, ~200 runs.
+A condition was declared converged when every swept parameter's winner was
+bracketed by interior points, or the best remaining gain was under 0.001 TRA.
+`size_threshold`, `max_edge_distance`, `max_children`, `merges`, `divisions` and
+`min/max_merge_cost` were never varied.
+
+## Final results
+
+| Condition | 01_cells TRA | DET | LNK | 02_cells TRA | Winning params (01_cells) |
+|---|---|---|---|---|---|
+| `baseline` | 0.9122 | 0.9165 | 0.8812 | 0.9393 | drift_w=57, drift_c=-4000, area_w=1730, area_c=-1500, intensity_w=4, intensity_c=-1000, cohesion_w=2000, adhesion_w=-500 |
+| `no_drift` | 0.9121 | 0.9159 | 0.8842 | 0.9349 | area_w=1730, area_c=-5000, intensity_w=4, intensity_c=-1000, cohesion_w=2000, adhesion_w=-1000 |
+| `no_intensity` | 0.9120 | 0.9162 | 0.8812 | 0.9371 | drift_w=57, drift_c=-4000, area_w=1730, area_c=-1500, cohesion_w=2000, adhesion_w=-500 |
+| `no_volume` | 0.9115 | 0.9157 | 0.8812 | 0.9350 | drift_w=30, drift_c=-5000, intensity_w=4, intensity_c=-1000, cohesion_w=2000, adhesion_w=-1000 |
+| `no_affinities` | 0.9097 | 0.9132 | 0.8842 | 0.9393 | drift_w=100, drift_c=-2000, area_w=2500, area_c=-1500, intensity_w=4, intensity_c=-1000 |
+| `no_cohesion` | 0.9095 | 0.9129 | 0.8842 | 0.9371 | drift_w=100, drift_c=-2000, area_w=2500, area_c=-1500, intensity_w=4, intensity_c=-1000 |
+| `plus_curvature` | 0.9089 | 0.9135 | 0.8751 | 0.9357 | curvature_w=10, curvature_c=-500 |
+| `plus_volume` | 0.9050 | 0.9154 | 0.8288 | 0.9334 | area_w=500, area_c=-500 |
+| `plus_drift` | 0.9049 | 0.9077 | 0.8842 | 0.9375 | drift_w=30, drift_c=-1000 |
+| `no_merges` | 0.9008 | 0.9047 | 0.8721 | 0.9265 | drift_w=100, drift_c=-2000, area_w=3500, area_c=-1500, intensity_w=4, intensity_c=-1000 |
+| `plus_cohesion` | 0.8842 | 0.9093 | 0.6999 | 0.8957 | cohesion_w=750, adhesion_w=-1000, base_edge_c=-2000 |
+| `plus_intensity` | 0.8826 | 0.8951 | 0.7915 | 0.9237 | intensity_w=8, intensity_c=-3000 |
+| `none` | 0.8530 | 0.8874 | 0.6012 | 0.8811 | base_edge_c=-200 |
+
+
+02_cells values are the 01_cells parameters applied unchanged -- no tuning was
+done against them.
+
+## What actually moved the numbers
+
+- **`drift_constant` was the dominant axis, and rounds 1-2 missed it entirely.**
+  The Stage A baseline sweep varied cohesion, adhesion and drift *weights* plus
+  curvature, and concluded the full model was converged at 0.9061. Stage B then
+  reached 0.9118 on `- Intensity` largely by pushing `drift_constant` to -4000 --
+  an axis the baseline had never been swept on. Once it was (Stage C), Baseline
+  jumped 0.9061 -> 0.9115, and -> 0.9122 in Stage D with `adhesion_weight` -500.
+  Lesson: sweep the constants, not just the weights, and re-open axes already
+  closed whenever another one moves a long way.
+- **Search effort masquerades as an effect.** After Stage B, five ablations beat
+  the baseline -- but only because they had been re-optimized while it had not,
+  and on a range it had not seen. Stage D gave `- Coh/Adh`, `- Affinities` and
+  `- Merges` the same `drift_constant` range; they did not improve, which is what
+  makes their remaining deficits believable. Stage F did the same for
+  `adhesion_weight` on the three ablations that retain cohesion/adhesion.
+- **Operating point.** Every improvement moved the model the same direction:
+  Baseline fp 133 -> 149, ns 14 -> 7, fn_edges 49 -> 38. The old weights were
+  suppressing objects to keep fp down and paying for it in split-merge and
+  linking errors.
+- **Curvature does not belong in the full model.** `+ Momentum` alone reaches
+  0.9089, but adding curvature to Baseline (weight 10 and 20, constants -500 and
+  -1000) scored 0.9038-0.9057, all at or below the curvature-free 0.9061. `Full`
+  legitimately has `curvature_weight = 0`.
+- **`None` / `- All` was structurally flat, not optimized.** `base_edge_constant`
+  from -500 to -3000 gave byte-identical metrics: an edge saves
+  `appear + disappear = 400` by existing, so any incentive past -400 selects
+  every candidate edge and the solve saturates. The real optimum is at -200
+  (0.8369 -> 0.8530), in the unsaturated region the first grid never entered.
+
+## Two definitional fixes
+
+- **`- Affinities` had cohesion/adhesion ACTIVE.** Its config carried
+  `ablate_cohesion_adhesion = true`, which has been dead code since `9ff60e6`
+  (`add_costs` now gates on weight==0 *and* constant==0), alongside
+  `cohesion_weight = 2000`. It now zeroes them, matching `- Coh/Adh` and
+  `- Merges` and the cumulative ablation `ABLATION.md` describes.
+- **`- Affinities` and `- Merges` also set `z_flow_conf_threshold = 0.0` /
+  `z_flow_min_pass_pixels = 10`,** which no other condition sets. This is **not**
+  a no-op: the 3D flow zarr does carry a `confidence` array, so the gate was live
+  -- per-node Z flow was averaged only over pixels with |confidence| > 0, and
+  nodes with fewer than 10 such pixels had Z dropped from their drift cost. Both
+  keys are gone, so every merge bar now differs from Baseline in exactly one way.
+
+## Artifacts
+
+- Sweep specs: `configs/sweeps/mda231_01cells_stage{A..G}.toml`
+- Final parameter record: `configs/sweeps/mda231_0{1,2}_cells_final.toml`
+- Runs: `experiments/tracking/Fluo-C3DL-MDA231/{01,02}_cells/fs1cpm6v2_<condition>/`
+- Per-round tables: `.../sweeps/figopt0729*/results.csv`
+- Recall files (`track_metrics_basic.json`, point matcher @ 10) regenerated for
+  the four merge conditions on both datasets; CTC `track_metrics.json` restored
+  afterwards.

@@ -28,5 +28,5 @@ min_merge_cost = 0.0
 max_merge_cost = 1.0
 max_edge_distance = 60
 size_threshold = 60
-base_edge_constant = -1000.0
-exp_uid = "fs1cpm6_none"
+base_edge_constant = -200.0
+exp_uid = "fs1cpm6v2_none"

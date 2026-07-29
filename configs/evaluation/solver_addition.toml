@@ -24,6 +24,23 @@
 # =============================================================================
 # Fluo-C3DL-MDA231 / 01_cells
 # =============================================================================
+# ---------------------------------------------------------------------------
+# 2026-07-29 re-optimization. The 2026-07-21 fs1_cpm6 runs re-ran every condition
+# on the improved segmentation but kept the ILP weights tuned on the OLD one,
+# which left two ablations beating the full model. Every condition was re-swept
+# on 01_cells (sweeps figopt0729A..G, ~200 runs; specs in configs/sweeps/) and
+# the winners transferred verbatim to 02_cells. uids are now fs1cpm6v2_<cond>;
+# the exact parameters per bar are in configs/sweeps/mda231_0{1,2}_cells_final.toml
+# and in each run's saved config.toml. Baseline 01_cells 0.9061 -> 0.9122.
+#
+# Two definitional fixes went in with it: the retired ablate_cohesion_adhesion
+# flag meant `- Affinities` had actually been solving with cohesion/adhesion
+# ACTIVE, and it plus `- Merges` also carried z_flow_conf_threshold = 0.0, which
+# no other condition sets and which is NOT a no-op (the 3D flow zarr does have a
+# confidence array, so Z flow was being gated). Both are gone, so every merge bar
+# now differs from Baseline in exactly one way.
+# ---------------------------------------------------------------------------
+
 [mda231]
 experiment = "Fluo-C3DL-MDA231"
 dataset_dir = "01_cells"
@@ -56,50 +73,50 @@ reduction = "scalar"
 [mda231.conditions.none]
 label = "None"
 color = "#999999"
-note = "base_edge_constant=-1000 (identical to - All)"
-tracking_uid = "fs1cpm6_none"
+note = "base_edge_constant=-200 (identical to - All)"
+tracking_uid = "fs1cpm6v2_none"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/none_config.toml"
 
 [mda231.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#56B4E9"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "fs1cpm6_plus_cohesion"
+tracking_uid = "fs1cpm6v2_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_cohesion_config.toml"
 
 [mda231.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#CC79A7"
-note = "active: intensity (w=2, c=-1000)"
-tracking_uid = "fs1cpm6_plus_intensity"
+note = "active: intensity (w=8, c=-3000)"
+tracking_uid = "fs1cpm6v2_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_intensity_config.toml"
 
 [mda231.conditions.plus_volume]
 label = "+ Volume"
 color = "#E69F00"
-note = "active: area (w=1000, c=-500)"
-tracking_uid = "fs1cpm6_plus_volume"
+note = "active: area (w=500, c=-500)"
+tracking_uid = "fs1cpm6v2_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_volume_config.toml"
 
 [mda231.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#D55E00"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "fs1cpm6_plus_curvature"
+tracking_uid = "fs1cpm6v2_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_curvature_config.toml"
 
 [mda231.conditions.plus_drift]
 label = "+ Flow"
 color = "#009E73"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "fs1cpm6_plus_drift"
+tracking_uid = "fs1cpm6v2_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_drift_config.toml"
 
 [mda231.conditions.full]
 label = "Full"
 color = "#0072B2"
-note = "full tuned baseline (all costs active)"
-tracking_uid = "trk_cp_20260720_fs1_cpm6"
+note = "full tuned baseline (drift_constant=-4000, adhesion_weight=-500; curvature off)"
+tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 # =============================================================================
@@ -138,50 +155,50 @@ reduction = "scalar"
 [mda231_02cells.conditions.none]
 label = "None"
 color = "#999999"
-note = "base_edge_constant=-1000 (identical to - All)"
-tracking_uid = "fs1cpm6_none"
+note = "base_edge_constant=-200 (identical to - All)"
+tracking_uid = "fs1cpm6v2_none"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/none_config.toml"
 
 [mda231_02cells.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#56B4E9"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "fs1cpm6_plus_cohesion"
+tracking_uid = "fs1cpm6v2_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_cohesion_config.toml"
 
 [mda231_02cells.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#CC79A7"
-note = "active: intensity (w=2, c=-1000)"
-tracking_uid = "fs1cpm6_plus_intensity"
+note = "active: intensity (w=8, c=-3000)"
+tracking_uid = "fs1cpm6v2_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_intensity_config.toml"
 
 [mda231_02cells.conditions.plus_volume]
 label = "+ Volume"
 color = "#E69F00"
-note = "active: area (w=1000, c=-500)"
-tracking_uid = "fs1cpm6_plus_volume"
+note = "active: area (w=500, c=-500)"
+tracking_uid = "fs1cpm6v2_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_volume_config.toml"
 
 [mda231_02cells.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#D55E00"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "fs1cpm6_plus_curvature"
+tracking_uid = "fs1cpm6v2_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_curvature_config.toml"
 
 [mda231_02cells.conditions.plus_drift]
 label = "+ Flow"
 color = "#009E73"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "fs1cpm6_plus_drift"
+tracking_uid = "fs1cpm6v2_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_drift_config.toml"
 
 [mda231_02cells.conditions.full]
 label = "Full"
 color = "#0072B2"
-note = "full tuned baseline (all costs active)"
-tracking_uid = "holdout_fs1_cpm6"
+note = "full tuned baseline (drift_constant=-4000, adhesion_weight=-500; curvature off)"
+tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 # =============================================================================

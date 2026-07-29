@@ -29,4 +29,4 @@ max_merge_cost = 1.0
 max_edge_distance = 60
 size_threshold = 60
 base_edge_constant = -2000.0
-exp_uid = "fs1cpm6_plus_cohesion"
+exp_uid = "fs1cpm6v2_plus_cohesion"

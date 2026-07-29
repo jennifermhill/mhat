@@ -7,6 +7,7 @@ import toml
 import geff
 import zarr
 
+from mhat.evaluation.diagnostics import run_diagnostics
 from mhat.evaluation.evaluate_tracking import compute_ctc_seg, evaluate_tracking
 from mhat.evaluation.from_ctc_to_geff import from_ctc_to_geff
 
@@ -32,10 +33,11 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
                 axes=axes,
             )
 
-    results = evaluate_tracking(
+    results, matched = evaluate_tracking(
         config,
         gt_data_dir,
         pred_data_dir,
+        return_matched=True,
     )
 
     track_metrics = {}
@@ -56,7 +58,7 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
         else:
             print(f"Skipping SEG: missing {seg_gt_dir} or {pred_seg_path}")
 
-    return track_metrics
+    return track_metrics, matched
 
 
 if __name__ == "__main__":
@@ -81,7 +83,7 @@ if __name__ == "__main__":
     output_dir = output_base_dir / "evaluation" / experiment / dataset / config["track_result"]
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    track_metrics = run_evaluation(config, gt_data_dir, pred_data_dir)
+    track_metrics, matched = run_evaluation(config, gt_data_dir, pred_data_dir)
     tracksfile = output_dir / "track_metrics.json"
     with open(tracksfile, 'w') as f:
         json.dump(track_metrics, f)
@@ -93,3 +95,6 @@ if __name__ == "__main__":
     # Save the eval config used for this run alongside the results for provenance
     with open(output_dir / "eval_config.toml", "w") as config_file:
         toml.dump(config, config_file)
+
+    # FN edge / FN node / GT drift diagnostics, reusing the matching computed above
+    run_diagnostics(config, gt_data_dir, pred_data_dir, output_dir, matched=matched)

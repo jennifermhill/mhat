@@ -138,24 +138,27 @@ def compute_ctc_seg(seg_gt_dir, pred_seg_path):
     return total_jaccard / total_objs
 
 
-def evaluate_tracking(
-    config, gt_data_dir: Path, pred_data_dir: Path
-):
-    """Calculate metrics for linked tracks by comparing to ground truth.
+def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
+    """Load GT and predicted tracks (with segmentations) as traccuracy graphs.
+
+    Shared by ``evaluate_tracking`` and the post-evaluation diagnostics so both
+    see exactly the same graphs, positions and scale.
 
     Args:
-        config (dict): Evaluation configuration dictionary.
+        config (dict): Evaluation configuration dictionary (unused today, kept
+            for symmetry with the other entry points).
         gt_data_dir (Path): Path to ground truth data directory.
         pred_data_dir (Path): Path to predicted data directory.
 
     Returns:
-        results (dict): Dictionary of metric results.
+        tuple: (gt_graph, pred_graph, scale) where the graphs are
+        ``traccuracy.TrackingGraph`` objects and scale is the per-axis scale
+        read from the predicted geff metadata.
     """
-
     # Use import_from_geff to get graph and segmentation in correct format
     name_map = {
         "time": "time",
-        "x": "x", 
+        "x": "x",
         "y": "y",
         "z": "z",
         "id": "track_id",    # track_id stays constant across frames
@@ -221,15 +224,13 @@ def evaluate_tracking(
         segmentation=pred_seg,
     )
 
-    # match_threshold = config.get("match_threshold", 5.0)
-    metrics = config.get("metrics", ["basic", "track_overlap"])
+    return gt_graph, pred_graph, scale
+
+
+def build_matcher(config):
+    """Instantiate the matcher named by the config, with its threshold kwargs."""
     matcher = config.get("matcher", "point")
     threshold = config.get("threshold", config.get("match_threshold", None))
-
-    # Check that the specified metrics are valid
-    for metric in metrics:
-        if metric not in metrics_dict:
-            raise ValueError(f"Invalid metric specified: {metric}\nValid metrics are: {list(metrics_dict.keys())}")
 
     matcher_fn = matchers_dict[matcher]
     if matcher == "iou":
@@ -243,14 +244,55 @@ def evaluate_tracking(
     else:
         kwargs = {"threshold": threshold} if threshold is not None else {}
 
+    return matcher_fn(**kwargs)
+
+
+def evaluate_tracking(
+    config, gt_data_dir: Path, pred_data_dir: Path, return_matched: bool = False
+):
+    """Calculate metrics for linked tracks by comparing to ground truth.
+
+    Args:
+        config (dict): Evaluation configuration dictionary.
+        gt_data_dir (Path): Path to ground truth data directory.
+        pred_data_dir (Path): Path to predicted data directory.
+        return_matched (bool): If True, also return the traccuracy ``Matched``
+            object so callers can run further diagnostics without re-matching.
+
+    Returns:
+        results (dict): Dictionary of metric results, or (results, matched) if
+        ``return_matched`` is True.
+    """
+    gt_graph, pred_graph, _ = load_tracking_graphs(config, gt_data_dir, pred_data_dir)
+
+    # match_threshold = config.get("match_threshold", 5.0)
+    metrics = config.get("metrics", ["basic", "track_overlap"])
+
+    # Check that the specified metrics are valid
+    for metric in metrics:
+        if metric not in metrics_dict:
+            raise ValueError(f"Invalid metric specified: {metric}\nValid metrics are: {list(metrics_dict.keys())}")
+
     results, matched = run_metrics(
         gt_graph,
         pred_graph,
-        matcher=matcher_fn(**kwargs),
+        matcher=build_matcher(config),
         metrics=[metrics_dict[m]() for m in metrics],
     )
 
     # The CTC SEG measure uses the sparse `SEG` ground truth folder, not the
     # coarse `TRA` markers loaded here, so it is computed separately by the
     # caller (see compute_ctc_seg / run_evaluation).
+    if return_matched:
+        return results, matched
     return results
+
+
+def match_tracking(config, gt_data_dir: Path, pred_data_dir: Path):
+    """Load the graphs and run only the matcher, returning the Matched object.
+
+    Used by the standalone diagnostic scripts, which need the matching but not
+    the metrics.
+    """
+    gt_graph, pred_graph, _ = load_tracking_graphs(config, gt_data_dir, pred_data_dir)
+    return build_matcher(config).compute_mapping(gt_graph, pred_graph)

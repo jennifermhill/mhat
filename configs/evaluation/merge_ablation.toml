@@ -78,6 +78,16 @@ seg_overrides = ""
 tracking_uid = "fs1cpm6v2_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
+# 2026-07-29 RESULT, not an oversight: with cohesion/adhesion zeroed (the
+# cumulative ablation ABLATION.md specifies), this bar is within 0.0002 TRA of
+# `- Coh/Adh` on 01_cells (0.9097 vs 0.9095; identical fn/ns/Node Recall, and
+# Edge Recall marginally lower). The two runs now differ in exactly one key,
+# seg_result -- both sweeps converged independently on the same ILP parameters.
+# That is the finding: the affinity scoring function reaches the solution mainly
+# through the merge scores that become the cohesion/adhesion node attributes, so
+# once those costs are removed only the merge tree SHAPE is left, and that alone
+# changes almost nothing. The coh/adh-on variant (which scored 0.8910 against
+# baseline under the old definition) was considered and deliberately not adopted.
 [mda231.conditions.no_affinities]
 label = "- Affinities"
 seg_uid = "fs1cpm6_seg_noaff"

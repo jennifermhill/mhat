@@ -223,3 +223,27 @@ done against them.
 - Recall files (`track_metrics_basic.json`, point matcher @ 10) regenerated for
   the four merge conditions on both datasets; CTC `track_metrics.json` restored
   afterwards.
+
+## `- Affinities` outcome (decided 2026-07-29)
+
+Cohesion/adhesion **are** excluded -- all four keys 0.0 in the config as run, and
+the solver logs `Skipping cohesion cost (weight=0, constant=0)` /
+`Skipping adhesion cost (...)`, so no ILP structure is created for them.
+
+The consequence is that `- Affinities` and `- Coh/Adh` differ in exactly one key,
+`seg_result`: both mini-optimizations converged independently on the same ILP
+parameters (drift_w=100, drift_c=-2000, area_w=2500, area_c=-1500, intensity
+4/-1000). Metrics 01_cells 0.9097 vs 0.9095, 02_cells 0.9393 vs 0.9371.
+
+The near-tie is mechanistic, not a tuning failure. The affinity scoring function
+influences the solution mainly through the merge scores that become the
+cohesion/adhesion node attributes; zeroing those costs removes that channel, and
+what remains is only the merge tree shape (which agglomerated hypotheses exist as
+candidates). Under the earlier accidental definition, where coh/adh were left
+active, the same condition scored 0.8910 -- the effect was real but it was
+flowing through the cohesion costs.
+
+**Decision: keep the zeroed definition.** The cumulative ablation stays intact and
+the near-degenerate bar is reported as the result -- once cohesion/adhesion are
+gone, the scoring function contributes almost nothing on its own. The coh/adh-on
+variant was offered and declined; it is not re-run.

@@ -15,6 +15,10 @@ Usage::
     conda run -n mhat2 python scripts/05_evaluation/collect_sweep.py \\
         experiments/tracking/Fluo-C3DL-MDA231/01_cells/sweeps/<sweep_id>/manifest.toml \\
         [--baseline TRA DET LNK] [--metric-set ctc|overlap]
+
+``--metric-set ctc`` reports TRA/DET/LNK for CTC-ground-truth datasets;
+``--metric-set overlap`` reports TE/TF plus the edge and node recalls, for the
+sparse-ground-truth datasets where precision and purity are not optimizable.
 """
 
 from __future__ import annotations
@@ -36,39 +40,47 @@ TUNABLE_KEYS = {
 }
 
 METRIC_SETS = {
-    # (json group, [(column name, key)...]); first column is the primary metric.
-    "ctc": (
-        "CTCMetrics",
-        [
-            ("TRA", "TRA"),
-            ("DET", "DET"),
-            ("LNK", "LNK"),
-            ("fp", "fp_nodes"),
-            ("fn", "fn_nodes"),
-            ("ns", "ns_nodes"),
-            ("fn_e", "fn_edges"),
-            ("fp_e", "fp_edges"),
-        ],
-    ),
-    "overlap": (
-        "TrackOverlapMetrics",
-        [
-            ("TE", "target_effectiveness"),
-            ("Purity", "track_purity"),
-        ],
-    ),
+    # [(column name, json group, key)...]; first column is the primary metric,
+    # used for sorting and for picking each condition's winner. Each column names
+    # its own group, because a sparse-GT run is judged on TrackOverlapMetrics and
+    # BasicMetrics together.
+    "ctc": [
+        ("TRA", "CTCMetrics", "TRA"),
+        ("DET", "CTCMetrics", "DET"),
+        ("LNK", "CTCMetrics", "LNK"),
+        ("fp", "CTCMetrics", "fp_nodes"),
+        ("fn", "CTCMetrics", "fn_nodes"),
+        ("ns", "CTCMetrics", "ns_nodes"),
+        ("fn_e", "CTCMetrics", "fn_edges"),
+        ("fp_e", "CTCMetrics", "fp_edges"),
+    ],
+    # Sparse-GT datasets (NC281-Fl2mSiH2B, primary_nk_cells): precision, purity
+    # and F1 are unreliable because unannotated objects count as FPs, so TE/TF
+    # lead and the recalls are the diagnostics. Purity is kept last, reported but
+    # not optimized.
+    "overlap": [
+        ("TE", "TrackOverlapMetrics", "target_effectiveness"),
+        ("TF", "TrackOverlapMetrics", "track_fractions"),
+        ("EdgeR", "BasicMetrics", "Edge Recall"),
+        ("NodeR", "BasicMetrics", "Node Recall"),
+        ("FN_e", "BasicMetrics", "False Negative Edges"),
+        ("Purity", "TrackOverlapMetrics", "track_purity"),
+    ],
 }
 
 
-def load_metrics(path, group, columns):
+def load_metrics(path, columns):
     if not path.is_file():
         return None
     with open(path) as handle:
         payload = json.load(handle)
-    if group not in payload:
+    # A file that has none of the groups this metric set reads is as good as
+    # missing -- report it as pending rather than as a row of blanks.
+    if not any(group in payload for _, group, _ in columns):
         return None
-    values = payload[group]
-    return {name: values.get(key) for name, key in columns}
+    return {
+        name: payload.get(group, {}).get(key) for name, group, key in columns
+    }
 
 
 def edge_report(rows, columns):
@@ -143,7 +155,7 @@ def main():
     args = parser.parse_args()
 
     manifest_paths = [Path(p).resolve() for p in args.manifest]
-    group, columns = METRIC_SETS[args.metric_set]
+    columns = METRIC_SETS[args.metric_set]
 
     rows = []
     for manifest_path in manifest_paths:
@@ -161,7 +173,7 @@ def main():
                     "exp_uid": run["exp_uid"],
                     "overrides": run.get("overrides", {}),
                     "effective": run.get("effective", {}),
-                    "_metrics": load_metrics(metrics_path, group, columns),
+                    "_metrics": load_metrics(metrics_path, columns),
                 }
             )
 
@@ -186,7 +198,7 @@ def main():
     print("-" * len(header))
     for row in done:
         cells = []
-        for name, _ in columns:
+        for name, *_ in columns:
             value = row["_metrics"].get(name)
             if isinstance(value, float):
                 cells.append(f"{value:>8.4f}")

@@ -2,7 +2,7 @@
 # One x-group per TrackOverlap metric, two touching bars per group (TrackMate,
 # MHAT). Values are loaded from each result's track_metrics.json -- nothing is
 # hard-coded here except which tracking result each method points at.
-# Rendered by trackmate_vs_mhat_figure.py.
+# Rendered by competitor_vs_mhat.py.
 
 output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/trackmate_vs_handtuned_nc281_sparse_train.png"
 title = ""
@@ -27,15 +27,17 @@ json_path = ["TrackOverlapMetrics", "track_fractions"]
 label = "Track\npurity"
 json_path = ["TrackOverlapMetrics", "track_purity"]
 
-# series: the two methods being compared (Okabe-Ito, colorblind-safe).
-method_order = ["trackmate", "mhat"]
-
-[methods.trackmate]
-label = "TrackMate"
-color = "#0072B2"
-tracking_uid = "trackmate"
+# series: the two methods being compared. MHAT is first in each group and gets
+# the sky blue that marks it in the leaderboard figure; the competing method is
+# gray, matching the leaderboard convention.
+method_order = ["mhat", "trackmate"]
 
 [methods.mhat]
 label = "MHAT"
-color = "#E69F00"
+color = "#56B4E9"
 tracking_uid = "2026-07-02_10-55-33"  # hand-tuned baseline
+
+[methods.trackmate]
+label = "TrackMate"
+color = "#B0B0B0"
+tracking_uid = "trackmate"

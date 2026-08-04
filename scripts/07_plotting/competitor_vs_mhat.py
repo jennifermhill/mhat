@@ -1,8 +1,15 @@
-"""TrackMate vs MHAT comparison figure on a single dataset.
+"""MHAT vs a competing tracker, on a single dataset.
 
-Renders a grouped bar chart: one x-group per TrackOverlap metric (e.g. target
-effectiveness, track fractions, track purity), with two touching bars per group
-(TrackMate, MHAT) plus a legend. Every value is loaded from the corresponding
+Generic: the competitor, the metrics, the colors, and the bar order all come
+from the config, so one script renders every head-to-head figure. Current
+configs:
+
+    configs/evaluation/trackmate_vs_mhat.toml        NC281-sparse / train
+    configs/evaluation/ultrack_vs_mhat_nk_cells.toml primary_nk_cells / 01_cells
+
+Renders a grouped bar chart: one x-group per metric (e.g. target effectiveness,
+track fractions, recalls), with two touching bars per group -- MHAT first, then
+the competitor -- plus a legend. Every value is loaded from the corresponding
 tracking result's track_metrics.json -- the config only says which result each
 method points at, so re-running picks up any re-evaluation.
 
@@ -20,14 +27,14 @@ Config schema (TOML) -- see configs/evaluation/trackmate_vs_mhat.toml:
     label     = "Target\neffectiveness"
     json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 
-    method_order = ["trackmate", "mhat"]
-    [methods.trackmate]
-    label        = "TrackMate"
-    color        = "#0072B2"
-    tracking_uid = "trackmate"
+    method_order = ["mhat", "trackmate"]
+    [methods.mhat]
+    label        = "MHAT"
+    color        = "#56B4E9"
+    tracking_uid = "2026-07-02_10-55-33"
 
 Usage:
-    python trackmate_vs_mhat_figure.py configs/evaluation/trackmate_vs_mhat.toml [--output foo.png]
+    python competitor_vs_mhat.py configs/evaluation/trackmate_vs_mhat.toml [--output foo.png]
 """
 import argparse
 import json
@@ -67,7 +74,7 @@ def load_metric(cfg, uid, json_path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config", help="Path to trackmate_vs_mhat.toml")
+    parser.add_argument("config", help="Path to a <competitor>_vs_mhat TOML")
     parser.add_argument("--output", default=None, help="Override output_png from TOML")
     args = parser.parse_args()
 
@@ -112,7 +119,7 @@ def main():
     ax.set_xticklabels([metrics[k]["label"] for k in metric_keys])
     ax.set_ylabel(cfg.get("ylabel", "Score (higher is better)"))
     ax.set_ylim(0, 1.0)
-    ax.set_title(cfg.get("title", "TrackMate vs MHAT"))
+    ax.set_title(cfg.get("title", ""))
     ax.legend(frameon=False, loc="upper left")
 
     ax.spines[["top", "right"]].set_visible(False)

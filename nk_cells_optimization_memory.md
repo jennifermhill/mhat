@@ -94,9 +94,10 @@ Two calibration facts worth keeping from that table:
   Winner (120, 5). `size_threshold = 0` falsified under matched costs.
 - ~~Update `configs/evaluation/ultrack_vs_mhat_nk_cells.toml` to the new best~~ **done
   2026-07-31** (`tracking_uid = "nkgraph_size120"`).
-- **Remaining, on Windows only**: regenerate `ultrack_vs_mhat_nk_cells.png` with
-  `scripts/07_plotting/trackmate_vs_mhat_figure.py`. The config's `output_png` /
-  `eval_base_dir` are `Y:` paths — do not render on the cluster.
+- ~~**Remaining, on Windows only**: regenerate `ultrack_vs_mhat_nk_cells.png`~~ **done
+  2026-08-04** with `scripts/07_plotting/competitor_vs_mhat.py` (renamed from
+  `trackmate_vs_mhat_figure.py`). The config's `output_png` / `eval_base_dir` are
+  `Y:` paths — do not render on the cluster.
 
 ### Where the campaign landed
 Total gain over the Phase 5 starting point is **+0.0038 TE / +0.0038 EdgeR**; the whole Stage-2

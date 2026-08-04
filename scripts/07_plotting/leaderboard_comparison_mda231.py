@@ -1,10 +1,10 @@
 """MHAT vs CTC leaderboard top-3 (per metric) on Fluo-C3DL-MDA231 (02_cells / video 02).
 
-Grouped bar chart: one x-group per CTC metric (TRA, DET, SEG). Each group shows
-MHAT plus the three best CTC competitors *for that metric*, with the competitors
-ordered highest-to-lowest. The top-3 set therefore differs between metrics.
-Colors are fixed per method, so the legend maps color -> method across the whole
-figure; bars touch within a group.
+Three-panel bar chart: one panel per CTC metric (TRA, DET, SEG), with the metric
+named on that panel's y-axis. Each panel shows MHAT plus the three best CTC
+competitors *for that metric*, ordered highest-to-lowest; the top-3 set therefore
+differs between panels. MHAT is light blue and every competitor is gray, so the
+x tick labels -- not color -- identify the methods.
 
 Data provenance
 ---------------
@@ -58,17 +58,10 @@ CTC_TOP3 = {
 }
 METRICS = ["TRA", "DET", "SEG"]
 
-# Fixed color per method (Wong colorblind-safe palette, project palette).
-COLOR = {
-    "MHAT":        "#0072B2",  # blue      (project MHAT color)
-    "KTH-SE (1)":  "#E69F00",  # orange
-    "KIT-GE (3)":  "#009E73",  # bluish green
-    "LEID-NL":     "#CC79A7",  # reddish purple
-    "CALT-US (*)": "#D55E00",  # vermillion
-    "MU-US (3*)":  "#56B4E9",  # sky blue
-}
-# Legend order: MHAT first, then competitors as they first appear across metrics.
-LEGEND_ORDER = ["MHAT", "KIT-GE (3)", "KTH-SE (1)", "LEID-NL", "CALT-US (*)", "MU-US (3*)"]
+# MHAT is highlighted in light blue; every competing method is the same gray.
+# Methods are identified by the x tick labels, not by color.
+MHAT_COLOR = "#56B4E9"   # sky blue (Wong colorblind-safe palette)
+OTHER_COLOR = "#B0B0B0"  # gray
 
 
 def main():
@@ -84,40 +77,33 @@ def main():
     mhat = json.loads((eval_dir / baseline_uid / "track_metrics.json")
                       .read_text())["CTCMetrics"]
 
-    # Per group: MHAT first, then that metric's top-3 competitors (already sorted).
+    # Per panel: MHAT first, then that metric's top-3 competitors (already sorted).
     groups = {m: [("MHAT", mhat[m])] + CTC_TOP3[m] for m in METRICS}
-    n = 1 + 3  # bars per group
 
-    x = np.arange(len(METRICS))
-    width = 0.8 / n
+    fig, axes = plt.subplots(1, len(METRICS), figsize=(9, 4), sharey=True)
+    for ax, m in zip(axes, METRICS):
+        names = [name for name, _ in groups[m]]
+        heights = [v for _, v in groups[m]]
+        colors = [MHAT_COLOR if name == "MHAT" else OTHER_COLOR for name in names]
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    for slot in range(n):
-        offset = (slot - (n - 1) / 2) * width
-        xs = x + offset
-        heights = [groups[m][slot][1] for m in METRICS]
-        colors = [COLOR[groups[m][slot][0]] for m in METRICS]
-        bars = ax.bar(xs, heights, width, color=colors,
-                      edgecolor="white", linewidth=1.0)
-        for bar, m in zip(bars, METRICS):
-            name, v = groups[m][slot]
-            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.008, f"{v:.3f}",
-                    rotation=90, ha="center", va="bottom",
-                    fontsize=7.5, color="#333333")
+        x = np.arange(len(names))
+        bars = ax.bar(x, heights, 0.72, color=colors)
+        for bar, v in zip(bars, heights):
+            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.012, f"{v:.3f}",
+                    ha="center", va="bottom", fontsize=7.5, color="#333333")
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(METRICS, fontsize=12, fontweight="bold")
-    ax.set_ylabel("Score (higher is better)")
-    ax.set_ylim(0, 1.0)
+        ax.set_xticks(x)
+        ax.set_xticklabels(names, rotation=40, ha="right", fontsize=8.5)
+        for tick, name in zip(ax.get_xticklabels(), names):
+            if name == "MHAT":
+                tick.set_fontweight("bold")
+        ax.set_ylabel(m, fontsize=12, fontweight="bold")
+        ax.set_ylim(0, 1.0)
+        ax.tick_params(axis="y", labelleft=True)
 
-    handles = [plt.Rectangle((0, 0), 1, 1, color=COLOR[m]) for m in LEGEND_ORDER]
-    ax.legend(handles, LEGEND_ORDER, frameon=False, loc="upper center",
-              ncol=len(LEGEND_ORDER), fontsize=8.5, bbox_to_anchor=(0.5, -0.08),
-              columnspacing=1.2, handlelength=1.2, handletextpad=0.5)
-
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)
-    ax.set_axisbelow(True)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)
+        ax.set_axisbelow(True)
 
     fig.tight_layout()
     out = Path(args.output or eval_dir / "leaderboard_comparison_mda231_02.png")

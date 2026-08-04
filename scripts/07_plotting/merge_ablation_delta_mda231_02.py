@@ -18,7 +18,8 @@ so this figure stays in sync with the other merge figures when the TOML's uids
 change. Values load from each condition's track_metrics.json (CTCMetrics), so the
 2026-07-20 SEG fix is reflected. SEG is used in place of LNK and isn't in the
 TOML metric list, so the three metrics are defined locally here; the palette is
-keyed by condition name to match merge_ablation_figure.py.
+keyed by condition name and defined locally (it no longer matches
+merge_ablation_figure.py).
 
 Usage:
     python scripts/07_plotting/merge_ablation_delta_mda231_02.py \
@@ -35,13 +36,14 @@ import toml
 # Baseline first, then the three delta bars (matches merge_ablation_figure.py).
 CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
-# Wong colorblind-friendly palette, per-concept, consistent with the other merge
-# figures. Baseline is the Δ=0 reference line, not a bar.
+# Wong colorblind-friendly palette, per-concept. Baseline is the Δ=0 reference
+# line, not a bar, and uses the same light blue that marks MHAT in the
+# leaderboard comparison figure.
 PALETTE = {
-    "baseline": "#0072B2",       # blue
-    "no_cohesion": "#CC79A7",    # reddish purple
-    "no_affinities": "#F0E442",  # yellow
-    "no_merges": "#000000",      # black
+    "baseline": "#56B4E9",       # sky blue
+    "no_cohesion": "#009E73",    # bluish green
+    "no_affinities": "#000000",  # black
+    "no_merges": "#CC79A7",      # reddish purple
 }
 
 # SEG replaces LNK here (all three read from CTCMetrics).

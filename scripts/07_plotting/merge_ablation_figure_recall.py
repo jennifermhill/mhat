@@ -18,11 +18,12 @@ import toml
 
 CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
+# Same palette as merge_ablation_figure.py / merge_ablation_delta_mda231_02.py.
 PALETTE = {
-    "baseline": "#0072B2",
-    "no_cohesion": "#CC79A7",
-    "no_affinities": "#F0E442",
-    "no_merges": "#000000",
+    "baseline": "#56B4E9",       # sky blue
+    "no_cohesion": "#009E73",    # bluish green
+    "no_affinities": "#000000",  # black
+    "no_merges": "#CC79A7",      # reddish purple
 }
 
 PLACEHOLDER = "<fill in>"

@@ -18,11 +18,12 @@ import toml
 CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
 # Wong colorblind-friendly palette, per-concept consistent across figures.
+# Baseline uses the same light blue that marks MHAT in the leaderboard figure.
 PALETTE = {
-    "baseline": "#0072B2",       # blue
-    "no_cohesion": "#CC79A7",    # reddish purple
-    "no_affinities": "#F0E442",  # yellow
-    "no_merges": "#000000",      # black
+    "baseline": "#56B4E9",       # sky blue
+    "no_cohesion": "#009E73",    # bluish green
+    "no_affinities": "#000000",  # black
+    "no_merges": "#CC79A7",      # reddish purple
 }
 
 PLACEHOLDER = "<fill in>"

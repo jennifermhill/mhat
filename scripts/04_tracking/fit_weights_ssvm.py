@@ -30,7 +30,7 @@ from funtracks.import_export import import_from_geff
 from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids
 from mhat.tracking import utils
 from mhat.tracking.gt_annotation import annotate_gt_on_candidate_graph
-from mhat.tracking.pipeline import build_track_graph
+from mhat.tracking.pipeline import build_track_graph, resolve_input_dirs
 from mhat.tracking.solve_with_motile import add_costs, report_graph_statistics
 from motile.variables import EdgeSelected, NodeSelected
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
@@ -207,15 +207,27 @@ def fit_weights_hamming_weighted(
 
 
 def configure_logging(output_dir):
-    """Surface structsvm bundle-method convergence output to a logfile only."""
+    """Surface structsvm bundle-method convergence output to a logfile only.
+
+    Attaches the handler directly rather than via ``logging.basicConfig``, which
+    is a no-op once the root logger has handlers — a driver that fits many
+    subsets in one process would otherwise funnel every run into the first
+    run's logfile.
+    """
     log_dir = output_dir
-    log_dir.mkdir(exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"fit_weights_ssvm_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s: %(message)s"))
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler])
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+        handler.close()
+    root.addHandler(file_handler)
+    root.setLevel(logging.INFO)
     logging.getLogger("structsvm").setLevel(logging.INFO)
+    return log_path
 
 
 def load_gt(gt_data_dir, scale):
@@ -265,15 +277,22 @@ _LEARNED_WEIGHT_TO_TOML = {
 }
 
 
-def write_learned_config(input_config, solver, learned_path):
-    """Write a tracking config with weight/constant fields replaced by learned values."""
+def build_learned_config(input_config, solver):
+    """Copy of the input config with weight/constant fields replaced by learned values."""
     learned_config = dict(input_config)
     for (cost_name, var_name), weight in solver.weights._weights_by_name.items():
         toml_key = _LEARNED_WEIGHT_TO_TOML.get((cost_name, var_name))
         if toml_key is not None:
             learned_config[toml_key] = float(weight.value)
+    return learned_config
+
+
+def write_learned_config(input_config, solver, learned_path):
+    """Write a tracking config with weight/constant fields replaced by learned values."""
+    learned_config = build_learned_config(input_config, solver)
     with open(learned_path, "w") as f:
         toml.dump(learned_config, f)
+    return learned_config
 
 
 def get_solution_seg(fragments, merge_history, solution_graph):
@@ -354,8 +373,46 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
     for k, v in stats.items():
         print(f"  {k}: {v}")
 
+    return fit_and_solve_on_graph(
+        config,
+        track_graph,
+        exclusion_sets,
+        fragments,
+        merge_history,
+        scale,
+        axes,
+        output_dir,
+        no_merges=no_merges,
+    )
+
+
+def fit_and_solve_on_graph(
+    config,
+    fit_graph,
+    fit_exclusion_sets,
+    fragments,
+    merge_history,
+    scale,
+    axes,
+    output_dir,
+    no_merges=False,
+    solve_graph=None,
+    solve_exclusion_sets=None,
+):
+    """Fit weights on `fit_graph`, then solve and write the tracking outputs.
+
+    `fit_graph` must already carry `gt_selected` on its nodes and edges.
+
+    `solve_graph` lets the final solve run on a different (larger) graph than the
+    fit — used by the GT-amount experiment, where arm A fits on a graph reduced
+    to the annotated region but still wants predictions over the whole field of
+    view, so the outputs stay comparable across subset sizes. Defaults to
+    `fit_graph`.
+
+    Returns a summary dict describing the fit (also useful as fit_summary.json).
+    """
     print("\nBuilding solver and adding constraints/costs...")
-    solver = motile.Solver(track_graph)
+    solver = motile.Solver(fit_graph)
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(1))
     # force_all=True: weights/constants start at 0 here, so the runtime
@@ -364,9 +421,9 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
     add_costs(solver, config, force_all=True, no_merges=no_merges)
     # ExclusiveNodes must be added before fit_weights — the loss-augmented ILP
     # in SoftMarginLoss copies solver.constraints at construction time.
-    solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))
+    solver.add_constraint(motile.constraints.ExclusiveNodes(fit_exclusion_sets))
 
-    report_graph_statistics(config, track_graph)
+    report_graph_statistics(config, fit_graph)
 
     print("\nFitting weights via SSVM (this may take a while)...")
     if config.get("ssvm_standardize", False):
@@ -409,12 +466,54 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
     print(solver.weights)
 
     learned_path = output_dir / "learned_weights.toml"
-    write_learned_config(config, solver, learned_path)
+    learned_config = write_learned_config(config, solver, learned_path)
     print(f"Wrote learned weights to {learned_path}")
 
     print("\nSolving with learned weights...")
-    solver.solve()
-    solution_graph = utils.to_nx_graph(solver.get_selected_subgraph())
+    if solve_graph is not None and solve_graph is not fit_graph:
+        # Arm A: fit on the reduced graph, predict on the full one. Rebuild the
+        # same cost set (same ablate_* flags via force_all) with the learned
+        # values, so the only difference from the fit solver is the graph.
+        solve_solver = motile.Solver(solve_graph)
+        solve_solver.add_constraint(motile.constraints.MaxParents(1))
+        solve_solver.add_constraint(motile.constraints.MaxChildren(1))
+        add_costs(solve_solver, learned_config, force_all=True, no_merges=no_merges)
+        solve_solver.add_constraint(
+            motile.constraints.ExclusiveNodes(
+                fit_exclusion_sets if solve_exclusion_sets is None else solve_exclusion_sets
+            )
+        )
+        solve_solver.solve()
+        solution_graph = utils.to_nx_graph(solve_solver.get_selected_subgraph())
+    else:
+        solver.solve()
+        solution_graph = utils.to_nx_graph(solver.get_selected_subgraph())
+
+    # `gt_selected` is a fitting label, not a prediction. Drop it before writing:
+    # it is meaningless in the output, and for unlabeled candidates it is None,
+    # which geff cannot serialise (it infers a dtype from the first value).
+    for _, node_data in solution_graph.nodes(data=True):
+        node_data.pop("gt_selected", None)
+    for _, _, edge_data in solution_graph.edges(data=True):
+        edge_data.pop("gt_selected", None)
+
+    n_solution_nodes = solution_graph.number_of_nodes()
+    if n_solution_nodes == 0:
+        # Degenerate fit: nothing selected. Downstream geff/traccuracy cannot
+        # handle an empty prediction, so bail out before writing outputs.
+        print("WARNING: learned weights give an EMPTY solution; skipping output write.")
+        return {
+            "empty_solution": True,
+            "n_fit_nodes": len(fit_graph.nodes),
+            "n_fit_edges": len(fit_graph.edges),
+            "n_solution_nodes": 0,
+            "n_solution_edges": 0,
+            "learned_weights": {
+                k: learned_config[k]
+                for k in _LEARNED_WEIGHT_TO_TOML.values()
+                if k in learned_config
+            },
+        }
 
     print("Saving results...")
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
@@ -445,6 +544,17 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
         overwrite=True,
     )
 
+    return {
+        "empty_solution": False,
+        "n_fit_nodes": len(fit_graph.nodes),
+        "n_fit_edges": len(fit_graph.edges),
+        "n_solution_nodes": n_solution_nodes,
+        "n_solution_edges": solution_graph.number_of_edges(),
+        "learned_weights": {
+            k: learned_config[k] for k in _LEARNED_WEIGHT_TO_TOML.values() if k in learned_config
+        },
+    }
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -452,36 +562,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    raw_base_dir = Path(config["raw_base_dir"])
-    input_base_dir = Path(config["input_base_dir"])
     output_base_dir = Path(config["output_base_dir"])
     dataset = config["dataset"]
     experiment = config["experiment"]
-    assert raw_base_dir.is_dir()
-    assert input_base_dir.is_dir()
     assert output_base_dir.is_dir()
 
-    raw_dir = raw_base_dir / experiment / f"{dataset}.zarr"
-    assert raw_dir.is_dir(), f"Raw data directory {raw_dir} is missing"
-
-    seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
-    assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
-
-    flow_result = config.get("flow_result", None)
-    if flow_result is not None:
-        if config["use_lk"]:
-            flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_lucaskanade" / flow_result
-            flow_dir_2d = None
-        else:
-            flow_dir_2d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / flow_result
-            flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / flow_result
-            if not flow_dir_2d.is_dir():
-                flow_dir_2d = None
-        flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
-    else:
-        flow_dirs = {"2d": None, "3d": None}
-
-    gt_data_dir = input_base_dir / "tracking" / experiment / dataset
+    raw_dir, seg_dir, flow_dirs, gt_data_dir = resolve_input_dirs(config)
 
     if not config.get("exp_uid"):
         config["exp_uid"] = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

@@ -16,6 +16,54 @@ import zarr
 from mhat.tracking import create_multihypo_graph, utils
 
 
+def resolve_input_dirs(config) -> tuple[Path, Path, dict, Path]:
+    """Turn the TOML path keys into the directories the pipeline scripts need.
+
+    Returns:
+        (raw_dir, seg_dir, flow_dirs, gt_data_dir)
+
+    ``gt_data_dir`` defaults to the usual ``<input>/tracking/<exp>/<dataset>``
+    convention but can be overridden with a ``gt_data_dir`` config key — used to
+    point a fit or an evaluation at a reduced GT subset (see gt_subsets.py).
+    """
+    raw_base_dir = Path(config["raw_base_dir"])
+    input_base_dir = Path(config["input_base_dir"])
+    experiment = config["experiment"]
+    dataset = config["dataset"]
+    assert raw_base_dir.is_dir(), f"Raw base directory {raw_base_dir} is missing"
+    assert input_base_dir.is_dir(), f"Input base directory {input_base_dir} is missing"
+
+    raw_dir = raw_base_dir / experiment / f"{dataset}.zarr"
+    assert raw_dir.is_dir(), f"Raw data directory {raw_dir} is missing"
+
+    seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
+    assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
+
+    flow_result = config.get("flow_result", None)
+    if flow_result is not None:
+        flow_base = input_base_dir / "opticalflow" / experiment / dataset
+        if config.get("use_lk", False):
+            flow_dir_3d = flow_base / "opticalflow_lucaskanade" / flow_result
+            flow_dir_2d = None
+        else:
+            flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
+            flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
+            if not flow_dir_2d.is_dir():
+                print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D only.")
+                flow_dir_2d = None
+        assert flow_dir_3d.is_dir(), f"Optical flow directory {flow_dir_3d} is missing"
+        flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
+    else:
+        flow_dirs = {"2d": None, "3d": None}
+
+    if config.get("gt_data_dir"):
+        gt_data_dir = Path(config["gt_data_dir"])
+    else:
+        gt_data_dir = input_base_dir / "tracking" / experiment / dataset
+
+    return raw_dir, seg_dir, flow_dirs, gt_data_dir
+
+
 def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     """Load arrays, run multi-hypo construction, attach attributes.
 

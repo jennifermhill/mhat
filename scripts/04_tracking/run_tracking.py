@@ -391,7 +391,7 @@ if __name__ == "__main__":
         exp_uid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         config["exp_uid"] = exp_uid
 
-    output_dir = output_base_dir / "tracking" / experiment / dataset / "test_run"
+    output_dir = output_base_dir / "tracking" / experiment / dataset / exp_uid
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 

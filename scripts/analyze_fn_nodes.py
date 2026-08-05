@@ -221,7 +221,9 @@ if __name__ == "__main__":
     dataset = config["dataset"]
 
     gt_data_dir = input_base_dir / "tracking" / experiment / dataset
-    pred_data_dir = input_base_dir / "tracking" / experiment / dataset / "test_run"
+    # run_tracking.py writes to .../<exp_uid>/; "test_run" is only the legacy default.
+    track_result = config.get("track_result", config.get("exp_uid", "test_run"))
+    pred_data_dir = input_base_dir / "tracking" / experiment / dataset / track_result
 
     print(f"Analyzing FN nodes for {experiment}/{dataset}")
     analyze_fn_nodes(config, gt_data_dir, pred_data_dir)

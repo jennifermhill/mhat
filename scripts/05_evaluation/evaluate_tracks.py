@@ -72,7 +72,12 @@ if __name__ == "__main__":
     assert input_base_dir.is_dir()
     assert output_base_dir.is_dir()
 
-    gt_data_dir = input_base_dir / "tracking" / experiment / dataset
+    # `gt_data_dir` may be overridden to score against a reduced GT subset
+    # (see src/mhat/tracking/gt_subsets.py); defaults to the usual convention.
+    if config.get("gt_data_dir"):
+        gt_data_dir = Path(config["gt_data_dir"])
+    else:
+        gt_data_dir = input_base_dir / "tracking" / experiment / dataset
     assert gt_data_dir.is_dir(), f"GT data dir {gt_data_dir} is missing"
 
     pred_data_dir = input_base_dir / "tracking" / experiment / dataset / config["track_result"]

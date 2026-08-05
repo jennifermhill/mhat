@@ -50,9 +50,8 @@ def run_tracking_and_eval(
     with open(cfg_path, "w") as f:
         toml.dump(config, f)
 
-    # run_tracking.py writes to .../tracking/<experiment>/<dataset>/test_run/
-    # which we'll then move to out_subdir. Easier path: just call run_tracking.py
-    # with our config (which has all paths set) and let it write to test_run.
+    # run_tracking.py writes to .../tracking/<experiment>/<dataset>/<exp_uid>/,
+    # and exp_uid is set to out_subdir above, so it lands directly in out_dir.
     track_cmd = [
         sys.executable,
         str(Path(__file__).parent / "run_tracking.py"),
@@ -64,22 +63,10 @@ def run_tracking_and_eval(
         print(f"  ERROR: tracking failed:\n{proc.stderr[-2000:]}")
         return None
 
-    # run_tracking.py writes outputs under tracking/<exp>/<ds>/test_run/, not into our out_dir.
-    test_run_dir = tracking_root / "test_run"
-    if not (test_run_dir / "pred_tracks.zarr").is_dir():
+    if not (out_dir / "pred_tracks.zarr").is_dir():
         print("  ERROR: no pred_tracks.zarr produced (likely empty solution).")
         # Still copy the input config so we have a record
         return None
-
-    # Move test_run contents into our out_subdir
-    for child in test_run_dir.iterdir():
-        target = out_dir / child.name
-        if target.exists():
-            if target.is_dir():
-                shutil.rmtree(target)
-            else:
-                target.unlink()
-        shutil.move(str(child), str(out_dir))
 
     # Build a temporary eval config pointing at out_subdir
     eval_cfg = {

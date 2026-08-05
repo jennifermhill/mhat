@@ -3,7 +3,7 @@
 # Weights/constants copied verbatim from
 #   experiments/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_refit/learned_weights.toml.
 # Data/structural params from 02_cells baseline_config.toml (seg/flow are 02_cells').
-# NOTE: run_tracking.py writes to a hardcoded "test_run" dir; rename to "ssvm_test" after.
+# NOTE: run_tracking.py writes to .../<exp_uid>/, so this lands in "ssvm_test" directly.
 raw_base_dir = "Y:/jennifer/mhat/data/"
 input_base_dir = "Y:/jennifer/mhat/experiments/"
 output_base_dir = "Y:/jennifer/mhat/experiments/"

@@ -3,10 +3,10 @@
 # Weights/constants copied verbatim from
 #   experiments/tracking/NC281-sparse-label/02_nuclei_denoised_train/ssvm_fit/learned_weights.toml.
 # Data/structural params from 02_nuclei_denoised_test baseline_config.toml (test seg/flow).
-# NOTE: run_tracking.py writes to a hardcoded "test_run" dir; rename to "ssvm_test" after.
-raw_base_dir = "Y:/jennifer/mhat/data/"
-input_base_dir = "Y:/jennifer/mhat/experiments/"
-output_base_dir = "Y:/jennifer/mhat/experiments/"
+# NOTE: run_tracking.py writes to .../<exp_uid>/, so this lands in "ssvm_test" directly.
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 experiment = "NC281-sparse-label"
 dataset = "02_nuclei_denoised_test"
 seg_result = "2026-07-08_14-40-36"

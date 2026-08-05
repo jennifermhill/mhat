@@ -1,0 +1,153 @@
+# GT-amount learning curve — how much ground truth does the SSVM fit actually need?
+#
+# Everything below the [experiment] block is a verbatim clone of
+# configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/ssvm_fit/ssvm_fit.toml,
+# so every run in the sweep builds the identical candidate graph and differs ONLY
+# in how much GT the fit can see. Driver: scripts/04_tracking/run_gt_amount_experiment.py
+#
+# The n=164 (all tracks) run must reproduce .../ssvm_fit/learned_weights.toml exactly
+# — that is verification gate V2. Do not launch the batch until it does.
+
+# --- experiment layout -------------------------------------------------------
+# Nested subsets: within a seed, 12 ⊂ 25 ⊂ 50 ⊂ 100 ⊂ all.
+# The full-GT size is derived from the data, NOT listed here: import_from_geff
+# renumbers tracks (splitting at divisions), so this GT has 167 funtracks tracks
+# even though the raw geff carries 164 track_ids. `include_full` appends the true
+# count; any size listed at or above it is dropped.
+sizes = [100, 50, 25, 12]
+include_full = true
+seeds = [0, 1, 2, 3, 4]
+# Two annotation protocols, three arms:
+#   sparser GT over the whole field of view (parameterized by `sizes`)
+#     "A" = delete unannotated candidates from the fit graph (a true ignore).
+#     "B" = mark them gt_selected=None, motile's documented sparse-GT API
+#           (a soft negative).
+#   a smaller densely-annotated region (parameterized by `crop_target_gt_nodes`)
+#     "C" = annotate everything in a box; fit only on candidates wholly inside it.
+# A and B keep the competing hypotheses around each annotated cell, but label ZERO
+# candidates that overlap no annotated object at all — an annotator working sparsely
+# cannot call those false positives. C supervises them normally. That difference in
+# which negatives exist, not how many, is what the sweep exists to measure.
+# Compare the arms at equal `n_gt_nodes_annotated`, NOT at equal track count.
+arms = ["A", "B", "C"]
+# How "candidate touches a GT track" is decided when picking what to hide.
+# "any"  = shares at least one voxel (an annotator said nothing about that region)
+# "iogt" = only near-matches count (passes iogt_threshold)
+mask_overlap_criterion = "any"
+gt_subsets_dirname = "gt_amount/gt_subsets"
+run_name_prefix = "gt2"
+
+# --- where the runs are grouped ----------------------------------------------
+# This sweep is ~80 runs across two datasets; left flat they bury the handful of
+# ordinary runs sharing those dataset directories. Run TOKENS stay flat (they are
+# the CSV `run` column and the log-file stems) — only the paths and the
+# exp_uid / track_result addressing a run carry the subdirectory. Stage 1 and
+# stage 2 are separate sweeps over the same dataset, hence separate keys.
+# Unset means the old flat layout, which is still what every other sweep uses.
+regsweep_subdir = "gt_amount/stage1_regsweep"   # sweep_ssvm_reg.py (stage 1)
+runs_subdir = "gt_amount/stage2_fits"           # train fits (stage 2)
+test_runs_subdir = "gt_amount/stage2_solves"    # test solves (stage 3b)
+
+# --- arm C: dense crops ------------------------------------------------------
+# HOW CROPS ARE SIZED. Two modes; `crop_target_gt_nodes` wins if both are set.
+#
+# Budget mode (used here). Each crop grows outward from its seeded centre until it
+# holds about this many annotated GT nodes. "match_sizes" derives one budget per
+# entry in `sizes` above, equal to the mean annotated-GT-node count those track
+# subsets actually cost — [1634, 821, 416, 196] on this dataset — so arm C's points
+# land directly on top of arm A/B's on the shared x-axis. Tokens carry the budget in
+# 4 digits: 821 -> b0821. The budgets are a mean over seeds and are pinned in
+# gt_crops/crop_budgets.json on first resolve, so do NOT narrow --seeds in the
+# fan-out; that would re-resolve them into a different token namespace.
+#
+# Why budget rather than volume: the GT is spatially clumpy, so a fixed volume
+# fraction buys wildly different annotation depending on where the box lands (at 50%
+# of this volume seed 0 caught 643 GT nodes, seed 1 caught 1780). Budget sizing
+# collapses that spread to ~±10 nodes and lets the crop volume absorb the density
+# difference instead.
+#
+# Not an oracle: the search counts only the GT inside the box it is considering —
+# the annotator's own completed work — never the GT outside, and the box's POSITION
+# still comes from the seed alone. Only its size adapts.
+crop_target_gt_nodes = "match_sizes"
+# Coarse scan increment (fraction of total volume) used to bracket the target before
+# bisecting. Affects only search cost, which is negligible.
+crop_growth_step = 0.05
+#
+# Fixed-volume mode (the alternative — unset crop_target_gt_nodes to use it).
+# Nested within a seed. Tokens: 0.5 -> f500, 0.0625 -> f063. Kept for reference;
+# superseded by budget mode above and INERT while crop_target_gt_nodes is set.
+crop_fractions = [0.5, 0.25, 0.125, 0.0625]
+# Which axes shrink. ("y", "x") keeps the full 20 frames and all 25 z-slices — an
+# annotator choosing a smaller field of view — so track lengths, and therefore the
+# link supervision per annotated cell, are unchanged. On this 512x512 volume that
+# is 362 / 256 / 181 / 128 px squares.
+crop_axes = ["y", "x"]
+# "contained" = a candidate is used only if its whole bounding box is inside the
+# crop. Paired with "a GT object is annotated iff it intersects the crop", this
+# makes it impossible for a candidate to be labeled gt_selected=0 because of a cell
+# the annotator never annotated. "centroid" keeps more border candidates but gives
+# up that guarantee. Do not change this without re-running verify_crop_no_oracle.py.
+crop_membership = "contained"
+gt_crops_dirname = "gt_amount/gt_crops"
+
+# IO
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "NC281-sparse-label"
+dataset = "02_nuclei_denoised_train"
+
+seg_result = "2026-07-02_10-32-29"
+flow_result = "2026-07-02_10-43-07"
+use_lk = false
+
+# ILP params (initial values for SSVM; will be overwritten with learned values)
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.0
+drift_constant = 0.0
+area_weight = 0.0
+area_constant = 0.0
+intensity_weight = 0.0
+intensity_constant = 0.0
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = 0.0
+cohesion_constant = 0.0
+adhesion_weight = 0.0
+adhesion_constant = 0.0
+appear_constant = 0.0
+disappear_constant = 0.0
+
+# cand graph creation params (same as 02_nuclei_denoised_train/baseline_config.toml)
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 35
+size_threshold = 0
+
+# Confidence-based Z flow filtering (matches baseline: 1e-7)
+z_flow_conf_threshold = 1e-7
+z_flow_min_pass_pixels = 10
+
+# Ablation flags
+ablate_cohesion_adhesion = false
+ablate_drift = false
+ablate_area = false
+ablate_intensity = false
+ablate_curvature = true  # curvature dominates solve time on NC281-sparse; disabled for fit
+
+# SSVM params
+# ssvm_reg is superseded per-run by ssvm_reg_effective_target below; kept only as
+# the value the graph-construction path reads before the fit.
+ssvm_reg = 0.1
+# Stage-1 calibration (2026-08-04, 19-point twelfth-decade grid at full GT):
+# winner ssvm_reg = 0.0121 at n_labeled = 10877 -> effective 131.61. Each run
+# divides this by its own n_labeled, so the effective regularizer is held fixed
+# while the GT amount varies. Do NOT also set ssvm_reg_normalize.
+ssvm_reg_effective_target = 131.61
+ssvm_max_iter = 100
+ssvm_eps = 1.0e-6
+iogt_threshold = 0.5

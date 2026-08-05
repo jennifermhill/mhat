@@ -1,0 +1,9 @@
+# ssvm_reg = 0.0383; scored against the COMPLETE train GT.
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "NC281-sparse-label"
+dataset = "02_nuclei_denoised_train"
+track_result = "gt_amount/stage1_regsweep/regsweep_r05"
+metrics = [ "basic", "track_overlap",]
+matcher = "point"
+match_threshold = 10

@@ -18,8 +18,9 @@
 #
 # Wong colorblind-friendly palette, matched to the figure's cost concepts.
 # drift is labelled "Flow", curvature "Momentum" to match the rest of the figure:
-#   drift/Flow #009E73 (green) | volume #E69F00 (yellow) | curvature/Momentum #D55E00 (orange)
-#   intensity #CC79A7 (pink) | coh/adh #56B4E9 (light blue) | full #0072B2 (blue) | none #999999
+#   drift/Flow #56B4E9 (light blue) | curvature/Momentum #0072B2 (blue)
+#   intensity #E69F00 (orange) | volume #D55E00 (vermillion) | coh/adh #009E73 (bluish green)
+#   full #000000 (black) | none #999999 (gray)
 
 # =============================================================================
 # Fluo-C3DL-MDA231 / 01_cells
@@ -79,42 +80,42 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/none_config.toml"
 
 [mda231.conditions.plus_cohesion]
 label = "+ Coh/Adh"
-color = "#56B4E9"
+color = "#009E73"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
 tracking_uid = "fs1cpm6v2_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_cohesion_config.toml"
 
 [mda231.conditions.plus_intensity]
 label = "+ Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 note = "active: intensity (w=8, c=-3000)"
 tracking_uid = "fs1cpm6v2_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_intensity_config.toml"
 
 [mda231.conditions.plus_volume]
 label = "+ Volume"
-color = "#E69F00"
+color = "#D55E00"
 note = "active: area (w=500, c=-500)"
 tracking_uid = "fs1cpm6v2_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_volume_config.toml"
 
 [mda231.conditions.plus_curvature]
 label = "+ Momentum"
-color = "#D55E00"
+color = "#0072B2"
 note = "active: curvature (w=10, c=-500)"
 tracking_uid = "fs1cpm6v2_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_curvature_config.toml"
 
 [mda231.conditions.plus_drift]
 label = "+ Flow"
-color = "#009E73"
+color = "#56B4E9"
 note = "active: drift (w=30, c=-1000)"
 tracking_uid = "fs1cpm6v2_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_drift_config.toml"
 
 [mda231.conditions.full]
 label = "Full"
-color = "#0072B2"
+color = "#000000"
 note = "full tuned baseline (drift_constant=-4000, adhesion_weight=-500; curvature off)"
 tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
@@ -161,42 +162,42 @@ config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/none_config.toml"
 
 [mda231_02cells.conditions.plus_cohesion]
 label = "+ Coh/Adh"
-color = "#56B4E9"
+color = "#009E73"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
 tracking_uid = "fs1cpm6v2_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_cohesion_config.toml"
 
 [mda231_02cells.conditions.plus_intensity]
 label = "+ Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 note = "active: intensity (w=8, c=-3000)"
 tracking_uid = "fs1cpm6v2_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_intensity_config.toml"
 
 [mda231_02cells.conditions.plus_volume]
 label = "+ Volume"
-color = "#E69F00"
+color = "#D55E00"
 note = "active: area (w=500, c=-500)"
 tracking_uid = "fs1cpm6v2_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_volume_config.toml"
 
 [mda231_02cells.conditions.plus_curvature]
 label = "+ Momentum"
-color = "#D55E00"
+color = "#0072B2"
 note = "active: curvature (w=10, c=-500)"
 tracking_uid = "fs1cpm6v2_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_curvature_config.toml"
 
 [mda231_02cells.conditions.plus_drift]
 label = "+ Flow"
-color = "#009E73"
+color = "#56B4E9"
 note = "active: drift (w=30, c=-1000)"
 tracking_uid = "fs1cpm6v2_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_drift_config.toml"
 
 [mda231_02cells.conditions.full]
 label = "Full"
-color = "#0072B2"
+color = "#000000"
 note = "full tuned baseline (drift_constant=-4000, adhesion_weight=-500; curvature off)"
 tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
@@ -239,21 +240,21 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/none_config.toml"
 
 [nc281.conditions.plus_cohesion]
 label = "+ Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 note = "active: cohesion+adhesion (cohesion_w=-500)"
 tracking_uid = "2026-04-27_19-03-50"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_cohesion_config.toml"
 
 [nc281.conditions.plus_volume]
 label = "+ Volume"
-color = "#E69F00"
+color = "#D55E00"
 note = "active: area (w=2350)"
 tracking_uid = "2026-04-27_19-18-02"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_volume_config.toml"
 
 [nc281.conditions.plus_intensity]
 label = "+ Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 note = "active: intensity (w=7)"
 tracking_uid = "2026-04-27_19-36-39"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_intensity_config.toml"
@@ -261,21 +262,21 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_intensity_config.toml"
 # curvature batch nc281curvadd_2026-04-29_16-49-06 R3 (cluster run, on Y:).
 [nc281.conditions.plus_curvature]
 label = "+ Momentum"
-color = "#D55E00"
+color = "#0072B2"
 note = "active: curvature (w=100, c=-800)"
 tracking_uid = "2026-04-29_16-49-06_R3"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_curvature_config.toml"
 
 [nc281.conditions.plus_drift]
 label = "+ Flow"
-color = "#009E73"
+color = "#56B4E9"
 note = "active: drift (w=30)"
 tracking_uid = "2026-04-27_18-49-31"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_drift_config.toml"
 
 [nc281.conditions.full]
 label = "Full"
-color = "#0072B2"
+color = "#000000"
 note = "full tuned baseline (drift_w=30, cohesion_w=-500)"
 tracking_uid = "2026-04-23_15-11-00"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_solver_config.toml"
@@ -322,35 +323,35 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/none_config.tom
 
 [nc281_sparse.conditions.plus_cohesion]
 label = "+ Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 note = "active: cohesion+adhesion (w~20k); all other ablate_* = true"
 tracking_uid = "2026-05-01_10-02-14_add_coh_w20k"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_cohesion_config.toml"
 
 [nc281_sparse.conditions.plus_volume]
 label = "+ Volume"
-color = "#E69F00"
+color = "#D55E00"
 note = "active: area (w~1300); all other ablate_* = true"
 tracking_uid = "2026-05-01_10-02-14_add_vol_w1300"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_volume_config.toml"
 
 [nc281_sparse.conditions.plus_intensity]
 label = "+ Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 note = "active: intensity (w~6); all other ablate_* = true"
 tracking_uid = "2026-05-01_10-02-14_add_int_w6"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_intensity_config.toml"
 
 [nc281_sparse.conditions.plus_curvature]
 label = "+ Momentum"
-color = "#D55E00"
+color = "#0072B2"
 note = "active: curvature (w~100); all other ablate_* = true"
 tracking_uid = "2026-05-01_10-02-14_add_curv_w100"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_curvature_config.toml"
 
 [nc281_sparse.conditions.plus_drift]
 label = "+ Flow"
-color = "#009E73"
+color = "#56B4E9"
 note = "active: drift (w~100); all other ablate_* = true"
 tracking_uid = "2026-05-01_10-02-14_add_drift_w100"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_drift_config.toml"
@@ -358,7 +359,7 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_drift_conf
 # Full tuned model (drift+coh+adh); point metrics in track_metrics_point.json.
 [nc281_sparse.conditions.full]
 label = "Full"
-color = "#0072B2"
+color = "#000000"
 note = "all ablate_* = false (full tuned baseline)"
 tracking_uid = "2026-04-29_11-36-23_R1"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config.toml"
@@ -405,42 +406,42 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/none_conf
 
 [nc281_sparse_train.conditions.plus_cohesion]
 label = "+ Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 note = "active: cohesion+adhesion (cohesion_weight=-10000); sel=0.438"
 tracking_uid = "add_coh_w10k"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_cohesion_config.toml"
 
 [nc281_sparse_train.conditions.plus_volume]
 label = "+ Volume"
-color = "#E69F00"
+color = "#D55E00"
 note = "active: area (area_weight=1300); sel=0.611"
 tracking_uid = "add_vol_w1300"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_volume_config.toml"
 
 [nc281_sparse_train.conditions.plus_intensity]
 label = "+ Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 note = "active: intensity (intensity_weight=3); sel=0.639"
 tracking_uid = "add_int_w3"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_intensity_config.toml"
 
 [nc281_sparse_train.conditions.plus_curvature]
 label = "+ Momentum"
-color = "#D55E00"
+color = "#0072B2"
 note = "active: curvature (curvature_weight=100, constant=-1700); sel=0.861"
 tracking_uid = "add_curv_w100"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_curvature_config.toml"
 
 [nc281_sparse_train.conditions.plus_drift]
 label = "+ Flow"
-color = "#009E73"
+color = "#56B4E9"
 note = "active: drift (drift_weight=100, constant=-2000); sel=0.862"
 tracking_uid = "add_drift_w100"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_drift_config.toml"
 
 [nc281_sparse_train.conditions.full]
 label = "Full"
-color = "#0072B2"
+color = "#000000"
 note = "all costs active (full tuned baseline; Step-0 train tune, drift_w=100, coh=-500/450); sel=0.861"
 tracking_uid = "s0_dw100_cw500"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
@@ -484,42 +485,42 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/none_confi
 
 [nc281_sparse_test.conditions.plus_cohesion]
 label = "+ Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 note = "train params applied to test (cohesion_weight=-10000); sel=0.365"
 tracking_uid = "test_plus_coh"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_cohesion_config.toml"
 
 [nc281_sparse_test.conditions.plus_volume]
 label = "+ Volume"
-color = "#E69F00"
+color = "#D55E00"
 note = "train params applied to test (area_weight=1300); sel=0.618"
 tracking_uid = "test_plus_vol"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_volume_config.toml"
 
 [nc281_sparse_test.conditions.plus_intensity]
 label = "+ Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 note = "train params applied to test (intensity_weight=3); sel=0.629"
 tracking_uid = "test_plus_int"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_intensity_config.toml"
 
 [nc281_sparse_test.conditions.plus_curvature]
 label = "+ Momentum"
-color = "#D55E00"
+color = "#0072B2"
 note = "train params applied to test (curvature_weight=100); sel=0.839"
 tracking_uid = "test_plus_curv"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_curvature_config.toml"
 
 [nc281_sparse_test.conditions.plus_drift]
 label = "+ Flow"
-color = "#009E73"
+color = "#56B4E9"
 note = "train params applied to test (drift_weight=100); sel=0.857"
 tracking_uid = "test_plus_drift"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_drift_config.toml"
 
 [nc281_sparse_test.conditions.full]
 label = "Full"
-color = "#0072B2"
+color = "#000000"
 note = "train params applied to test (full tuned baseline); sel=0.858"
 tracking_uid = "test_full"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"

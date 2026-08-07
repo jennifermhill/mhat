@@ -16,8 +16,9 @@
 #
 # Wong colorblind-friendly palette, matched to the figure's cost concepts.
 # drift is labelled "Flow", curvature "Momentum" to match the rest of the figure:
-#   drift/Flow #009E73 (green) | volume #E69F00 (yellow) | curvature/Momentum #D55E00 (orange)
-#   intensity #CC79A7 (pink) | coh/adh #56B4E9 (light blue) | baseline #0072B2 (blue) | all/none #999999
+#   drift/Flow #56B4E9 (light blue) | curvature/Momentum #0072B2 (blue)
+#   intensity #E69F00 (orange) | volume #D55E00 (vermillion) | coh/adh #009E73 (bluish green)
+#   baseline #000000 (black) | all/none #999999 (gray)
 
 # =============================================================================
 # Fluo-C3DL-MDA231 / 01_cells
@@ -71,35 +72,35 @@ reduction = "scalar"
 # `params` is informational; canonical config is in each run's saved config.toml.
 [mda231.conditions.baseline]
 label = "Baseline"
-color = "#0072B2"
+color = "#000000"
 params = "full model; drift_constant=-4000, adhesion_weight=-500"
 tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_intensity]
 label = "- Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 params = "intensity zeroed; drift_constant=-4000, adhesion_weight=-500"
 tracking_uid = "fs1cpm6v2_no_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_intensity_config.toml"
 
 [mda231.conditions.no_volume]
 label = "- Volume"
-color = "#E69F00"
+color = "#D55E00"
 params = "area zeroed; drift_constant=-5000, drift_weight=30"
 tracking_uid = "fs1cpm6v2_no_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_volume_config.toml"
 
 [mda231.conditions.no_drift]
 label = "- Flow"
-color = "#009E73"
+color = "#56B4E9"
 params = "drift zeroed; area_constant=-5000"
 tracking_uid = "fs1cpm6v2_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_drift_config.toml"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
-color = "#56B4E9"
+color = "#009E73"
 params = "cohesion+adhesion zeroed; drift_weight=100, area_weight=2500"
 tracking_uid = "fs1cpm6v2_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
@@ -147,35 +148,35 @@ reduction = "scalar"
 # 2026-05-29_10-59-37. Baseline = full model (holdout_fs1_cpm6).
 [mda231_02cells.conditions.baseline]
 label = "Baseline"
-color = "#0072B2"
+color = "#000000"
 params = "full model; drift_constant=-4000, adhesion_weight=-500"
 tracking_uid = "fs1cpm6v2_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_intensity]
 label = "- Intensity"
-color = "#CC79A7"
+color = "#E69F00"
 params = "intensity zeroed; drift_constant=-4000, adhesion_weight=-500"
 tracking_uid = "fs1cpm6v2_no_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_intensity_config.toml"
 
 [mda231_02cells.conditions.no_volume]
 label = "- Volume"
-color = "#E69F00"
+color = "#D55E00"
 params = "area zeroed; drift_constant=-5000, drift_weight=30"
 tracking_uid = "fs1cpm6v2_no_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_volume_config.toml"
 
 [mda231_02cells.conditions.no_drift]
 label = "- Flow"
-color = "#009E73"
+color = "#56B4E9"
 params = "drift zeroed; area_constant=-5000"
 tracking_uid = "fs1cpm6v2_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_drift_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
-color = "#56B4E9"
+color = "#009E73"
 params = "cohesion+adhesion zeroed; drift_weight=100, area_weight=2500"
 tracking_uid = "fs1cpm6v2_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
@@ -216,21 +217,21 @@ reduction = "mean"
 # copied from the C: sandbox to Y:. Baseline = full model (drift_w=30, cohesion_w=-500).
 [nc281.conditions.baseline]
 label = "Baseline"
-color = "#0072B2"
+color = "#000000"
 ablate_flags = ""
 tracking_uid = "2026-04-23_15-11-00"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_solver_config.toml"
 
 [nc281.conditions.no_cohesion]
 label = "- Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 ablate_flags = "ablate_cohesion_adhesion = true"
 tracking_uid = "2026-04-23_14-29-18"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_cohesion_solver_config.toml"
 
 [nc281.conditions.no_drift]
 label = "- Flow"
-color = "#009E73"
+color = "#56B4E9"
 ablate_flags = "ablate_drift = true"
 tracking_uid = "2026-04-23_14-04-19"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_drift_config.toml"
@@ -277,7 +278,7 @@ reduction = "scalar"
 # Full tuned model (drift+coh+adh); point-matched metrics live in track_metrics_point.json.
 [nc281_sparse.conditions.baseline]
 label = "Baseline"
-color = "#0072B2"
+color = "#000000"
 ablate_flags = ""
 tracking_uid = "2026-04-29_11-36-23_R1"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config.toml"
@@ -285,14 +286,14 @@ metrics_filename = "track_metrics_point.json"
 
 [nc281_sparse.conditions.no_cohesion]
 label = "- Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 ablate_flags = "ablate_cohesion_adhesion = true"
 tracking_uid = "2026-05-01_10-02-14_ablat_no_coh"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_cohesion_solver_config.toml"
 
 [nc281_sparse.conditions.no_drift]
 label = "- Flow"
-color = "#009E73"
+color = "#56B4E9"
 ablate_flags = "ablate_drift = true"
 tracking_uid = "2026-05-01_10-02-14_ablat_no_drift"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_drift_config.toml"
@@ -337,21 +338,21 @@ reduction = "scalar"
 
 [nc281_sparse_train.conditions.baseline]
 label = "Baseline"
-color = "#0072B2"
+color = "#000000"
 ablate_flags = ""
 tracking_uid = "s0_dw100_cw500"  # Step-0 full-model train winner (= addition.full)
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
 
 [nc281_sparse_train.conditions.no_cohesion]
 label = "- Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 ablate_flags = "cohesion+adhesion weight&constant = 0; drift_weight=100"
 tracking_uid = "nocoh2_dw100"  # sel=0.862 (= merge no_cohesion); cohesion inert
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_cohesion_config.toml"
 
 [nc281_sparse_train.conditions.no_drift]
 label = "- Flow"
-color = "#009E73"
+color = "#56B4E9"
 ablate_flags = "drift weight&constant = 0; base_edge_constant=-2000; cohesion=-250/225"
 tracking_uid = "nodrift2_cw250"  # sel=0.423 (drift removed, base-edge floor kept)
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_drift_config.toml"
@@ -394,21 +395,21 @@ reduction = "scalar"
 
 [nc281_sparse_test.conditions.baseline]
 label = "Baseline"
-color = "#0072B2"
+color = "#000000"
 ablate_flags = ""
 tracking_uid = "test_full"  # train baseline params on test; sel=0.858
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"
 
 [nc281_sparse_test.conditions.no_cohesion]
 label = "- Cohesion"
-color = "#56B4E9"
+color = "#009E73"
 ablate_flags = "cohesion+adhesion weight&constant = 0; drift_weight=100"
 tracking_uid = "test_nocoh2"  # sel=0.857 (= baseline; cohesion inert)
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_cohesion_config.toml"
 
 [nc281_sparse_test.conditions.no_drift]
 label = "- Flow"
-color = "#009E73"
+color = "#56B4E9"
 ablate_flags = "drift weight&constant = 0; base_edge_constant=-2000; cohesion=-250/225"
 tracking_uid = "test_nodrift2"  # sel=0.546 (drift removed; big drop from baseline 0.858)
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_drift_config.toml"

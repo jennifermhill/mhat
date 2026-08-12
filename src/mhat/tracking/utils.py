@@ -374,6 +374,24 @@ def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
         cand_graph.edges[edge]["intensity_diff"] = intensity_diff
 
 
+def add_division_attr(cand_graph: motile.TrackGraph):
+    """Flag division hyperedges with a 0/1 attribute so they can be given a cost.
+
+    motile's built in Split cost cannot price these divisions: it applies to the
+    NodeSplit variable, which only turns on when a node has two or more selected
+    outgoing edges, whereas a division here is a single selected hyperedge. The
+    cost therefore has to sit on the edge, as a weight on this indicator.
+
+    Every edge gets the attribute, including ordinary ones, because EdgeSelection
+    looks it up on each edge it is applied to.
+    """
+    for edge in cand_graph.edges:
+        is_division = (
+            cand_graph.is_hyperedge(edge) and len(edge[0]) == 1 and len(edge[1]) > 1
+        )
+        cand_graph.edges[edge]["is_division"] = float(is_division)
+
+
 def add_camp_signal_attr(solution_graph: motile.TrackGraph, raw_cell_img: np.ndarray, cell_seg: np.ndarray):
     """Add mean CAMP signal from raw_cell_img as a node attribute to the solution graph. Occurs in-place on solution graph."""
     for node_id, data in solution_graph.nodes(data=True):

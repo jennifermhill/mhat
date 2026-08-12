@@ -57,6 +57,18 @@ def solve_with_motile(config, graph, exclusion_sets):
     else:
         print("Skipping intensity cost (weight=0)")
 
+    if config.get("division_weight", 0) != 0:
+        solver.add_cost(
+            motile.costs.EdgeSelection(
+                weight=config["division_weight"],
+                attribute="is_division",
+                constant=0.0,
+            ),
+            name="division",
+        )
+    else:
+        print("Skipping division cost (weight=0)")
+
     if config["curvature_weight"] != 0:
         solver.add_cost(
             CurvatureCost(

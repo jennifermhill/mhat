@@ -242,6 +242,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         utils.add_drift_dist_attr(track_graph, drift=0)
     utils.add_area_diff_attr(track_graph)
     utils.add_intensity_diff_attr(track_graph)
+    utils.add_division_attr(track_graph)
 
     print("Solving tracking with motile...")
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets)

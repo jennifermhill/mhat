@@ -242,8 +242,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     utils.add_area_diff_attr(track_graph)
     utils.add_intensity_diff_attr(track_graph)
 
-    report_graph_statistics(config, track_graph)
-
     # Save candidate edge list for analysis
     cand_edges_path = output_dir / "candidate_edges.npy"
     cand_edge_list = np.array([(e[0], e[1]) for e in track_graph.edges], dtype=np.int64)

@@ -2,6 +2,7 @@ import os
 
 import motile
 import numpy as np
+from mhat.tracking.division_cost import DivisionCost
 from mhat.tracking.edge_pairs import CurvatureCost
 from mhat.tracking.leaves_scaled_costs import LeavesScaledNodeSelection
 from mhat.tracking.utils import to_nx_graph, report_graph_statistics
@@ -59,11 +60,7 @@ def solve_with_motile(config, graph, exclusion_sets):
 
     if config.get("division_weight", 0) != 0:
         solver.add_cost(
-            motile.costs.EdgeSelection(
-                weight=config["division_weight"],
-                attribute="is_division",
-                constant=0.0,
-            ),
+            DivisionCost(weight=config["division_weight"]),
             name="division",
         )
     else:

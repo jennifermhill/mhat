@@ -11,6 +11,8 @@ from scipy import linalg
 import skimage
 from line_profiler import profile
 
+from mhat.tracking.edge_pairs import CurvatureCost
+
 
 def nodes_from_segmentation(
     segmentation: np.ndarray,
@@ -458,15 +460,15 @@ def report_graph_statistics(config, track_graph):
             if attr in data:
                 edge_attrs[attr].append(data[attr])
 
-    # Compute curvature values from edge pairs
+    curvature_cost = CurvatureCost(position_attribute="centroid")
     curvature_values = []
     for node in track_graph.nodes:
         in_edges = list(track_graph.prev_edges[node])
         out_edges = list(track_graph.next_edges[node])
         for in_edge in in_edges:
-            in_offset = np.array(track_graph.nodes[in_edge[1]]["centroid"]) - np.array(track_graph.nodes[in_edge[0]]["centroid"])
+            in_offset = curvature_cost.get_edge_offset(track_graph, in_edge)
             for out_edge in out_edges:
-                out_offset = np.array(track_graph.nodes[out_edge[1]]["centroid"]) - np.array(track_graph.nodes[out_edge[0]]["centroid"])
+                out_offset = curvature_cost.get_edge_offset(track_graph, out_edge)
                 curvature_values.append(np.linalg.norm(out_offset - in_offset))
 
     # Config parameter mapping

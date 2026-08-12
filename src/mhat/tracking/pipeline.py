@@ -189,5 +189,6 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
         utils.add_drift_dist_attr(track_graph, drift=0)
     utils.add_area_diff_attr(track_graph)
     utils.add_intensity_diff_attr(track_graph)
+    utils.add_division_attr(track_graph)
 
     return track_graph, fragments, merge_history, all_exclusion_sets, scale, axes

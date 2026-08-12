@@ -1,4 +1,5 @@
 import motile
+from mhat.tracking.division_cost import DivisionCost
 from mhat.tracking.edge_pairs import CurvatureCost
 from mhat.tracking.leaves_scaled_costs import LeavesScaledNodeSelection
 from mhat.tracking.utils import to_nx_graph, report_graph_statistics
@@ -30,6 +31,14 @@ def add_costs(solver, config, force_all=False, no_merges=False):
       (e.g. curvature dominates solve time on NC281-sparse), not as a runtime
       ablation mechanism. `base_edge_constant` is a fixed (non-learnable) inference
       offset and is never added on this path.
+
+    The division cost is the exception to both regimes: it is a DivisionCost (a
+    weight only, no constant) and has no `ablate_*` flag. At runtime it is
+    included when `division_weight` is nonzero; on the fit path it is included
+    only when `divisions` is true, since with divisions off `is_division` is 0 on
+    every edge and the feature would be a dead column in the fit. It is also
+    excluded from the `base_edge` trigger below, which would otherwise stop
+    firing for the existing no-feature conditions.
 
     Appear/disappear costs are always added on both paths.
 
@@ -91,6 +100,18 @@ def add_costs(solver, config, force_all=False, no_merges=False):
         )
     else:
         print("Skipping intensity cost")
+
+    if force_all:
+        include_division = config.get("divisions", False)
+    else:
+        include_division = config.get("division_weight", 0) != 0
+    if include_division:
+        solver.add_cost(
+            DivisionCost(weight=config.get("division_weight", 0.0)),
+            name="division",
+        )
+    else:
+        print("Skipping division cost")
 
     if _include("ablate_curvature", "curvature_weight", "curvature_constant"):
         solver.add_cost(

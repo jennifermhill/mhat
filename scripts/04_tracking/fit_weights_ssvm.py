@@ -269,6 +269,8 @@ _LEARNED_WEIGHT_TO_TOML = {
     ("cohesion", "constant"): "cohesion_constant",
     ("adhesion", "weight"): "adhesion_weight",
     ("adhesion", "constant"): "adhesion_constant",
+    # DivisionCost exposes a weight only, so there is no division constant to map.
+    ("division", "weight"): "division_weight",
     ("Appear", "constant"): "appear_constant",
     ("Disappear", "constant"): "disappear_constant",
     # Only the no-features baseline adds this (see add_costs). Its learned constant

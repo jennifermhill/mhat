@@ -289,12 +289,24 @@ def add_area_diff_attr(cand_graph: motile.TrackGraph):
         cand_graph.edges[edge]["area_diff"] = area_diff
 
 
+def _combined_intensity(cand_graph: motile.TrackGraph, nodes) -> float:
+    """Mean intensity of a set of nodes treated as a single object.
+
+    The intensity attribute is a per-object mean, so unlike area it does not add
+    across nodes. Weighting by area reproduces the mean over the combined region
+    exactly, which is what the node on the other side of the hyperedge measures.
+    """
+    intensities = [cand_graph.nodes[n]["intensity"] for n in nodes]
+    areas = [cand_graph.nodes[n]["area"] for n in nodes]
+    return float(np.average(intensities, weights=areas))
+
+
 def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
             us, vs = edge
-            intensity_u = sum(cand_graph.nodes[n]["intensity"] for n in us)
-            intensity_v = sum(cand_graph.nodes[n]["intensity"] for n in vs)
+            intensity_u = _combined_intensity(cand_graph, us)
+            intensity_v = _combined_intensity(cand_graph, vs)
         else:
             u, v = edge
             intensity_u = cand_graph.nodes[u]["intensity"]

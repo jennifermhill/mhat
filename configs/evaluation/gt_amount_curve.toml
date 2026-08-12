@@ -1,65 +1,140 @@
 # GT-amount learning curve — see gt_amount_experiment_plan.md
 #
-# Single sweep, so the arm keys are plain "A"/"B" (the "arm|label" form is only
-# needed when merging several sweeps via merge_gt_amount_csvs.py).
+# ONE config, several datasets. Everything at the top level is shared; each
+# [datasets.<name>] table adds what that dataset alone needs and overrides anything
+# shared. A no-flag invocation
 #
-# Every run here is fit at a FIXED EFFECTIVE regularizer: stage 1 calibrated
-# ssvm_reg on the fully annotated train split (19-point twelfth-decade grid,
-# winner ssvm_reg = 0.0121 at n_labeled = 10877 -> effective 131.61), and each
-# run divides that target by its own n_labeled. So the confound the old two-sweep
-# figure had to display — small-GT fits being far less regularized than the
-# full-GT fit — is designed out rather than plotted alongside.
+#     python scripts/07_plotting/gt_amount_curve.py configs/evaluation/gt_amount_curve.toml
 #
-# All three arms appear here because this is the HELD-OUT TEST split: the test GT is
-# dense, full-length and identical for every arm, so the protocols are directly
-# comparable (plan ground rule 3). The train-side figure stays at two arms.
+# regenerates every figure below, each into its own experiment tree. Narrow with
+# `--dataset <name>` while iterating.
+#
+# The two datasets deliberately share arm labels, colours and x semantics so the
+# figures can be set side by side without re-reading either legend. What they cannot
+# share is the metric: NC281 is point-matched (TrackOverlapMetrics), MDA231 is
+# CTC-matched (CTCMetrics), and BasicMetrics cannot run alongside a CTC matching at
+# all. Hence per-dataset metric_column / panel_metrics / ylabel / baselines.
+#
+# Every run in both sweeps is fit at a FIXED EFFECTIVE regularizer: stage 1
+# calibrates ssvm_reg on the fully annotated train split, and each run divides that
+# target by its own n_labeled. So the confound the old two-sweep figure had to
+# display — small-GT fits being far less regularized than the full-GT fit — is
+# designed out rather than plotted alongside.
+#
+# These are HELD-OUT TEST splits: the test GT is dense, full-length and identical for
+# every arm, so the protocols are directly comparable (plan ground rule 3). Only the
+# two arms worth comparing are drawn — sparse crops (A) and dense crops (C); arm B is
+# commented out below.
 #
 # Arm C's crops are sized by annotation BUDGET, not by volume, so its points land on
 # the same x as A/B's rather than scattered between them (plan ground rule 5).
 
-csv_path = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/stage2_test.csv"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/gt_amount_curve.png"
-
-metric_column = "target_effectiveness"
-ylabel = "Target effectiveness (held-out test)"
+# --- shared ------------------------------------------------------------------
+# Annotated NODES, not tracks: the arms are only honestly comparable on the budget an
+# annotator actually spends (one object per frame). Crop budgets are measured rather
+# than requested, so fixed track ticks no longer fit.
+x_field = "n_gt_nodes_annotated"
 xlabel = "Annotated GT nodes used for fitting"
+xticks = []
 suptitle = ""
 
-# Annotated NODES, not tracks: the two arms are only honestly comparable on the
-# budget an annotator actually spends (one object per frame). Crop budgets are
-# measured rather than requested, so fixed track ticks no longer fit.
-x_field = "n_gt_nodes_annotated"
-xticks = []
-
+# Arm A = sparse annotation (unlabeled candidates removed from the graph).
 [arms.A]
-label = "Arm A — unlabeled candidates removed"
+label = "Sparse crops"
 color = "#0072B2"
 linestyle = "-"
 
-[arms.B]
-label = "Arm B — gt_selected=None (motile API)"
-color = "#E69F00"
-linestyle = "-"
+# Arm B (gt_selected=None, motile API) is omitted from the figure — it is the
+# strictly worse protocol and adds nothing to the comparison. Its runs are still in
+# the CSV; uncomment to bring it back.
+# [arms.B]
+# label = "Arm B — gt_selected=None (motile API)"
+# color = "#E69F00"
+# linestyle = "-"
 
 # Keep linestyle solid: a dashed style triggers the hollow-marker "control condition"
 # styling used by the merged two-sweep figure, which would misread here.
 [arms.C]
-label = "Arm C — dense crop"
+label = "Dense crops"
 color = "#009E73"
 linestyle = "-"
 
+
+# --- NC281-sparse-label ------------------------------------------------------
+# Point matcher, dense GT, 167 train tracks. Primary metric is target effectiveness.
+[datasets.NC281-sparse-label]
+csv_path = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/stage2_test.csv"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/gt_amount_curve.png"
+output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/gt_amount_panels.png"
+metric_column = "target_effectiveness"
+panel_metrics = ["target_effectiveness", "edge_recall", "node_recall"]
+ylabel = "Target effectiveness (held-out test)"
+
 # Reference lines on the same held-out test split.
-[baselines.hand_tuned]
+[datasets.NC281-sparse-label.baselines.hand_tuned]
 label = "Hand-tuned (full GT)"
 value = 0.8290
 color = "#555555"
 
-# NOTE: this is the OLDER full-GT SSVM run fit at ssvm_reg = 0.1 (effective ~1088).
-# It is NOT expected to coincide with this sweep's n=167 point, which is fit at
-# effective 131.61 — stage 1 showed that reg 0.1 is well into the over-regularized
-# regime (train TE 0.7512 vs 0.8093 at the winner). Kept as a "what the old default
-# cost you" marker, not as a correctness check.
-[baselines.ssvm_full_gt_reg0p1]
-label = "SSVM full GT, old ssvm_reg=0.1"
-value = 0.7209
-color = "#999999"
+# REMOVED FROM THE FIGURE: the older full-GT SSVM run fit at ssvm_reg = 0.1
+# (effective ~1088, test TE 0.7209). It was never a correctness check against this
+# sweep's n=167 point (fit at effective 131.61) — stage 1 showed reg 0.1 is well into
+# the over-regularized regime (train TE 0.7512 vs 0.8093 at the winner). Uncomment to
+# restore the "what the old default cost you" marker.
+# [datasets.NC281-sparse-label.baselines.ssvm_full_gt_reg0p1]
+# label = "SSVM full GT, old ssvm_reg=0.1"
+# value = 0.7209
+# color = "#999999"
+
+
+# --- Fluo-C3DL-MDA231 --------------------------------------------------------
+# CTC matcher, 33 train tracks / 364 GT nodes. Primary metric is CTC TRA — the
+# dataset's established headline number and the one both reference lines are quoted
+# in. Panels are TRA / DET / SEG: tracking, detection and segmentation quality of the
+# same solution, which is what the arms trade against each other. LNK stays a CSV
+# diagnostic — 02_cells has three dividing tracks while the graph is built with
+# divisions = false, which caps achievable LNK for reasons unrelated to GT amount.
+#
+# SEG is measured on 13 sparse annotated z-slices and is bounded above by the
+# held-fixed segmentation, so expect a lower, flatter panel than TRA/DET. The
+# hand-tuned reference scores SEG 0.7082 there.
+[datasets.Fluo-C3DL-MDA231]
+csv_path = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/stage2_test.csv"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/gt_amount_curve.png"
+output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/gt_amount_panels.png"
+metric_column = "tra"
+panel_metrics = ["tra", "det", "seg"]
+ylabel = "CTC TRA (held-out test)"
+
+# `metric` is REQUIRED on every baseline here. gt_amount_curve.py filters reference
+# lines with base.get("metric", "target_effectiveness"), so an MDA231 baseline
+# without it silently vanishes from the figure.
+#
+# Hand-tuned on the same seg/flow pair (seg_cp_20260720_fs1_cpm6 / holdout_fs1_cpm6).
+# Legitimate as a reference: its parameters were chosen on 01_cells and only then
+# scored on test. It also runs curvature_weight = 0.0, matching this sweep's
+# ablate_curvature = true.
+[datasets.Fluo-C3DL-MDA231.baselines.hand_tuned]
+label = "Hand-tuned (full GT)"
+value = 0.9392
+metric = "tra"
+color = "#555555"
+
+# REMOVED FROM THE FIGURE: SSVM at the old default ssvm_reg = 0.1, full GT,
+# curvature-ablated, produced on this seg pair by stage 0c (stage-1 grid point
+# regsweep_r06, solved on test as gt_amount/ref_reg0p1). Same role as NC281's: "what
+# the old default cost you", not a correctness check against this sweep's full-GT
+# point (which is fit at the calibrated effective regularizer). Uncomment to restore.
+#
+# NOTE how close this sits to the hand-tuned line: 0.9339 vs 0.9392, a 0.005 gap.
+# On the OLD segmentation 2026-04-03_11-09-49 the equivalent SSVM run scored TRA
+# 0.8671 against a hand-tuned 0.9364 — a 0.07 gap. Two things changed at once: the
+# fs1cpm6 segmentation, and curvature ablation (the old-seg run left curvature
+# active and failed at linking, LNK 0.560; this one gets LNK 0.8965). So on this
+# dataset the headroom between "SSVM at a default regularizer" and "hand-tuned" is
+# now small, and the curve is mostly about how fast that degrades as GT shrinks.
+# [datasets.Fluo-C3DL-MDA231.baselines.ssvm_full_gt_reg0p1]
+# label = "SSVM full GT, old ssvm_reg=0.1"
+# value = 0.9339
+# metric = "tra"
+# color = "#999999"

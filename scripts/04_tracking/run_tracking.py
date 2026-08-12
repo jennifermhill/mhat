@@ -14,7 +14,6 @@ import networkx as nx
 from mhat.evaluation.eval_io import check_video_dir
 from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
 from mhat.tracking.tracks_io import save_tracks_to_csv
-from mhat.tracking.utils import report_graph_statistics
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 

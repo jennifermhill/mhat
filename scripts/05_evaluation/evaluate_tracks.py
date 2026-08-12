@@ -26,7 +26,7 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
             print(f"Converting GT tracks to geff format at {gt_tracks_path}")
             axes = pred_metadata.axes
             from_ctc_to_geff(
-                ctc_path=gt_data_dir / "01_GT" / "TRA",
+                ctc_path=gt_data_dir / ctc_gt / "TRA",
                 geff_path=gt_tracks_path,
                 segmentation_store=gt_data_dir / "correct_seg.zarr",
                 axes=axes,

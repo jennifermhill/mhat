@@ -1,0 +1,36 @@
+# SSVM full-GT reference at the OLD default ssvm_reg = 0.1, curvature-ablated.
+# Weights learned on 01_cells (stage-1 grid point regsweep_r06) and applied
+# to the held-out test split verbatim. This is the second baseline line on the
+# MDA231 GT-amount figure -- a "what the old default cost you" marker, not a
+# correctness check against the sweep full-GT point.
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "02_cells"
+seg_result = "holdout_fs1_cpm6"
+flow_result = "2026-05-29_10-59-37"
+use_lk = false
+drift_distance = [ 0.0, 3.0, 6.0,]
+drift_weight = 0.05455702257186428
+drift_constant = -0.37689201538019185
+area_weight = 0.16872011549156854
+area_constant = -0.37689201538019185
+intensity_weight = 0.0016677630731288058
+intensity_constant = -0.37689201538019185
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = -0.12690858942892336
+cohesion_constant = 0.0010213347731385504
+adhesion_weight = 0.0673147912143785
+adhesion_constant = 0.0010213347731385504
+appear_constant = 0.2691633685018366
+disappear_constant = 0.2098455342678329
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 60
+size_threshold = 60
+exp_uid = "gt_amount/ref_reg0p1"

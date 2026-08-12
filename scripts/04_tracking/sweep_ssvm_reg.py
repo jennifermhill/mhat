@@ -74,11 +74,53 @@ SWEEP_KEYS = (
     # Stage 1 and stage 2 group their runs separately, so the stage-2 keys must
     # not leak into a regsweep run's own config.
     "runs_subdir", "test_runs_subdir", "regsweep_subdir",
+    # How the sweep is SCORED, and where stage 3 sends its solves. Properties of
+    # the sweep, not of any one run's tracking parameters.
+    "eval_metrics", "eval_matcher", "eval_match_threshold", "ctc_gt", "test_ctc_gt",
+    "selection_metric", "test_dataset", "test_template",
 )
+
+#: Short name -> path into track_metrics.json. `selection_metric` in the sweep
+#: config picks which one ranks the grid. Default keeps the NC281 behaviour.
+SELECTION_METRIC_PATHS = {
+    "target_effectiveness": ("TrackOverlapMetrics", "target_effectiveness"),
+    "track_purity": ("TrackOverlapMetrics", "track_purity"),
+    "TRA": ("CTCMetrics", "TRA"),
+    "DET": ("CTCMetrics", "DET"),
+    "LNK": ("CTCMetrics", "LNK"),
+    "SEG": ("CTCMetrics", "SEG"),
+}
 
 
 def token(index: int, prefix: str) -> str:
     return f"{prefix}_r{index:02d}"
+
+
+def make_eval_config(config, input_base_dir, output_base_dir, experiment, dataset, track_result):
+    """Build the eval config for one regsweep run.
+
+    Metrics/matcher come from the sweep config so a CTC dataset can be scored with
+    the CTC matcher. Defaults reproduce the point-matched NC281 setup exactly.
+
+    `match_threshold` is written only for matchers that take one: `CTCMatcher()`
+    accepts no arguments, and evaluate_tracking forwards `threshold=` whenever the
+    key is present, so leaving it in would be a crash rather than an ignored key.
+    """
+    matcher = config.get("eval_matcher", "point")
+    eval_cfg = {
+        "input_base_dir": str(input_base_dir).replace("\\", "/") + "/",
+        "output_base_dir": str(output_base_dir).replace("\\", "/") + "/",
+        "experiment": experiment,
+        "dataset": dataset,
+        "track_result": track_result,
+        "metrics": config.get("eval_metrics", ["basic", "track_overlap"]),
+        "matcher": matcher,
+    }
+    if matcher != "ctc":
+        eval_cfg["match_threshold"] = config.get("eval_match_threshold", 10)
+    if config.get("ctc_gt"):
+        eval_cfg["ctc_gt"] = config["ctc_gt"]
+    return eval_cfg
 
 
 def main() -> None:
@@ -108,7 +150,15 @@ def main() -> None:
         / "configs/tracking" / experiment / dataset / (subdir or "gt_amount") / "eval"
     )
 
+    selection_metric = config.get("selection_metric", "target_effectiveness")
+    if selection_metric not in SELECTION_METRIC_PATHS:
+        raise SystemExit(
+            f"selection_metric={selection_metric!r} is not one of "
+            f"{sorted(SELECTION_METRIC_PATHS)}"
+        )
+
     if args.collect:
+        sel_group, sel_key = SELECTION_METRIC_PATHS[selection_metric]
         rows = []
         for i, reg in enumerate(regs):
             tok = token(i, prefix)
@@ -126,6 +176,7 @@ def main() -> None:
                     "target_effectiveness"
                 )
                 row["track_purity"] = m.get("TrackOverlapMetrics", {}).get("track_purity")
+                row["selected"] = m.get(sel_group, {}).get(sel_key)
             rows.append(row)
 
         def cell(value, width, fmt=""):
@@ -134,31 +185,67 @@ def main() -> None:
 
         print(
             f"{'token':<16}{'ssvm_reg':>10}{'n_labeled':>11}{'sol_nodes':>11}"
-            f"{'TE':>10}{'purity':>9}  status"
+            f"{selection_metric[:9]:>10}{'TE':>10}{'purity':>9}  status"
         )
         for r in rows:
             print(
                 f"{r['token']:<16}{cell(r['ssvm_reg'], 10, '.4f')}"
                 f"{cell(r.get('n_labeled'), 11, 'd' if r.get('n_labeled') is not None else '')}"
                 f"{cell(r.get('n_solution_nodes'), 11, 'd' if r.get('n_solution_nodes') is not None else '')}"
+                f"{cell(r.get('selected'), 10, '.4f' if r.get('selected') is not None else '')}"
                 f"{cell(r.get('target_effectiveness'), 10, '.4f' if r.get('target_effectiveness') is not None else '')}"
                 f"{cell(r.get('track_purity'), 9, '.4f' if r.get('track_purity') is not None else '')}"
                 f"  {r['status']}"
             )
 
-        scored = [r for r in rows if r.get("target_effectiveness") is not None]
+        scored = [r for r in rows if r.get("selected") is not None]
         if not scored:
-            print("\nNo scored runs yet — run run_evals.py on the eval configs first.")
+            print(
+                f"\nNo scored runs yet ({selection_metric} missing everywhere) — "
+                "run run_evals.py on the eval configs first."
+            )
             return
-        best = max(scored, key=lambda r: r["target_effectiveness"])
+        best = max(scored, key=lambda r: r["selected"])
         target = best["ssvm_reg"] * best["n_labeled"]
-        print(f"\nBest: {best['token']}  ssvm_reg={best['ssvm_reg']}  TE={best['target_effectiveness']:.4f}")
+        print(
+            f"\nBest: {best['token']}  ssvm_reg={best['ssvm_reg']}  "
+            f"{selection_metric}={best['selected']:.4f}"
+        )
         print(f"n_labeled at full GT = {best['n_labeled']}")
         print(f"\n  ssvm_reg_effective_target = {target:.2f}")
         print("\nPut that in the stage-2 config. If the winner sits at an END of the grid,")
         print("extend the grid in that direction before trusting it.")
         if best is scored[0] or best is scored[-1]:
             print("  ^^ WARNING: winner is at a grid edge; the optimum is not bracketed.")
+
+        # Bracket + plateau report. A grid this fine routinely ends on a plateau, and
+        # picking the argmax off a plateau fits the regularizer to eval noise — which
+        # stage 2 then imposes on every subset fit. Print the neighbourhood so that
+        # call is made on the numbers rather than on the single best cell.
+        by_reg = sorted(scored, key=lambda r: r["ssvm_reg"])
+        pos = by_reg.index(best)
+        lo = by_reg[pos - 1] if pos > 0 else None
+        hi = by_reg[pos + 1] if pos + 1 < len(by_reg) else None
+        print(
+            "\nBracket: "
+            + " < ".join(
+                f"{r['ssvm_reg']:g} ({r['selected']:.4f})"
+                for r in (lo, best, hi)
+                if r is not None
+            )
+        )
+        top = sorted(scored, key=lambda r: r["selected"], reverse=True)[:3]
+        spread = top[0]["selected"] - top[-1]["selected"]
+        print(
+            f"Top 3: "
+            + ", ".join(f"{r['token']}={r['selected']:.4f}" for r in top)
+            + f"  (spread {spread:.4f})"
+        )
+        if spread < 0.005:
+            print(
+                "  ^^ PLATEAU: top-3 spread < 0.005. Prefer the geometric centre of the\n"
+                "     plateau over the argmax — the ranking here is within eval noise."
+            )
         summary_out = train_root / subdir if subdir else train_root
         summary_out.mkdir(parents=True, exist_ok=True)
         with open(summary_out / f"{prefix}_summary.json", "w") as f:
@@ -230,16 +317,9 @@ def main() -> None:
 
         # Score against the COMPLETE train GT — legitimate here because this stage is
         # the fully-annotated condition. No gt_data_dir override needed.
-        eval_cfg = {
-            "input_base_dir": str(input_base_dir).replace("\\", "/") + "/",
-            "output_base_dir": str(output_base_dir).replace("\\", "/") + "/",
-            "experiment": experiment,
-            "dataset": dataset,
-            "track_result": run_ref(subdir, tok),
-            "metrics": ["basic", "track_overlap"],
-            "matcher": "point",
-            "match_threshold": 10,
-        }
+        eval_cfg = make_eval_config(
+            config, input_base_dir, output_base_dir, experiment, dataset, run_ref(subdir, tok)
+        )
         with open(eval_cfg_dir / f"{tok}_eval.toml", "w") as f:
             f.write(f"# ssvm_reg = {reg}; scored against the COMPLETE train GT.\n")
             toml.dump(eval_cfg, f)

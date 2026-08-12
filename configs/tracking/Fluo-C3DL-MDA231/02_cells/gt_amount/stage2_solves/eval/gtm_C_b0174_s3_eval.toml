@@ -1,0 +1,8 @@
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "02_cells"
+track_result = "gt_amount/stage2_solves/gtm_C_b0174_s3"
+metrics = [ "ctc", "track_overlap",]
+matcher = "ctc"
+ctc_gt = "02_GT"

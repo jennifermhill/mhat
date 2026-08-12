@@ -16,11 +16,23 @@ a score of zero, and averaging it in would hide the failure.
 Pass several metrics to put them side by side in one figure; every panel shows
 both arms.
 
+One config can describe SEVERAL datasets, under `[datasets.<name>]`. Keys at the
+top level (arms, x_field, xticks, xlabel) are shared; each dataset table supplies
+its own csv_path / output_png / metric_column / baselines, and overrides anything
+shared. Each dataset renders into its own experiment tree, so a single no-flag
+invocation regenerates every figure the experiment owns. A config with no
+`[datasets]` table is treated as one unnamed dataset, which is the original schema.
+
 Config schema (TOML) -- see configs/evaluation/gt_amount_curve.toml.
 
 Usage:
+    # every dataset in the config: curve + panels each
     python scripts/07_plotting/gt_amount_curve.py configs/evaluation/gt_amount_curve.toml
-    python scripts/07_plotting/gt_amount_curve.py <cfg> \
+    # one dataset only
+    python scripts/07_plotting/gt_amount_curve.py <cfg> --dataset Fluo-C3DL-MDA231
+    # ad-hoc metric set (needs a single dataset, or it would collapse two figures
+    # onto one path)
+    python scripts/07_plotting/gt_amount_curve.py <cfg> --dataset NC281-sparse-label \
         --metrics target_effectiveness edge_recall track_purity --output panels.png
 """
 
@@ -45,6 +57,11 @@ DEFAULT_METRIC_LABELS = {
     "edge_recall": "Edge recall",
     "node_f1": "Node F1",
     "edge_f1": "Edge F1",
+    # CTC family — datasets matched with CTCMatcher report these instead.
+    "tra": "Tracking (TRA)",
+    "det": "Detection (DET)",
+    "lnk": "Linking (LNK)",
+    "seg": "Segmentation (SEG)",
 }
 
 
@@ -219,9 +236,19 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
         )
 
     # Reference lines only belong on the metric they were measured with.
-    for base in cfg.get("baselines", {}).values():
-        if base.get("metric", "target_effectiveness") != metric:
-            continue
+    bases = [
+        b
+        for b in cfg.get("baselines", {}).values()
+        if b.get("metric", "target_effectiveness") == metric
+    ]
+    # Two references can sit a few thousandths apart (on MDA231 the hand-tuned and
+    # old-default-SSVM lines differ by 0.005), which puts their labels on top of each
+    # other. Draw the lines where they belong but stack the LABELS upward whenever the
+    # previous one would still be occupying that height.
+    bases.sort(key=lambda b: b["value"])
+    label_gap = 0.030  # in data units; ~1.5 line heights on a 0-1 axis
+    last_label_y = None
+    for base in bases:
         ax.axhline(
             base["value"],
             color=base.get("color", "#888888"),
@@ -229,9 +256,13 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
             linewidth=1.2,
             zorder=1,
         )
+        label_y = base["value"]
+        if last_label_y is not None and label_y - last_label_y < label_gap:
+            label_y = last_label_y + label_gap
+        last_label_y = label_y
         ax.annotate(
             f"{base['label']} ({base['value']:.3f})",
-            (0.0, base["value"]),
+            (0.0, label_y),
             xycoords=("axes fraction", "data"),
             textcoords="offset points",
             xytext=(4, 3),
@@ -259,23 +290,39 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
     return handles
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config")
-    parser.add_argument("--metric", default=None, help="single metric (back-compat)")
-    parser.add_argument(
-        "--metrics", nargs="+", default=None, help="several metrics -> one panel each"
-    )
-    parser.add_argument("--output", default=None)
-    parser.add_argument("--errorbar", choices=("sem", "sd"), default="sem")
-    args = parser.parse_args()
+def resolve_datasets(cfg, selected):
+    """Flatten the config into (name, dataset_cfg) pairs.
 
-    cfg = toml.load(args.config)
+    A dataset's config is the shared top-level keys with its own table merged over
+    them, so `arms` / `x_field` / `xticks` are written once and a dataset only
+    states what differs. No `[datasets]` table means the whole file is one dataset,
+    which is the pre-existing single-dataset schema.
+    """
+    shared = {k: v for k, v in cfg.items() if k != "datasets"}
+    tables = cfg.get("datasets")
+    if not tables:
+        if selected:
+            raise SystemExit("--dataset given but the config has no [datasets] table")
+        return [(None, shared)]
+
+    unknown = [name for name in (selected or []) if name not in tables]
+    if unknown:
+        raise SystemExit(
+            f"unknown dataset(s) {unknown}; the config defines {sorted(tables)}"
+        )
+    return [
+        (name, {**shared, **table})
+        for name, table in tables.items()
+        if not selected or name in selected
+    ]
+
+
+def render(cfg, metrics, output_path, errorbar) -> None:
+    """Draw one figure — one panel per metric — and save it."""
     rows = load_rows(Path(cfg["csv_path"]))
     if not rows:
         raise SystemExit(f"no rows in {cfg['csv_path']}")
 
-    metrics = args.metrics or [args.metric or cfg.get("metric_column", "target_effectiveness")]
     labels = {**DEFAULT_METRIC_LABELS, **cfg.get("metric_labels", {})}
 
     fig, axes = plt.subplots(
@@ -285,7 +332,7 @@ def main() -> None:
 
     handles = []
     for ax, metric in zip(axes, metrics):
-        handles = draw_metric(ax, rows, metric, cfg, errorbar=args.errorbar)
+        handles = draw_metric(ax, rows, metric, cfg, errorbar=errorbar)
         if len(metrics) == 1:
             ax.set_ylabel(cfg.get("ylabel", labels.get(metric, metric)))
         else:
@@ -310,10 +357,67 @@ def main() -> None:
         fig.suptitle(cfg["suptitle"], fontsize=13, fontweight="bold")
     plt.tight_layout()
 
-    output_path = Path(args.output or cfg["output_png"])
+    output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
     print(f"Saved {output_path}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("config")
+    parser.add_argument("--metric", default=None, help="single metric (back-compat)")
+    parser.add_argument(
+        "--metrics", nargs="+", default=None, help="several metrics -> one panel each"
+    )
+    parser.add_argument("--output", default=None)
+    parser.add_argument(
+        "--dataset", nargs="+", default=None, help="render only these [datasets.*] entries"
+    )
+    parser.add_argument("--errorbar", choices=("sem", "sd"), default="sem")
+    args = parser.parse_args()
+
+    cfg = toml.load(args.config)
+    datasets = resolve_datasets(cfg, args.dataset)
+
+    # --metrics / --metric / --output describe ONE figure. Applying them across
+    # several datasets would either mislabel the axes or write both figures to the
+    # same path, so require the caller to narrow the selection first.
+    ad_hoc = args.metrics or args.metric or args.output
+    if ad_hoc and len(datasets) > 1:
+        raise SystemExit(
+            "--metric/--metrics/--output apply to a single figure; narrow with "
+            f"--dataset (config defines {[n for n, _ in datasets]})"
+        )
+
+    for name, dcfg in datasets:
+        if name:
+            print(f"--- {name} ---")
+        if ad_hoc:
+            metrics = args.metrics or [
+                args.metric or dcfg.get("metric_column", "target_effectiveness")
+            ]
+            render(dcfg, metrics, args.output or dcfg["output_png"], args.errorbar)
+            continue
+
+        # The routine invocation: the headline curve, plus the panel figure when the
+        # dataset declares one. Both are declared in the config, so regenerating an
+        # experiment's figures never depends on remembering the right flags.
+        render(
+            dcfg,
+            [dcfg.get("metric_column", "target_effectiveness")],
+            dcfg["output_png"],
+            args.errorbar,
+        )
+        panel_metrics = dcfg.get("panel_metrics")
+        if panel_metrics:
+            panels_png = dcfg.get("output_panels_png")
+            if not panels_png:
+                raise SystemExit(
+                    f"{name or 'config'} sets panel_metrics but no output_panels_png"
+                )
+            render(dcfg, list(panel_metrics), panels_png, args.errorbar)
 
 
 if __name__ == "__main__":

@@ -91,6 +91,7 @@ _SWEEP_KEYS = (
     "run_name_prefix",
     "ssvm_reg_normalize",
     "ssvm_reg_effective_target",
+    "ssvm_reg_sweep",
     "crop_fractions",
     "crop_target_gt_nodes",
     "crop_growth_step",
@@ -102,6 +103,16 @@ _SWEEP_KEYS = (
     "runs_subdir",
     "test_runs_subdir",
     "regsweep_subdir",
+    # How the sweep is scored and where stage 3 sends its solves — sweep-level, not
+    # per-run tracking parameters.
+    "eval_metrics",
+    "eval_matcher",
+    "eval_match_threshold",
+    "ctc_gt",
+    "test_ctc_gt",
+    "selection_metric",
+    "test_dataset",
+    "test_template",
 )
 
 #: Arm C ("dense crop") is handled by a different code path from A/B throughout.

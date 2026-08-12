@@ -31,7 +31,8 @@ from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids
 from mhat.tracking import utils
 from mhat.tracking.gt_annotation import annotate_gt_on_candidate_graph
 from mhat.tracking.pipeline import build_track_graph, resolve_input_dirs
-from mhat.tracking.solve_with_motile import add_costs, report_graph_statistics
+from mhat.tracking.solve_with_motile import add_costs
+from mhat.tracking.utils import report_graph_statistics
 from motile.variables import EdgeSelected, NodeSelected
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 

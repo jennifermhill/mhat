@@ -64,7 +64,20 @@ class CurvatureCost(motile.costs.Cost):
 
     def get_edge_offset(self, graph, edge):
 
-        pos_v = np.array(graph.nodes[edge[1]][self.position_attribute])
-        pos_u = np.array(graph.nodes[edge[0]][self.position_attribute])
+        # A hyperedge endpoint is a tuple of nodes rather than a single node, so
+        # it is represented by the mean of their positions. This matches how
+        # add_drift_dist_attr and add_flow_dist_attr aggregate hyperedges.
+        if graph.is_hyperedge(edge):
+            us, vs = edge
+            pos_u = np.mean(
+                [graph.nodes[u][self.position_attribute] for u in us], axis=0
+            )
+            pos_v = np.mean(
+                [graph.nodes[v][self.position_attribute] for v in vs], axis=0
+            )
+        else:
+            u, v = edge
+            pos_u = np.array(graph.nodes[u][self.position_attribute])
+            pos_v = np.array(graph.nodes[v][self.position_attribute])
 
         return pos_v - pos_u

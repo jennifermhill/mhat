@@ -6,9 +6,19 @@ Joins three things per run token:
   - learned weights    .../<token>/learned_weights.toml
   - SSVM convergence   .../<token>/fit_weights_ssvm_*.log  (iteration count, final eps)
 
-Runs that produced no usable result keep an explicit `status` (empty_solution,
-fit_failed, not_converged, missing) alongside a 0.0 metric, so a degenerate fit
-is never silently plotted as a genuine score of zero.
+Two status columns, because they can disagree:
+
+  `status`        the outcome on the dataset being SCORED — this is what the curve
+                  plots. `ok`, `not_converged`, `empty_solution_test`, `fit_failed`,
+                  `missing`.
+  `train_status`  what the fit itself reported, kept for diagnostics.
+
+They differ for a fit that converged and wrote weights whose solution was empty on the
+TRAIN graph. That is not evidence the same weights are degenerate on the test graph, so
+such runs are solved there and reported with their real score; they are drawn as
+failures only if the TEST solve is empty too. Runs with no usable result keep an
+explicit status alongside a 0.0 score, so a degenerate fit is never silently plotted
+as a genuine score of zero.
 
 Usage:
     python scripts/05_evaluation/collect_gt_amount.py \
@@ -40,7 +50,43 @@ METRIC_FIELDS = [
     ("fp_nodes", ["BasicMetrics", "False Positive Nodes"]),
     ("fn_nodes", ["BasicMetrics", "False Negative Nodes"]),
     ("fn_edges", ["BasicMetrics", "False Negative Edges"]),
+    # CTC family. A dataset scored with the CTC matcher cannot also run BasicMetrics
+    # (incompatible matching types), so in practice a row carries one block or the
+    # other and the unused one stays blank. The counts are prefixed because CTC and
+    # BasicMetrics disagree about what an FP node is.
+    ("tra", ["CTCMetrics", "TRA"]),
+    ("det", ["CTCMetrics", "DET"]),
+    ("lnk", ["CTCMetrics", "LNK"]),
+    ("seg", ["CTCMetrics", "SEG"]),
+    ("aogm", ["CTCMetrics", "AOGM"]),
+    ("ctc_fp_nodes", ["CTCMetrics", "fp_nodes"]),
+    ("ctc_fn_nodes", ["CTCMetrics", "fn_nodes"]),
+    ("ctc_ns_nodes", ["CTCMetrics", "ns_nodes"]),
+    ("ctc_fp_edges", ["CTCMetrics", "fp_edges"]),
+    ("ctc_fn_edges", ["CTCMetrics", "fn_edges"]),
 ]
+
+#: Fields that are SCORES in [0, 1]. An empty solution really does score 0 on these,
+#: and writing 0.0 is what makes the plot draw it as a failed run rather than drop it.
+#: Everything else in METRIC_FIELDS is a count or a cost, where 0 would be a lie
+#: (an empty solution has zero false positives), so those stay blank.
+SCORE_FIELDS = frozenset(
+    {
+        "target_effectiveness",
+        "track_purity",
+        "track_fractions",
+        "node_recall",
+        "node_precision",
+        "node_f1",
+        "edge_recall",
+        "edge_precision",
+        "edge_f1",
+        "tra",
+        "det",
+        "lnk",
+        "seg",
+    }
+)
 
 WEIGHT_FIELDS = [
     "drift_weight",
@@ -195,13 +241,23 @@ def main() -> None:
         if row["status"] == "ok" and n_iter is not None and n_iter >= max_iter - 1:
             row["status"] = "not_converged"
 
+        # `status` describes the outcome on the dataset being SCORED, because that is
+        # what the curve plots; `train_status` preserves what the fit itself reported.
+        # They differ for a fit that converged and wrote weights whose solution was
+        # empty on the train graph: that is not evidence the same weights are empty on
+        # the test graph, so the run is solved there and gets its real score. A run is
+        # only drawn as a failure if it is empty on the dataset being plotted.
+        row["train_status"] = row["status"]
+
         metrics_path = run_dir(eval_root, eval_subdir, token) / "track_metrics.json"
         if metrics_path.is_file():
             metrics = json.loads(metrics_path.read_text())
             for name, path in METRIC_FIELDS:
                 row[name] = walk_json_path(metrics, path)
+            if row["status"] == "empty_solution":
+                row["status"] = "ok"
         else:
-            if row["status"] == "ok":
+            if row["status"] in ("ok", "empty_solution"):
                 # Distinguish "the weights gave an empty solution on the test set"
                 # (a real, reportable outcome) from "this run was never evaluated".
                 test_pred = (
@@ -214,7 +270,7 @@ def main() -> None:
                 )
                 row["status"] = "missing" if test_pred.is_dir() else "empty_solution_test"
             for name, _ in METRIC_FIELDS:
-                row[name] = 0.0 if name == "target_effectiveness" else None
+                row[name] = 0.0 if name in SCORE_FIELDS else None
 
         rows.append(row)
 
@@ -223,7 +279,7 @@ def main() -> None:
         return
 
     fieldnames = (
-        ["run", "arm", "n_tracks", "seed", "status"]
+        ["run", "arm", "n_tracks", "seed", "status", "train_status"]
         + BUDGET_FIELDS
         + [name for name, _ in METRIC_FIELDS]
         + FIT_FIELDS

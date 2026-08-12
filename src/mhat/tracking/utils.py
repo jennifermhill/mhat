@@ -308,6 +308,12 @@ def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
 def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: bool = True) -> nx.DiGraph:
     """Add hyper edges representing specific merges and divisions to the graph
 
+    Hyperedges are pairwise: a division hyperedge points at exactly two
+    successors, and a merge hyperedge at exactly two predecessors. The constraint is
+    fixed here rather than with MaxChildren/MaxParents, because motile
+    counts a hyperedge as a single outgoing/incoming edge however many nodes it
+    connects.
+
     Args:
         candidate_graph (nx.DiGraph): A candidate graph already populated with
             normal nodes and edges.
@@ -316,17 +322,15 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
 
     Returns:
         nx.DiGraph: The candidate graph with additional hypernodes for each
-            possible merge and division
+            possible pairwise merge and division
     """
     nodes_original = list(candidate_graph.nodes)
     hypernodes = []
     hyperedges = []
     for node in nodes_original:
         if divisions:
-            successor_combos = []
-            for i in range(2, 6):
-                successors = candidate_graph.successors(node)
-                successor_combos.extend(list(combinations(successors, i)))
+            successors = candidate_graph.successors(node)
+            successor_combos = combinations(successors, 2)
             for succ_combo in successor_combos:
                 hypernode_succ = str(node) + "_" + "_".join(map(str, succ_combo))
                 hypernodes.append(hypernode_succ)
@@ -334,10 +338,8 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
                 for item in succ_combo:
                     hyperedges.append((hypernode_succ, item))
         if merges:
-            predecessor_combos = []
-            for i in range(2, 6):
-                predecessors = candidate_graph.predecessors(node)
-                predecessor_combos.extend(list(combinations(predecessors, i)))
+            predecessors = candidate_graph.predecessors(node)
+            predecessor_combos = combinations(predecessors, 2)
             for pred_combo in predecessor_combos:
                 hypernode_pred = str(node) + "_" + "_".join(map(str, pred_combo))
                 hypernodes.append(hypernode_pred)

@@ -355,6 +355,24 @@ def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
         cand_graph.edges[edge]["intensity_diff"] = intensity_diff
 
 
+def add_division_attr(cand_graph: motile.TrackGraph):
+    """Flag division hyperedges with a 0/1 attribute so they can be given a cost.
+
+    motile's built in Split cost cannot price these divisions: it applies to the
+    NodeSplit variable, which only turns on when a node has two or more selected
+    outgoing edges, whereas a division here is a single selected hyperedge. The
+    cost therefore has to sit on the edge, as a weight on this indicator.
+
+    Every edge gets the attribute, including ordinary ones, because EdgeSelection
+    looks it up on each edge it is applied to.
+    """
+    for edge in cand_graph.edges:
+        is_division = (
+            cand_graph.is_hyperedge(edge) and len(edge[0]) == 1 and len(edge[1]) > 1
+        )
+        cand_graph.edges[edge]["is_division"] = float(is_division)
+
+
 def apply_mean_ablation(config: dict, track_graph: motile.TrackGraph) -> None:
     """Replace graph attribute values with their mean to ablate discriminating power.
 

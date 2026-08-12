@@ -66,6 +66,18 @@ def add_costs(solver, config, no_merges=False):
     else:
         print("Skipping intensity cost (weight=0, constant=0)")
 
+    if config.get("division_weight", 0) != 0:
+        solver.add_cost(
+            motile.costs.EdgeSelection(
+                weight=config["division_weight"],
+                attribute="is_division",
+                constant=0.0,
+            ),
+            name="division",
+        )
+    else:
+        print("Skipping division cost (weight=0)")
+
     if config.get("curvature_weight", 0) != 0 or config.get("curvature_constant", 0) != 0:
         solver.add_cost(
             CurvatureCost(

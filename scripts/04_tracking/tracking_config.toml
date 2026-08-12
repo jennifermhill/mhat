@@ -23,6 +23,7 @@ cohesion_weight = -500
 cohesion_constant = 450
 adhesion_weight = -100
 adhesion_constant = 50
+division_weight = 0.0
 appear_constant = 50.0
 disappear_constant = 50.0
 

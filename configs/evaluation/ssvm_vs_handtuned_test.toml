@@ -1,22 +1,30 @@
 # Hand-tuned vs SSVM-fit comparison figure -- TEST sets (held-out).
-# Same weights as the train figure (hand-tuned params / SSVM weights both fit on
-# the train set), now evaluated on each dataset's held-out test set:
+# Hand-tuned params / SSVM weights are both fit on the train set, then evaluated on
+# each dataset's held-out test set:
 #   MDA231 -> 02_cells (TRA, CTC matcher); NC281-sparse -> 02_nuclei_denoised_test
 #   (TE, point matcher). Rendered by ssvm_vs_handtuned_figure.py.
+#
+# The SSVM bars are the CURRENT BEST fits: the full-GT solves from stage 2 of the
+# gt_amount experiment, fit at the effective regularizer calibrated on the train split
+# in stage 1. They replace the earlier runs fit at the default ssvm_reg = 0.1, which
+# stage 1 showed to be well into the over-regularized regime. Selecting the
+# regularizer on train and only then scoring on test keeps this oracle-free.
 
 output_png = "Y:/jennifer/mhat/experiments/evaluation/ssvm_vs_handtuned_test.png"
 suptitle = ""
 ylabel = "Score (higher is better)"
 dataset_order = ["mda231", "nc281_test"]
 
-# Colors match the MHAT-vs-other-methods figures: darker blue first, orange second.
+# Wong sky blue for hand-tuned, neutral gray for SSVM-fit. (Gray is not part of the
+# Wong palette — it is a deliberate neutral so the hand-tuned bar carries the only
+# hue in the figure.)
 [conditions.hand_tuned]
 label = "Hand-tuned"
-color = "#0072B2"
+color = "#56B4E9"
 
 [conditions.ssvm]
 label = "SSVM-fit"
-color = "#E69F00"
+color = "#808080"
 
 [datasets.mda231]
 name = "MDA231"
@@ -25,10 +33,19 @@ dataset_dir = "02_cells"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
 json_path = ["CTCMetrics", "TRA"]
 reduction = "scalar"
+#
+# SEGMENTATION PARITY: the current-best SSVM run is built on seg_result
+# "holdout_fs1_cpm6", so the hand-tuned bar points at the hand-tuned run on that SAME
+# segmentation rather than at handtuned_test (seg 2026-05-29_10-47-41, TRA 0.9364).
+# Both bars are now seg holdout_fs1_cpm6 / flow 2026-05-29_10-59-37. Do not point one
+# bar back at the older seg without moving the other.
 [datasets.mda231.hand_tuned]
-tracking_uid = "handtuned_test"
+tracking_uid = "holdout_fs1_cpm6"
+# Current best: full-GT SSVM fit at the CALIBRATED effective regularizer (stage 1 of
+# the gt_amount experiment), replacing the old ssvm_test run fit at the default
+# ssvm_reg = 0.1 (TRA 0.8671).
 [datasets.mda231.ssvm]
-tracking_uid = "ssvm_test"
+tracking_uid = "gt_amount/stage2_solves/gtm_full_n033_s0"
 
 [datasets.nc281_test]
 name = "NC28.1"
@@ -37,7 +54,11 @@ dataset_dir = "02_nuclei_denoised_test"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
 json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 reduction = "scalar"
+# No parity issue here: test_full, the old ssvm_test and the new full-GT solve all
+# share seg 2026-07-08_14-40-36 / flow 2026-07-08_14-46-03, so only the SSVM bar moves.
 [datasets.nc281_test.hand_tuned]
 tracking_uid = "test_full"
+# Current best: as for MDA231, the calibrated-regularizer full-GT fit, replacing the
+# old ssvm_reg = 0.1 run (TE 0.7209).
 [datasets.nc281_test.ssvm]
-tracking_uid = "ssvm_test"
+tracking_uid = "gt_amount/stage2_solves/gt2_full_n167_s0"

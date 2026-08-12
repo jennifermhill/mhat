@@ -1,21 +1,34 @@
-# Hand-tuned vs SSVM-fit comparison figure.
+# Hand-tuned vs SSVM-fit comparison figure -- TRAIN/fit sets.
 # Two datasets, each fit + evaluated on its own train/fit set; primary metric
 # differs per dataset (TRA for MDA231, TE for NC281-sparse train).
 # Rendered by ssvm_vs_handtuned_figure.py.
+#
+# The SSVM bars are the CURRENT BEST fits: the stage-1 regularizer-sweep winners from
+# the gt_amount experiment, i.e. the ssvm_reg the calibration actually selected on this
+# same train split. The winner is recorded as `best.token` in
+#   experiments/tracking/<experiment>/<dataset>/gt_amount/stage1_regsweep/regsweep_summary.json
+# (MDA231 regsweep_r14, ssvm_reg 0.0681; NC281 regsweep_r11, ssvm_reg 0.0121) -- read it
+# from there rather than re-deriving an argmax. These replace the earlier ssvm_refit /
+# ssvm_fit runs at the default ssvm_reg = 0.1.
+#
+# Companion figure: ssvm_vs_handtuned_test.toml, which shows the held-out test scores.
+# Keep the two consistent -- if one is repointed at new runs, repoint the other.
 
 output_png = "Y:/jennifer/mhat/experiments/evaluation/ssvm_vs_handtuned.png"
 suptitle = ""
 ylabel = "Score (higher is better)"
 dataset_order = ["mda231", "nc281_train"]
 
-# Colors match the MHAT-vs-other-methods figures: darker blue first, orange second.
+# Wong sky blue for hand-tuned, neutral gray for SSVM-fit. (Gray is not part of the
+# Wong palette — it is a deliberate neutral so the hand-tuned bar carries the only
+# hue in the figure.) Must stay identical to ssvm_vs_handtuned_test.toml.
 [conditions.hand_tuned]
 label = "Hand-tuned"
-color = "#0072B2"
+color = "#56B4E9"
 
 [conditions.ssvm]
 label = "SSVM-fit"
-color = "#E69F00"
+color = "#808080"
 
 [datasets.mda231]
 name = "MDA231"
@@ -24,10 +37,16 @@ dataset_dir = "01_cells"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
 json_path = ["CTCMetrics", "TRA"]
 reduction = "scalar"
+#
+# SEGMENTATION PARITY: regsweep_r14 is built on seg_cp_20260720_fs1_cpm6, so the
+# hand-tuned bar points at the hand-tuned run on that SAME segmentation rather than at
+# 2026-05-15_10-55-56 (seg 2026-04-03_11-09-49, TRA 0.8808). Both bars are now seg
+# seg_cp_20260720_fs1_cpm6 / flow 2026-02-17_15-55-00. Do not point one bar back at the
+# older seg without moving the other. (Same rule as the test figure.)
 [datasets.mda231.hand_tuned]
-tracking_uid = "2026-05-15_10-55-56"
+tracking_uid = "trk_cp_20260720_fs1_cpm6"
 [datasets.mda231.ssvm]
-tracking_uid = "ssvm_refit"
+tracking_uid = "gt_amount/stage1_regsweep/regsweep_r14"
 
 [datasets.nc281_train]
 name = "NC28.1"
@@ -36,7 +55,9 @@ dataset_dir = "02_nuclei_denoised_train"
 eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
 json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 reduction = "scalar"
+# No parity issue here: the hand-tuned run, the old ssvm_fit and regsweep_r11 all share
+# seg 2026-07-02_10-32-29 / flow 2026-07-02_10-43-07, so only the SSVM bar moves.
 [datasets.nc281_train.hand_tuned]
 tracking_uid = "2026-07-02_10-55-33"
 [datasets.nc281_train.ssvm]
-tracking_uid = "ssvm_fit"
+tracking_uid = "gt_amount/stage1_regsweep/regsweep_r11"

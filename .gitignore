@@ -3,6 +3,7 @@
 /data
 /experiments
 /workshop_paper
+/logs
 
 # configs/ is version-controlled on this branch (unlike mhat_dicty).
 # Exclude the ssvm-specific evaluation configs — their figure scripts live on ssvm-fit, not here.

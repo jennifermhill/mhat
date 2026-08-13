@@ -5,13 +5,13 @@ experiment = "primary_nk_cells"
 dataset = "01_cells"
 # ctc_gt = "02_GT"
 
-track_result = "2026-07-27_14-10-54"
+track_result = "nkgraph_size120"
 
 # Eval settings
 metrics = ["basic", "track_overlap"]
 matcher = "point"
 # iou_threshold = 0.25
-match_threshold = 15
+match_threshold = 10
 
 # Diagnostics written to <output_dir>/diagnostics/ after the metrics.
 # All default to on; uncomment to tune or disable. Keep this table last —

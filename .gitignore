@@ -4,6 +4,7 @@
 /experiments
 /configs
 /workshop_paper
+/scripts/*/[a-z]*_config.toml
 
 # Claude files
 /.claude

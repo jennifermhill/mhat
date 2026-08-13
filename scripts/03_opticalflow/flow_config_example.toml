@@ -1,8 +1,8 @@
 # IO
-input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
-output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/opticalflow/"
-experiment = "InterfaceTransferMirrorB1-DB"
-dataset = "03_nuclei"
+input_base_dir = "/path/to/data/"
+output_base_dir = "/path/to/experiments/opticalflow/"
+experiment = "experiment_1"
+dataset = "dataset_1"
 
 rerun_uid = ""
 
@@ -51,5 +51,5 @@ z_sig = 1
 w_sig = 8
 t_sig = 1
 [lucaskanade.hyperparams]
-enhance_contrast = false
+enhance_contrast = true
 

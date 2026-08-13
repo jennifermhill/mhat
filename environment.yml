@@ -1,0 +1,44 @@
+# Minimal cross-platform environment for the optical flow stage (scripts/03_opticalflow).
+#
+# Scope: the conda layer is a minimal cross-platform base for the optical flow stage
+# (scripts/03_opticalflow/opticalflow.py and visualize_results.py). The mhat package itself
+# is installed from this checkout via the pip section, which pulls in mhat's full dependency
+# set (motile/ilpy, gunpowder, traccuracy, neuroglancer, ...). The deep-segmentation backends
+# (waterz, cellpose) are not declared mhat deps and are still not covered here.
+#
+# conda-forge resolves the native/GUI stack per-OS, so this file installs on both
+# macOS (Apple Silicon) and Linux. opticalflow3d is a custom PyTorch fork (not on PyPI),
+# pinned by git URL in the pip section so it installs on any machine with network access.
+#
+# Install (run from the repo root so the pip "." line resolves to this checkout):
+#   conda env create -f environment.yml
+#
+name: mhat
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  # numeric / imaging stack (consistent BLAS from conda-forge)
+  - numpy
+  - scipy
+  - scikit-image
+  - matplotlib
+  - dask
+  - zarr<3
+  - tifffile
+  - tqdm
+  - toml
+  - colorcet            # used by scripts/03_opticalflow/make_quiver_movie.py
+  # torch from conda-forge (NOT pip): shares conda's llvm-openmp so there is a single
+  # OpenMP runtime. pip's torch bundles its own libomp, which collides with conda's and
+  # aborts with "OMP Error #15" depending on import order. CPU/MPS on macOS, CPU on Linux
+  # (CUDA is a later, GPU-only opt-in).
+  - pytorch
+  # GUI / visualization (visualize_results.py)
+  - napari
+  - pyqt
+  - pip:
+      - opencv-python-headless   # provides cv2
+      - git+https://github.com/jennifermhill/opticalflow3d
+      - .                        # the mhat package itself (from this checkout, with deps)

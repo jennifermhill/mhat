@@ -295,10 +295,11 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets, no_merges=no_merges)
 
     print("Saving results...")
- 
+
     solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
+ 
     assign_tracklet_ids(solution_graph)
-    # solution_seg = utils.relabel_segmentation(solution_graph, solution_seg)
+
     output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
     if axes is not None:
         output_zarr_root.attrs["axes"] = axes

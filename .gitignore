@@ -3,6 +3,7 @@
 /data
 /experiments
 /workshop_paper
+/scripts/*/[a-z]*_config.toml
 /logs
 
 # configs/ is version-controlled on this branch (unlike mhat_dicty).

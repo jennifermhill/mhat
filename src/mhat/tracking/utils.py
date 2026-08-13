@@ -227,25 +227,6 @@ def relabel_segmentation(
     return tracked_masks
 
 
-def map_seg_to_track_ids(solution_graph, segmentation):
-    """Remap segmentation labels to match the graph's track_id attributes.
-
-    import_from_geff renumbers track_id, so seg labels no longer match.
-    This reads the raw geff to find which node property corresponds to the
-    seg labels (via related_objects.label_prop), then remaps per frame.
-    """
-
-    mapped = np.zeros_like(segmentation)
-    for node_id in solution_graph.nodes():
-        seg_id = node_id
-        track_id = solution_graph.nodes[node_id]["track_id"]
-        t = solution_graph.nodes[node_id]["time"]
-        mask = segmentation[t] == seg_id
-        if mask.any():
-            mapped[t][mask] = track_id
-    return mapped
-
-
 def add_appear_ignore_attr(cand_graph):
     for node_id, attrs in cand_graph.nodes(data=True):
         if "time" not in attrs:
@@ -390,21 +371,6 @@ def add_division_attr(cand_graph: motile.TrackGraph):
             cand_graph.is_hyperedge(edge) and len(edge[0]) == 1 and len(edge[1]) > 1
         )
         cand_graph.edges[edge]["is_division"] = float(is_division)
-
-
-def add_camp_signal_attr(solution_graph: motile.TrackGraph, raw_cell_img: np.ndarray, cell_seg: np.ndarray):
-    """Add mean CAMP signal from raw_cell_img as a node attribute to the solution graph. Occurs in-place on solution graph."""
-    for node_id, data in solution_graph.nodes(data=True):
-        if "time" not in data:
-            continue  # skip hypernodes
-        t = data["time"]
-        seg_id = node_id
-        cell_mask = cell_seg[t] == seg_id
-        if np.sum(cell_mask) == 0:
-            signal = 0.0
-        else:
-            signal = np.mean(raw_cell_img[t][cell_mask])
-        solution_graph.nodes[node_id]["camp_signal"] = signal
 
 
 @profile

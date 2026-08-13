@@ -267,16 +267,11 @@ def evaluate_tracking(
 
     # match_threshold = config.get("match_threshold", 5.0)
     metrics = config.get("metrics", ["basic", "track_overlap"])
-    matcher = config.get("matcher", "point")
-    threshold = config.get("threshold", config.get("match_threshold", None))
 
     # Check that the specified metrics are valid
     for metric in metrics:
         if metric not in metrics_dict:
             raise ValueError(f"Invalid metric specified: {metric}\nValid metrics are: {list(metrics_dict.keys())}")
-
-    matcher_fn = matchers_dict[matcher]
-    kwargs = {"threshold": threshold} if threshold is not None else {}
 
     results, matched = run_metrics(
         gt_graph,

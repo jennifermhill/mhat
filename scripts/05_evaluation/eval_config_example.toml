@@ -1,0 +1,14 @@
+# IO
+input_base_dir = "/path/to/experiments/"
+output_base_dir = "/path/to/experiments/"
+experiment = "experiment_1"
+dataset = "dataset_1"
+ctc_gt = "01_GT"
+
+track_result = "track_result"
+
+# Eval settings
+metrics = ["ctc"]
+matcher = "ctc"
+# iou_threshold = 0.25
+# match_threshold = 10

@@ -1,3 +1,5 @@
+import os
+
 import motile
 from mhat.tracking.division_cost import DivisionCost
 from mhat.tracking.edge_pairs import CurvatureCost
@@ -228,6 +230,7 @@ def solve_with_motile(config, graph, exclusion_sets, no_merges=False):
 
     solver.add_constraint(motile.constraints.ExclusiveNodes(exclusion_sets))
 
-    solver.solve()
+    num_threads = 16 if (os.cpu_count() or 1) >= 16 else 1
+    solver.solve(num_threads=num_threads, verbose=True)
     solution_graph = to_nx_graph(solver.get_selected_subgraph())
     return solution_graph

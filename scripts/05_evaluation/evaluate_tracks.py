@@ -94,3 +94,7 @@ if __name__ == "__main__":
     tracking_config = pred_data_dir / "config.toml"
     if tracking_config.is_file():
         shutil.copy2(tracking_config, output_dir / "tracking_config.toml")
+
+    # Save the eval config used for this run alongside the results for provenance
+    with open(output_dir / "eval_config.toml", "w") as config_file:
+        toml.dump(config, config_file)

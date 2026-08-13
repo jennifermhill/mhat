@@ -1,0 +1,47 @@
+# IO
+raw_base_dir = "/path/to/data/"
+input_base_dir = "/path/to/experiments/"
+output_base_dir = "/path/to/experiments/"
+experiment = "experiment_1"
+dataset = "dataset_1"
+
+seg_result = "seg_result"
+flow_result = "flow_result"
+use_lk = false
+
+# Print graph attributes table
+verbose = false
+
+# ILP params
+drift_distance = [ 0.0, 0.0, 0.0,]
+drift_weight = 1.0
+drift_constant = -10.0
+area_weight = 1.0
+area_constant = -10.0
+intensity_weight = 1.0
+intensity_constant = -10.0
+curvature_weight = 1.0
+curvature_constant = -10.0
+cohesion_weight = -1.0
+cohesion_constant = 10.0
+adhesion_weight = -1.0
+adhesion_constant = 10.0
+division_weight = 2.0
+appear_constant = 2.0
+disappear_constant = 2.0
+
+# cand graph creation params
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+# max distance traveled between frames
+max_edge_distance = 60
+
+# fragments smaller than size_threshold will be ignored
+size_threshold = 20
+
+# Confidence-based Z flow filtering
+z_flow_conf_threshold = 1.0e-7
+z_flow_min_pass_pixels = 10

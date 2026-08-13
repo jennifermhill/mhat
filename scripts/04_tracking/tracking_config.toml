@@ -9,6 +9,9 @@ seg_result = "2026-04-21_14-02-04"
 flow_result = "2026-03-24_17-16-56"
 use_lk = false
 
+# Print graph attributes table
+verbose = false
+
 # ILP params
 drift_distance = [ 0.0, 3.0, 6.0,]
 drift_weight = 30.0

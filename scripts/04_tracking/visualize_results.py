@@ -100,6 +100,7 @@ def main(config, ground_truth: bool = False):
     if ground_truth:
         print("Visualizing ground truth tracks.")
         track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_tracks.zarr')
+        track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_seg.zarr')
     else:
         print("Visualizing predicted tracks.")
         track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_tracks.zarr')
@@ -163,7 +164,7 @@ def main(config, ground_truth: bool = False):
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-sparse-label\\01_nuclei_denoised\\2026-04-01_12-00-51\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\primary_nk_cells\\01_cells\\nkgraph_size120\\config.toml"
     # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\02_nuclei\\2026-03-24_17-02-10\\config.toml"
     # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
     track_config = toml.load(path_to_config)

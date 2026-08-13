@@ -12,6 +12,8 @@ from scipy import ndimage  # noqa: F401  (ensures scipy.ndimage is importable)
 import skimage
 from line_profiler import profile
 
+from mhat.tracking.edge_pairs import CurvatureCost
+
 
 def nodes_from_segmentation(
     segmentation: np.ndarray,
@@ -346,12 +348,24 @@ def add_area_diff_attr(cand_graph: motile.TrackGraph):
         cand_graph.edges[edge]["area_diff"] = area_diff
 
 
+def _combined_intensity(cand_graph: motile.TrackGraph, nodes) -> float:
+    """Mean intensity of a set of nodes treated as a single object.
+
+    The intensity attribute is a per-object mean, so unlike area it does not add
+    across nodes. Weighting by area reproduces the mean over the combined region
+    exactly, which is what the node on the other side of the hyperedge measures.
+    """
+    intensities = [cand_graph.nodes[n]["intensity"] for n in nodes]
+    areas = [cand_graph.nodes[n]["area"] for n in nodes]
+    return float(np.average(intensities, weights=areas))
+
+
 def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
             us, vs = edge
-            intensity_u = sum(cand_graph.nodes[n]["intensity"] for n in us)
-            intensity_v = sum(cand_graph.nodes[n]["intensity"] for n in vs)
+            intensity_u = _combined_intensity(cand_graph, us)
+            intensity_v = _combined_intensity(cand_graph, vs)
         else:
             u, v = edge
             intensity_u = cand_graph.nodes[u]["intensity"]
@@ -359,6 +373,24 @@ def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
 
         intensity_diff = np.abs(intensity_u - intensity_v)
         cand_graph.edges[edge]["intensity_diff"] = intensity_diff
+
+
+def add_division_attr(cand_graph: motile.TrackGraph):
+    """Flag division hyperedges with a 0/1 attribute so they can be given a cost.
+
+    motile's built in Split cost cannot price these divisions: it applies to the
+    NodeSplit variable, which only turns on when a node has two or more selected
+    outgoing edges, whereas a division here is a single selected hyperedge. The
+    cost therefore has to sit on the edge, as a weight on this indicator.
+
+    Every edge gets the attribute, including ordinary ones, because EdgeSelection
+    looks it up on each edge it is applied to.
+    """
+    for edge in cand_graph.edges:
+        is_division = (
+            cand_graph.is_hyperedge(edge) and len(edge[0]) == 1 and len(edge[1]) > 1
+        )
+        cand_graph.edges[edge]["is_division"] = float(is_division)
 
 
 def add_camp_signal_attr(
@@ -404,6 +436,12 @@ def add_camp_signal_attr(
 def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: bool = True) -> nx.DiGraph:
     """Add hyper edges representing specific merges and divisions to the graph
 
+    Hyperedges are pairwise: a division hyperedge points at exactly two
+    successors, and a merge hyperedge at exactly two predecessors. The constraint is
+    fixed here rather than with MaxChildren/MaxParents, because motile
+    counts a hyperedge as a single outgoing/incoming edge however many nodes it
+    connects.
+
     Args:
         candidate_graph (nx.DiGraph): A candidate graph already populated with
             normal nodes and edges.
@@ -412,17 +450,15 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
 
     Returns:
         nx.DiGraph: The candidate graph with additional hypernodes for each
-            possible merge and division
+            possible pairwise merge and division
     """
     nodes_original = list(candidate_graph.nodes)
     hypernodes = []
     hyperedges = []
     for node in nodes_original:
         if divisions:
-            successor_combos = []
-            for i in range(2, 6):
-                successors = candidate_graph.successors(node)
-                successor_combos.extend(list(combinations(successors, i)))
+            successors = candidate_graph.successors(node)
+            successor_combos = combinations(successors, 2)
             for succ_combo in successor_combos:
                 hypernode_succ = str(node) + "_" + "_".join(map(str, succ_combo))
                 hypernodes.append(hypernode_succ)
@@ -430,10 +466,8 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
                 for item in succ_combo:
                     hyperedges.append((hypernode_succ, item))
         if merges:
-            predecessor_combos = []
-            for i in range(2, 6):
-                predecessors = candidate_graph.predecessors(node)
-                predecessor_combos.extend(list(combinations(predecessors, i)))
+            predecessors = candidate_graph.predecessors(node)
+            predecessor_combos = combinations(predecessors, 2)
             for pred_combo in predecessor_combos:
                 hypernode_pred = str(node) + "_" + "_".join(map(str, pred_combo))
                 hypernodes.append(hypernode_pred)
@@ -445,6 +479,83 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
     candidate_graph.add_edges_from(hyperedges)
     
     return candidate_graph
+
+def report_graph_statistics(config, track_graph):
+    """Print mean/std of graph attributes and their ILP costs.
+
+    Node costs are scaled by num_leaves to reflect the actual costs
+    seen by the ILP solver (LeavesScaledNodeSelection bakes num_leaves
+    into the node feature values).
+    """
+    # Collect node attributes (only those with ILP cost parameters)
+    node_attrs = {"cohesion": ([], []), "adhesion": ([], [])}
+    for node_id, data in track_graph.nodes.items():
+        num_leaves = data.get("num_leaves", 1)
+        for attr in node_attrs:
+            if attr in data:
+                node_attrs[attr][0].append(data[attr])
+                node_attrs[attr][1].append(num_leaves)
+
+    # Collect edge attributes
+    edge_attrs = {"drift_dist": [], "area_diff": [], "intensity_diff": []}
+    for edge_key, data in track_graph.edges.items():
+        for attr in edge_attrs:
+            if attr in data:
+                edge_attrs[attr].append(data[attr])
+
+    curvature_cost = CurvatureCost(position_attribute="centroid")
+    curvature_values = []
+    for node in track_graph.nodes:
+        in_edges = list(track_graph.prev_edges[node])
+        out_edges = list(track_graph.next_edges[node])
+        for in_edge in in_edges:
+            in_offset = curvature_cost.get_edge_offset(track_graph, in_edge)
+            for out_edge in out_edges:
+                out_offset = curvature_cost.get_edge_offset(track_graph, out_edge)
+                curvature_values.append(np.linalg.norm(out_offset - in_offset))
+
+    # Config parameter mapping
+    param_map = {
+        "cohesion": ("cohesion_weight", "cohesion_constant"),
+        "adhesion": ("adhesion_weight", "adhesion_constant"),
+        "drift_dist": ("drift_weight", "drift_constant"),
+        "area_diff": ("area_weight", "area_constant"),
+        "intensity_diff": ("intensity_weight", "intensity_constant"),
+        "curvature": ("curvature_weight", "curvature_constant"),
+    }
+
+    print("\n" + "=" * 100)
+    print("Graph Attribute Statistics (node costs scaled by num_leaves)")
+    print("=" * 100)
+    header = f"{'Attribute':<16} {'Count':>6} {'Mean':>10} {'Std':>10} {'Weight':>10} {'Constant':>10} {'Cost Mean':>12} {'Cost Std':>12}"
+    print(header)
+    print("-" * 100)
+
+    # Node attributes: scale costs by num_leaves
+    for attr, (values, leaves) in node_attrs.items():
+        if not values:
+            continue
+        arr = np.array(values)
+        leaves_arr = np.array(leaves)
+        w_key, c_key = param_map[attr]
+        weight = config.get(w_key, 0.0)
+        constant = config.get(c_key, 0.0)
+        costs = (weight * arr + constant) * leaves_arr
+        print(f"{attr:<16} {len(arr):>6} {arr.mean():>10.3f} {arr.std():>10.3f} {weight:>10.1f} {constant:>10.1f} {costs.mean():>12.1f} {costs.std():>12.1f}")
+
+    # Edge attributes: no leaves scaling
+    all_edge_attrs = {**edge_attrs, "curvature": curvature_values}
+    for attr, values in all_edge_attrs.items():
+        if not values:
+            continue
+        arr = np.array(values)
+        w_key, c_key = param_map[attr]
+        weight = config.get(w_key, 0.0)
+        constant = config.get(c_key, 0.0)
+        costs = weight * arr + constant
+        print(f"{attr:<16} {len(arr):>6} {arr.mean():>10.3f} {arr.std():>10.3f} {weight:>10.1f} {constant:>10.1f} {costs.mean():>12.1f} {costs.std():>12.1f}")
+
+    print("=" * 100 + "\n")
 
 def to_nx_graph(graph, flatten_hyperedges: bool = True) -> nx.DiGraph:
     """Convert a this TrackGraph into a networkx DiGraph.

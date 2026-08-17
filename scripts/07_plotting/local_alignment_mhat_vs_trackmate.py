@@ -22,8 +22,14 @@ metadata to node positions). So positions are used as-is -- multiplying by
 distorting the two results differently depending on how much z-jitter each has.
 `scale[0]` (seconds per frame) is still used, to put the time axis in seconds.
 
+`--frame-range` restricts the plot to a window of frames. The index is computed
+per frame (neighbors are drawn from the same frame, velocity from the next one),
+so restricting the range changes only which frames are drawn and averaged -- the
+per-frame values are identical to those in the full-length figure.
+
 Usage:
     python scripts/07_plotting/local_alignment_mhat_vs_trackmate.py [--k 4] [--output foo.png]
+    python scripts/07_plotting/local_alignment_mhat_vs_trackmate.py --frame-range 0 99
 """
 import argparse
 from collections import defaultdict
@@ -125,6 +131,9 @@ def main():
                         help="TrackMate tracking result directory")
     parser.add_argument("--raw-nuclei-zarr", type=Path, default=RAW_NUCLEI_ZARR,
                         help="raw nuclei zarr, read for the axis scales")
+    parser.add_argument("--frame-range", type=int, nargs=2, metavar=("FIRST", "LAST"),
+                        default=None,
+                        help="restrict the plot to frames FIRST..LAST inclusive")
     parser.add_argument("--output", type=Path, default=None, help="Override output PNG path")
     args = parser.parse_args()
 
@@ -142,6 +151,13 @@ def main():
     for label, result_dir, color in datasets:
         tracks = import_from_geff(result_dir / "pred_tracks.zarr", NAME_MAP, scale=scale)
         avg = local_alignment_by_time(tracks, args.k)
+        if args.frame_range is not None:
+            first, last = args.frame_range
+            avg = avg.loc[(avg.index >= first) & (avg.index <= last)]
+            if avg.empty:
+                raise ValueError(
+                    f"{label}: no frames in range {first}..{last}"
+                )
         t_seconds = avg.index.values * scale[0]  # scale[0] = seconds per frame
         ax.plot(t_seconds, avg["mean"], color=color, lw=2, label=label)
         print(f"{label}: overall mean local alignment = {avg['mean'].mean():.3f}")

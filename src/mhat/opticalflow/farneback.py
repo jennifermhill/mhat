@@ -153,7 +153,7 @@ def compute_farneback_flow_3d(config, zarr_img, output_zarr):
         confidence_np = confidence.cpu().numpy()
         flow = np.stack((vx_np, vy_np, vz_np), axis=-1)
 
-        if prev_flow is not None and config['hyperparams']['temporal_smoothing'] is not None:
+        if prev_flow is not None and config['hyperparams']['temporal_smoothing'] is True:
             alpha = config['hyperparams']['temporal_smoothing_sigma']
             flow = alpha * flow + (1 - alpha) * prev_flow
         

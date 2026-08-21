@@ -287,9 +287,10 @@ if __name__ == "__main__":
     else:
         flow_dirs = {"2d": None, "3d": None}
 
-    current_datetime = datetime.datetime.now()
-    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    config["exp_uid"] = exp_uid
+    exp_uid = config.get("exp_uid")
+    if not exp_uid:
+        exp_uid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        config["exp_uid"] = exp_uid
 
     output_dir = output_base_dir / "tracking" / experiment / dataset / exp_uid
     output_dir.mkdir(parents=True, exist_ok=True)

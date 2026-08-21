@@ -1,3 +1,5 @@
+from collections import deque
+
 import numpy as np
 import toml
 import torch
@@ -35,12 +37,23 @@ def rename_flow_uid(rerun_uid: Path, exp_uid: str):
         
 
 def frame_average(flow_zarr, frame_avg):
+    """Smooth flow over time with a centered sliding window of frame_avg frames.
+    """
     print("Applying frame averaging to flow data...")
-    for i in range(0, flow_zarr['flow_raw'].shape[0]-1):
-        start_idx = max(0, i - frame_avg // 2)
-        end_idx = min(flow_zarr['flow_raw'].shape[0], i + frame_avg // 2 + 1)
-        flow_zarr['flow_raw'][i, ...] = np.mean(flow_zarr['flow_raw'][start_idx:end_idx, ...], axis=0)
-    return flow_zarr['flow_raw']
+    flow = flow_zarr['flow_raw']
+    n_real_frames = flow.shape[0] - 1  # last frame is the zero placeholder
+    half_window = frame_avg // 2
+
+    # Pre-averaging copies of the previous `half_window` frames.
+    previous_frames = deque(maxlen=half_window)
+    for i in range(0, n_real_frames):
+        end_idx = min(n_real_frames, i + half_window + 1)
+        current_frame = flow[i]  # not yet overwritten, so still the raw flow
+        # Frames after i are untouched, so they can be read straight from disk.
+        window = list(previous_frames) + [current_frame] + [flow[j] for j in range(i + 1, end_idx)]
+        previous_frames.append(current_frame)
+        flow[i, ...] = np.mean(window, axis=0)
+    return flow
 
 
 def get_device(device=None):

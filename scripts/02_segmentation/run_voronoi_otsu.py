@@ -8,7 +8,7 @@ from mhat.data import (
     add_data_args,
     add_segmentation_args,
 )
-from mhat.experiment_metadata import get_experiment_metadata
+from mhat.utils import get_experiment_metadata
 from mhat.segmentation.voronoi_otsu import voronoi_otsu_labeling
 
 

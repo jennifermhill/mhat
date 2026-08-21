@@ -14,6 +14,7 @@ import networkx as nx
 from mhat.evaluation.eval_io import check_video_dir
 from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
 from mhat.tracking.tracks_io import save_tracks_to_csv
+from mhat.utils import get_axes_metadata
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 def get_solution_seg(fragments, merge_history, solution_graph):
@@ -117,20 +118,12 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         flow_3d = None
         confidence_3d = None
     print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d.shape if flow_2d is not None else None}, flow_3d shape: {flow_3d.shape if flow_3d is not None else None}")
-    axes = seg_zarr_root[seg_group].attrs.get("axes", None)
-    if axes is not None:
-        for axis in axes:
-            if axis["scale"] is None:
-                axis["scale"] = 1.0
-            else:
-                axis["scale"] = float(axis["scale"])
-        scale = [axis["scale"] for axis in axes if "scale" in axis]
-    else:
-        scale = [1.0, 1.0, 1.0, 1.0]
+    axes = get_axes_metadata(seg_zarr_root[seg_group])
+    scale = [axis["scale"] for axis in axes]
     max_node_id = np.max(fragments)
     img_shape = fragments.shape
-    img_shape_scaled = [
-        int(img_shape[i] * scale[i]) for i in range(len(img_shape))
+    img_shape_scaled = [img_shape[0]] + [
+        int(img_shape[i] * scale[i]) for i in range(1, len(img_shape))
     ]
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
@@ -220,8 +213,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     assign_tracklet_ids(solution_graph)
 
     output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
-    if axes is not None:
-        output_zarr_root.attrs["axes"] = axes
+    output_zarr_root.attrs["axes"] = axes
     output_zarr_root[:] = solution_seg
 
     # Save tracks to geff file format

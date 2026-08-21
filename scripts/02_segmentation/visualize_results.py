@@ -2,6 +2,8 @@ import napari
 import zarr
 import dask.array as da
 
+from mhat.utils import get_axes_metadata
+
 
 def main(raw_zarr_path, seg_zarr_path, compute=False):
     raw = da.from_zarr(raw_zarr_path)
@@ -11,11 +13,8 @@ def main(raw_zarr_path, seg_zarr_path, compute=False):
     affinities = da.from_zarr(seg['affinities'])[:, ...]
     fragments = da.from_zarr(seg['fragments'])[:, ...]
     segmentations = da.from_zarr(seg['segmentations'])[:, ...]
-    axes = seg['affinities'].attrs.get("axes", None)
-    if axes is not None:
-        scale = [axis["scale"] for axis in axes if axis["scale"] is not None]
-    else:
-        scale = [1.0, 1.0, 1.0]
+    axes = get_axes_metadata(seg['affinities'])
+    scale = [axis["scale"] for axis in axes]
 
     print(f"Raw shape: {raw.shape}, dtype: {raw.dtype}")
     print(f"Affinities shape: {affinities.shape}, dtype: {affinities.dtype}")
@@ -41,8 +40,8 @@ def main(raw_zarr_path, seg_zarr_path, compute=False):
 if __name__ == '__main__':
     # raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/NC281-Fl2mSiH2B/02_cells.zarr'
     # seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/NC281-Fl2mSiH2B/03_test_data/data.zarr'
-    raw_zarr_path = "Y:\\jennifer\\mhat\\data\\iXon_vol2\\01_nuclei_denoised.zarr"
-    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\iXon_vol2\\01_nuclei_denoised\\2026-03-04_11-22-08\\data.zarr'
+    raw_zarr_path = "Y:\\jennifer\\mhat\\data\\Fluo-N3DL-DRO\\01_nuclei_short.zarr"
+    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\Fluo-N3DL-DRO\\01_nuclei_short\\2026-08-21_11-31-30\\data.zarr'
     # raw_zarr_path = '/Volumes/sgrolab/jennifer/mhat/data/Fusion_vol2/00_nuclei_denoised.zarr'
     # seg_zarr_path = '/Volumes/sgrolab/jennifer/mhat/experiments/segmentation/Fusion_vol2/00_nuclei_denoised/2026-03-03_18-13-58/data.zarr'
     main(raw_zarr_path, seg_zarr_path, compute=False)

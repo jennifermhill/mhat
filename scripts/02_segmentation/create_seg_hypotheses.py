@@ -17,20 +17,7 @@ from skimage.filters import gaussian
 from mhat.segmentation.threshold_labeling import threshold_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
-
-def get_axes_metadata(zarr_root):
-    axes = zarr_root.attrs.get("axes", None)
-    if axes is not None:
-        axes = [axis for axis in axes if axis.get("name") != "channel"]
-    else:
-        # Default axes metadata
-        axes = [
-            dict(name='time', type='time', unit='second', scale=1.0),
-            dict(name='z', type='space', unit='micrometer', scale=1.0),
-            dict(name='y', type='space', unit='micrometer', scale=1.0),
-            dict(name='x', type='space', unit='micrometer', scale=1.0),
-        ]
-    return axes
+from mhat.utils import get_axes_metadata
 
 def generate_fragments(data_zarr: Path, output_root, config):
     zarr_root = zarr.open(data_zarr, "r+")

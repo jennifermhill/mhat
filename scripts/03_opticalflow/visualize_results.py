@@ -5,6 +5,8 @@ import napari
 import zarr
 import dask.array as da
 
+from mhat.utils import get_axes_metadata
+
 def main(config, compute: bool = False, scale_factor: float = 1.0):
     experiment = config["experiment"]
     dataset = config["dataset"]
@@ -27,12 +29,8 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
     if path_to_raw.exists():
         zarr_img = zarr.open(path_to_raw, mode='r')
         raw_img = da.from_zarr(path_to_raw)
-        axes = zarr_img.attrs.get("axes", None)
-        if axes is not None:
-            axes = [axis for axis in axes if axis.get("name") != "channel"]
-            scale = [axis["scale"] for axis in axes if axis.get("scale") is not None]
-        else:
-            scale = [1.0, 1.0, 1.0, 1.0]
+        axes = get_axes_metadata(zarr_img)
+        scale = [axis["scale"] for axis in axes]
         if compute:
             raw_img = raw_img.compute()
         raw_img = raw_img[:, 0, ...] # Remove channel dimension
@@ -129,6 +127,6 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
 
 
 if __name__ == "__main__":
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-sparse-label\\01_nuclei_denoised\\opticalflow_2d\\2026-04-01_11-18-35\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-3color_mov\\01_nuclei_c0\\opticalflow_2d\\2026-08-20_17-22-24\\config.toml"
     config = toml.load(path_to_config)
-    main(config, compute=True, scale_factor=1)
+    main(config, compute=False, scale_factor=1)

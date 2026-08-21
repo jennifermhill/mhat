@@ -17,20 +17,7 @@ from skimage.filters import gaussian
 from mhat.segmentation.threshold_labeling import threshold_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
-
-def get_axes_metadata(zarr_root):
-    axes = zarr_root.attrs.get("axes", None)
-    if axes is not None:
-        axes = [axis for axis in axes if axis.get("name") != "channel"]
-    else:
-        # Default axes metadata
-        axes = [
-            dict(name='time', type='time', unit='second', scale=1.0),
-            dict(name='z', type='space', unit='micrometer', scale=1.0),
-            dict(name='y', type='space', unit='micrometer', scale=1.0),
-            dict(name='x', type='space', unit='micrometer', scale=1.0),
-        ]
-    return axes
+from mhat.utils import get_axes_metadata
 
 def generate_fragments(data_zarr: Path, output_root, config):
     zarr_root = zarr.open(data_zarr, "r+")
@@ -41,7 +28,7 @@ def generate_fragments(data_zarr: Path, output_root, config):
     T, C, Z, Y, X = raw_data.shape
 
     output_root.create_dataset(
-        "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
+        "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint32, overwrite=True
     )
     output_root['fragments'].attrs["axes"] = axes
 
@@ -169,7 +156,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params):
     T, Z, Y, X = fragments.shape
 
     output_root.create_dataset(
-        "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
+        "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint32, overwrite=True
     )
     output_root['segmentations'].attrs["axes"] = axes
 
@@ -182,6 +169,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params):
         fragments_3d = fragments[t]  # Shape: (Z, Y, X)
         affinities_3d = affinities[t]  # Shape: (3, Z, Y, X)
 
+        ws_frags = fragments_3d.astype(np.uint64)
         ws_affs = affinities_3d.astype(np.float32)
 
         score_func = waterz_params.get("scoring_function", None)
@@ -199,7 +187,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params):
         
         generator = waterz.agglomerate(
             affs=ws_affs,
-            fragments=fragments_3d,
+            fragments=ws_frags,
             thresholds=thresholds,
             scoring_function=score_func,
             return_merge_history=True,

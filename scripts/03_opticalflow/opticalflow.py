@@ -12,21 +12,7 @@ from mhat.opticalflow.utils import rename_flow_uid, frame_average
 from mhat.opticalflow.farneback import compute_farneback_flow_2d, compute_farneback_flow_3d
 from mhat.opticalflow.lucaskanade import compute_lucaskanade_flow_3d
 from mhat.opticalflow.visualization import generate_flow_frames
-
-
-def get_axes_metadata(zarr_root):
-    axes = zarr_root.attrs.get("axes", None)
-    if axes is not None:
-        axes = [axis for axis in axes if axis.get("name") != "channel"]
-    else:
-        # Default axes metadata
-        axes = [
-            dict(name='time', type='time', unit='second', scale=1.0),
-            dict(name='z', type='space', unit='micrometer', scale=1.0),
-            dict(name='y', type='space', unit='micrometer', scale=1.0),
-            dict(name='x', type='space', unit='micrometer', scale=1.0),
-        ]
-    return axes
+from mhat.utils import get_axes_metadata
 
 
 def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = False, do_lk: bool = False):

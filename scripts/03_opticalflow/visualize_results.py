@@ -5,7 +5,9 @@ import napari
 import zarr
 import dask.array as da
 
-def main(config, compute: bool = False):
+from mhat.utils import get_axes_metadata
+
+def main(config, compute: bool = False, scale_factor: float = 1.0):
     experiment = config["experiment"]
     dataset = config["dataset"]
     exp_uid = config["exp_uid"]
@@ -27,12 +29,8 @@ def main(config, compute: bool = False):
     if path_to_raw.exists():
         zarr_img = zarr.open(path_to_raw, mode='r')
         raw_img = da.from_zarr(path_to_raw)
-        axes = zarr_img.attrs.get("axes", None)
-        if axes is not None:
-            axes = [axis for axis in axes if axis.get("name") != "channel"]
-            scale = [axis["scale"] for axis in axes if axis.get("scale") is not None]
-        else:
-            scale = [1.0, 1.0, 1.0, 1.0]
+        axes = get_axes_metadata(zarr_img)
+        scale = [axis["scale"] for axis in axes]
         if compute:
             raw_img = raw_img.compute()
         raw_img = raw_img[:, 0, ...] # Remove channel dimension
@@ -50,7 +48,7 @@ def main(config, compute: bool = False):
 
             print(f"Flow frames path does not exist. Creating at: {path_to_2d / 'flow_frames_XY'}")
             flow_zarr = zarr.open(path_to_2d, mode='a')
-            generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
+            generate_flow_frames(flow_zarr, scale_factor=scale_factor, color_wheel=True)
 
         flow_frames_2d = da.from_zarr(path_to_flow_frames_2d)
 
@@ -69,7 +67,7 @@ def main(config, compute: bool = False):
             from mhat.opticalflow.visualization import generate_flow_frames
 
             print(f"Flow frames path does not exist. Creating at: {path_to_3d / 'flow_frames_XY'}")
-            generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
+            generate_flow_frames(flow_zarr, scale_factor=scale_factor, color_wheel=True)
         flow_frames_3d_XY = da.from_zarr(path_to_flow_frames_3d_XY)
 
         if compute:
@@ -101,7 +99,7 @@ def main(config, compute: bool = False):
             from mhat.opticalflow.visualization import generate_flow_frames
             
             print(f"Flow frames path does not exist. Creating at: {path_to_lk / 'flow_frames_XY'}")
-            generate_flow_frames(flow_zarr, scale_factor=1, color_wheel=True)
+            generate_flow_frames(flow_zarr, scale_factor=scale_factor, color_wheel=True)
         flow_frames_lk_XY = da.from_zarr(path_to_flow_frames_lk_XY)
 
         if compute:
@@ -129,6 +127,6 @@ def main(config, compute: bool = False):
 
 
 if __name__ == "__main__":
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-sparse-label\\01_nuclei_denoised_train\\opticalflow_2d\\2026-07-01_13-20-56\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-3color_mov\\01_nuclei_c0\\opticalflow_2d\\2026-08-20_17-22-24\\config.toml"
     config = toml.load(path_to_config)
-    main(config, compute=True)
+    main(config, compute=False, scale_factor=1)

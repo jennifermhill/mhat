@@ -41,7 +41,7 @@ def generate_fragments(data_zarr: Path, output_root, config):
     T, C, Z, Y, X = raw_data.shape
 
     output_root.create_dataset(
-        "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
+        "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint32, overwrite=True
     )
     output_root['fragments'].attrs["axes"] = axes
 
@@ -169,7 +169,7 @@ def get_segmentation(output_root, thresholds, outfile):
     T, Z, Y, X = fragments.shape
 
     output_root.create_dataset(
-        "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint64, overwrite=True
+        "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint32, overwrite=True
     )
     output_root['segmentations'].attrs["axes"] = axes
 
@@ -182,11 +182,12 @@ def get_segmentation(output_root, thresholds, outfile):
         fragments_3d = fragments[t]  # Shape: (Z, Y, X)
         affinities_3d = affinities[t]  # Shape: (3, Z, Y, X)
 
+        ws_frags = fragments_3d.astype(np.uint64)
         ws_affs = affinities_3d.astype(np.float32)
         
         generator = waterz.agglomerate(
             affs=ws_affs,
-            fragments=fragments_3d,
+            fragments=ws_frags,
             thresholds=thresholds,
             # scoring_function="ContactArea<RegionGraphType>",
             return_merge_history=True,

@@ -44,7 +44,7 @@ def get_axes(zarr_path):
 def main(zarr_path):
     
     root = zarr.open(zarr_path, mode='r')
-    img = root['0']['0'] 
+    img = root['0']['0']
 
     axes = get_axes(zarr_path)
 
@@ -53,7 +53,12 @@ def main(zarr_path):
         dataset_zarr_path = os.path.join(output_dir, f"{dataset}.zarr")
         os.makedirs(dataset_zarr_path, exist_ok=True)
         print(f"Creating Zarr dataset for {dataset} at {dataset_zarr_path}")
-        dataset_zarr = zarr.open(dataset_zarr_path, mode="a", shape=(T, 1, Z, Y, X), chunks=(1, 1, 1, Y, X))
+        dataset_zarr = zarr.open(dataset_zarr_path, 
+                                 mode="a", 
+                                 shape=(T, 1, Z, Y, X), 
+                                 chunks=(1, 1, 1, Y, X),
+                                 dtype=np.uint16,
+                                 )
         dataset_zarr.attrs["axes"] = axes
         for tp in tqdm(range(T)):
             frame = img[tp, datasets[dataset]]

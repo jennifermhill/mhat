@@ -14,6 +14,7 @@ import numpy as np
 import zarr
 
 from mhat.tracking import create_multihypo_graph, utils
+from mhat.utils import get_axes_metadata
 
 
 def resolve_input_dirs(config) -> tuple[Path, Path, dict, Path]:
@@ -81,39 +82,43 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     fragments = seg_zarr_root["fragments"][:]
 
     if flow_2d_zarr_path is not None:
-        flow_2d = zarr.open(flow_2d_zarr_path)["flow_raw"][:]
-        flow_2d = np.concatenate(
-            [flow_2d, np.zeros((1, *flow_2d[0].shape), dtype=flow_2d.dtype)], axis=0
-        )
+        flow_2d_zarr = zarr.open(flow_2d_zarr_path)["flow_raw"]
+        n_flow_frames_2d = flow_2d_zarr.shape[0]
     else:
-        flow_2d = None
+        flow_2d_zarr = None
     if flow_3d_zarr_path is not None:
         flow_3d_root = zarr.open(flow_3d_zarr_path)
-        flow_3d = flow_3d_root["flow_raw"][:]
-        flow_3d = np.concatenate(
-            [flow_3d, np.zeros((1, *flow_3d[0].shape), dtype=flow_3d.dtype)], axis=0
-        )
+        flow_3d_zarr = flow_3d_root["flow_raw"]
+        n_flow_frames_3d = flow_3d_zarr.shape[0]
         if "confidence" in flow_3d_root:
-            confidence_3d = flow_3d_root["confidence"][:]
-            confidence_3d = np.concatenate(
-                [confidence_3d, np.zeros((1, *confidence_3d[0].shape), dtype=confidence_3d.dtype)],
-                axis=0,
-            )
+            confidence_3d_zarr = flow_3d_root["confidence"]
         else:
-            confidence_3d = None
+            confidence_3d_zarr = None
     else:
-        flow_3d = None
-        confidence_3d = None
+        flow_3d_zarr = None
+        confidence_3d_zarr = None
 
-    axes = seg_zarr_root["fragments"].attrs.get("axes", None)
-    if axes is not None:
-        for axis in axes:
-            axis["scale"] = 1.0 if axis["scale"] is None else float(axis["scale"])
-        scale = [axis["scale"] for axis in axes if "scale" in axis]
-    else:
-        scale = [1.0, 1.0, 1.0, 1.0]
+    def load_flow_timepoint(zarr_arr, n_frames, timepoint):
+        """Load a single timepoint from a flow zarr, returning zeros for the last frame."""
+        if zarr_arr is None:
+            return None
+        if timepoint < n_frames:
+            return zarr_arr[timepoint]
+        else:
+            return np.zeros(zarr_arr.shape[1:], dtype=zarr_arr.dtype)
+
+    # Keep the zarr handles around so downstream is-not-None checks still work.
+    flow_2d = flow_2d_zarr
+    flow_3d = flow_3d_zarr
+    confidence_3d = confidence_3d_zarr
+
+    axes = get_axes_metadata(seg_zarr_root["fragments"])
+    scale = [axis["scale"] for axis in axes]
     img_shape = fragments.shape
-    img_shape_scaled = [int(img_shape[i] * scale[i]) for i in range(len(img_shape))]
+    # Node times are frame indices, not world units, so time stays unscaled here.
+    img_shape_scaled = [img_shape[0]] + [
+        int(img_shape[i] * scale[i]) for i in range(1, len(img_shape))
+    ]
     max_node_id = int(np.max(fragments))
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
@@ -133,13 +138,17 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     all_cand_graph = None
     all_exclusion_sets: list = []
     for t in range(img_shape[0]):
+        # Lazy-load flow data for this timepoint
+        flow_2d_tp = load_flow_timepoint(flow_2d_zarr, n_flow_frames_2d, t) if flow_2d_zarr is not None else None
+        flow_3d_tp = load_flow_timepoint(flow_3d_zarr, n_flow_frames_3d, t) if flow_3d_zarr is not None else None
+        conf_3d_tp = load_flow_timepoint(confidence_3d_zarr, n_flow_frames_3d, t) if confidence_3d_zarr is not None else None
         if no_merges:
             cand_graph = utils.nodes_from_segmentation(
                 fragments[t],
                 raw_img=raw_img[t],
-                flow_3d=flow_3d[t] if flow_3d is not None else None,
-                flow_2d=flow_2d[t] if flow_2d is not None else None,
-                confidence_3d=confidence_3d[t] if confidence_3d is not None else None,
+                flow_3d=flow_3d_tp,
+                flow_2d=flow_2d_tp,
+                confidence_3d=conf_3d_tp,
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,
                 size_threshold=config["size_threshold"],
@@ -156,9 +165,9 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
                 min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
                 max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
                 raw_img=raw_img[t],
-                flow_2d=flow_2d[t] if flow_2d is not None else None,
-                flow_3d=flow_3d[t] if flow_3d is not None else None,
-                confidence_3d=confidence_3d[t] if confidence_3d is not None else None,
+                flow_2d=flow_2d_tp,
+                flow_3d=flow_3d_tp,
+                confidence_3d=conf_3d_tp,
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,
                 size_threshold=config["size_threshold"],

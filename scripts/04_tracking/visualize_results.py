@@ -7,6 +7,7 @@ from typing import Any
 from funtracks.import_export import import_from_geff
 from motile_tracker.application_menus import MainApp
 from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
+from mhat.utils import get_axes_metadata
 
 
 
@@ -48,12 +49,8 @@ def main(config, ground_truth: bool = False):
 
     if raw_cells_zarr_path.exists():
         raw_cells = zarr.open(raw_cells_zarr_path, mode='r')
-        axes = raw_cells.attrs.get("axes", None)
-        if axes is not None:
-            axes = [axis for axis in axes if axis.get("name") != "channel"]
-            scale = [axis["scale"] for axis in axes if axis.get("scale") is not None]
-        else:
-            scale = [1.0, 1.0, 1.0, 1.0]
+        axes = get_axes_metadata(raw_cells)
+        scale = [axis["scale"] for axis in axes]
         raw_cells = raw_cells[:, 0, ...]
         print(f"Raw shape: {raw_cells.shape}, dtype: {raw_cells.dtype}, scale: {scale}")
         viewer.add_image(raw_cells, name='raw', colormap='gray', blending='additive', scale=scale)

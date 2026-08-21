@@ -89,35 +89,43 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     fragments = seg_zarr_root[seg_group][:]
     if flow_2d_zarr_path is not None:
         flow_2d_zarr_root = zarr.open(flow_2d_zarr_path)
-        flow_2d = flow_2d_zarr_root[flow_group][:]
-        # Add a zero flow for the last timepoint
-        flow_2d = np.concatenate(
-            [flow_2d, np.zeros((1, *flow_2d[0].shape), dtype=flow_2d.dtype)],
-            axis=0,
-        )
+        flow_2d_zarr = flow_2d_zarr_root[flow_group]
+        flow_2d_shape = flow_2d_zarr.shape
+        n_flow_frames_2d = flow_2d_shape[0]
     else:
-        flow_2d = None
+        flow_2d_zarr = None
+        flow_2d_shape = None
     if flow_3d_zarr_path is not None:
         flow_3d_zarr_root = zarr.open(flow_3d_zarr_path)
-        flow_3d = flow_3d_zarr_root[flow_group][:]
-        # Add a zero flow for the last timepoint
-        flow_3d = np.concatenate(
-            [flow_3d, np.zeros((1, *flow_3d[0].shape), dtype=flow_3d.dtype)],
-            axis=0,
-        )
+        flow_3d_zarr = flow_3d_zarr_root[flow_group]
+        flow_3d_shape = flow_3d_zarr.shape
+        n_flow_frames_3d = flow_3d_shape[0]
         # Try to load the per-pixel confidence array from the same zarr (optional).
         if "confidence" in flow_3d_zarr_root:
-            confidence_3d = flow_3d_zarr_root["confidence"][:]
-            confidence_3d = np.concatenate(
-                [confidence_3d, np.zeros((1, *confidence_3d[0].shape), dtype=confidence_3d.dtype)],
-                axis=0,
-            )
+            confidence_3d_zarr = flow_3d_zarr_root["confidence"]
         else:
-            confidence_3d = None
+            confidence_3d_zarr = None
     else:
-        flow_3d = None
-        confidence_3d = None
-    print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d.shape if flow_2d is not None else None}, flow_3d shape: {flow_3d.shape if flow_3d is not None else None}")
+        flow_3d_zarr = None
+        flow_3d_shape = None
+        confidence_3d_zarr = None
+
+    def load_flow_timepoint(zarr_arr, n_frames, timepoint):
+        """Load a single timepoint from a flow zarr, returning zeros for the last frame."""
+        if zarr_arr is None:
+            return None
+        if timepoint < n_frames:
+            return zarr_arr[timepoint]
+        else:
+            return np.zeros(zarr_arr.shape[1:], dtype=zarr_arr.dtype)
+
+    # Create wrapper objects that support [timepoint] indexing for lazy loading
+    # and is-not-None checks for downstream flow detection
+    flow_2d = flow_2d_zarr  # None if no 2D flow
+    flow_3d = flow_3d_zarr  # None if no 3D flow
+    confidence_3d = confidence_3d_zarr  # None if no confidence
+
+    print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d_shape if flow_2d_zarr is not None else None}, flow_3d shape: {flow_3d_shape if flow_3d_zarr is not None else None}")
     axes = get_axes_metadata(seg_zarr_root[seg_group])
     scale = [axis["scale"] for axis in axes]
     max_node_id = np.max(fragments)
@@ -151,15 +159,19 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
 
     for timepoint in range(img_shape[0]):
         print(f"Processing timepoint {timepoint}")
+        # Lazy-load flow data for this timepoint
+        flow_2d_tp = load_flow_timepoint(flow_2d_zarr, n_flow_frames_2d, timepoint) if flow_2d_zarr is not None else None
+        flow_3d_tp = load_flow_timepoint(flow_3d_zarr, n_flow_frames_3d, timepoint) if flow_3d_zarr is not None else None
+        conf_3d_tp = load_flow_timepoint(confidence_3d_zarr, n_flow_frames_3d, timepoint) if confidence_3d_zarr is not None else None
         cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
             fragments[timepoint],
             merge_history[merge_history[:, 4] == timepoint],
             min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
             max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
             raw_img=raw_img[timepoint],
-            flow_2d=flow_2d[timepoint] if flow_2d is not None else None,
-            flow_3d=flow_3d[timepoint] if flow_3d is not None else None,
-            confidence_3d=confidence_3d[timepoint] if confidence_3d is not None else None,
+            flow_2d=flow_2d_tp,
+            flow_3d=flow_3d_tp,
+            confidence_3d=conf_3d_tp,
             z_flow_conf_threshold=z_flow_conf_threshold,
             z_flow_min_pass_pixels=z_flow_min_pass_pixels,
             size_threshold=config["size_threshold"],

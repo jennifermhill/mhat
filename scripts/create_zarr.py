@@ -4,11 +4,11 @@ import numpy as np
 import zarr
 from tqdm import tqdm
 
-from mhat.utils import get_axes_from_ome_xml
+from mhat.utils import get_axes_from_ome_xml, check_uint16_safe
 
 
 def main(zarr_path):
-    
+
     root = zarr.open(zarr_path, mode='r')
     img = root['0']['0']
 
@@ -28,6 +28,7 @@ def main(zarr_path):
         dataset_zarr.attrs["axes"] = axes
         for tp in tqdm(range(T)):
             frame = img[tp, datasets[dataset]]
+            check_uint16_safe(frame, tp)
             dataset_zarr[tp, 0] = frame
 
 if __name__ == "__main__":

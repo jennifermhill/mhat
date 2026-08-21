@@ -5,6 +5,7 @@ import xml.etree.ElementTree as et
 from pathlib import Path
 
 import git
+import numpy as np
 
 
 def get_axes_metadata(zarr_root):
@@ -147,3 +148,32 @@ def get_axes_from_ome_xml(zarr_path, res_lvl=0):
         dict(name='y', type='space', unit='micrometer', scale=pixel_size_y),
         dict(name='x', type='space', unit='micrometer', scale=pixel_size_x),
     ]
+
+
+def check_uint16_safe(frame, tp=None):
+    """Guard the uint16 cast, which numpy performs silently.
+
+    uint8/uint16 sources fit by construction and cost nothing to clear. Wider or
+    signed integers, and floats, may still hold perfectly good 16-bit counts, so
+    those are judged on their actual values rather than rejected outright.
+
+    `tp` names the timepoint in the error message when checking frame by frame;
+    leave it unset to check a whole array at once.
+    """
+    if np.can_cast(frame.dtype, np.uint16):
+        return
+
+    what = "Data" if tp is None else f"Frame {tp}"
+    info = np.iinfo(np.uint16)
+    fmin, fmax = float(frame.min()), float(frame.max())
+    assert info.min <= fmin and fmax <= info.max, (
+        f"{what} has values [{fmin}, {fmax}], outside the uint16 range "
+        f"[{info.min}, {info.max}] -- the cast would wrap. Rescale the source first."
+    )
+    assert not np.issubdtype(frame.dtype, np.floating) or np.array_equal(
+        frame, np.rint(frame)
+    ), (
+        f"{what} is {frame.dtype} holding non-integer values in "
+        f"[{fmin}, {fmax}] -- the cast would truncate them (to all zeros, if this "
+        "is normalized data). Rescale to integer counts first."
+    )

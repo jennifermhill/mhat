@@ -9,7 +9,6 @@ import numpy as np
 import scipy
 from scipy import linalg
 import skimage
-from line_profiler import profile
 
 from mhat.tracking.edge_pairs import CurvatureCost
 
@@ -250,6 +249,7 @@ def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=[0, 0, 0]):
     for edge in cand_graph.edges:
         # TODO: fix to include y and z pos
         if cand_graph.is_hyperedge(edge):
+            # us is always length 1 now: only division hyperedges remain.
             us, vs = edge
             pos_u = np.array([
                 (sum(cand_graph.nodes[n]["z"] for n in us)) / len(us),
@@ -276,6 +276,7 @@ def add_flow_dist_attr(cand_graph: motile.TrackGraph):
     # TODO: combine with drift distance function above and default to drift distance if no flow
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
+            # us is always length 1 now: only division hyperedges remain.
             us, vs = edge
             flow_u = np.mean([cand_graph.nodes[n]["flow"] for n in us], axis=0)
             pos_u = np.array([
@@ -316,6 +317,7 @@ def add_flow_dist_attr(cand_graph: motile.TrackGraph):
 def add_area_diff_attr(cand_graph: motile.TrackGraph):
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
+            # us is always length 1 now: only division hyperedges remain.
             us, vs = edge
             area_u = sum(cand_graph.nodes[n]["area"] for n in us)
             area_v = sum(cand_graph.nodes[n]["area"] for n in vs)
@@ -343,6 +345,7 @@ def _combined_intensity(cand_graph: motile.TrackGraph, nodes) -> float:
 def add_intensity_diff_attr(cand_graph: motile.TrackGraph):
     for edge in cand_graph.edges:
         if cand_graph.is_hyperedge(edge):
+            # us is always length 1 now: only division hyperedges remain.
             us, vs = edge
             intensity_u = _combined_intensity(cand_graph, us)
             intensity_v = _combined_intensity(cand_graph, vs)
@@ -427,24 +430,26 @@ def apply_mean_ablation(config: dict, track_graph: motile.TrackGraph) -> None:
 
 
 @profile
-def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: bool = True) -> nx.DiGraph:
+def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True) -> nx.DiGraph:
     """Add hyper edges representing specific merges and divisions to the graph
 
-    Hyperedges are pairwise: a division hyperedge points at exactly two
-    successors, and a merge hyperedge at exactly two predecessors. The constraint is
-    fixed here rather than with MaxChildren/MaxParents, because motile
-    counts a hyperedge as a single outgoing/incoming edge however many nodes it
-    connects.
+    A division hyperedge points at exactly two successors. That pairwise
+    constraint is fixed here rather than with MaxChildren, because motile counts
+    a hyperedge as a single outgoing edge however many nodes it connects.
+
+    Track merging — a hyperedge from two predecessors into one successor — is no
+    longer supported. Note this is unrelated to the merging of segmentation
+    fragments, which happens upstream in create_multihypo_graph and is
+    unaffected.
 
     Args:
         candidate_graph (nx.DiGraph): A candidate graph already populated with
             normal nodes and edges.
         divisions (bool, optional): Whether to add division hyperedges. Defaults to True.
-        merges (bool, optional): Whether to add merge hyperedges. Defaults to True.
 
     Returns:
         nx.DiGraph: The candidate graph with additional hypernodes for each
-            possible pairwise merge and division
+            possible pairwise division
     """
     nodes_original = list(candidate_graph.nodes)
     hypernodes = []
@@ -459,15 +464,6 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True, merges: 
                 hyperedges.append((node, hypernode_succ))
                 for item in succ_combo:
                     hyperedges.append((hypernode_succ, item))
-        if merges:
-            predecessors = candidate_graph.predecessors(node)
-            predecessor_combos = combinations(predecessors, 2)
-            for pred_combo in predecessor_combos:
-                hypernode_pred = str(node) + "_" + "_".join(map(str, pred_combo))
-                hypernodes.append(hypernode_pred)
-                hyperedges.append((hypernode_pred, node))
-                for item in pred_combo:
-                    hyperedges.append((item, hypernode_pred))
 
     candidate_graph.add_nodes_from(hypernodes)
     candidate_graph.add_edges_from(hyperedges)
@@ -567,6 +563,7 @@ def to_nx_graph(graph, flatten_hyperedges: bool = True) -> nx.DiGraph:
     edges_list: list[tuple[Any, Any, Mapping]] = []
     for edge, data in graph.edges.items():
         if graph.is_hyperedge(edge):
+            # us is always length 1 now: only division hyperedges remain.
             us, vs = edge
             if flatten_hyperedges:
                 # flatten the hyperedges into multiple normal edges

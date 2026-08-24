@@ -114,7 +114,6 @@ def tracking_config():
         "min_merge_cost": 0.0,
         "max_merge_cost": 1.0,
         "divisions": True,
-        "merges": False,
         "verbose": False,
     }
 

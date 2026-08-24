@@ -63,7 +63,6 @@ def build_candidate_graph(fragments, raw, merge_history, config, scale):
     all_cand_graph = utils.add_hyperedges(
         all_cand_graph,
         divisions=config["divisions"],
-        merges=config["merges"],
     )
 
     img_shape = fragments.shape

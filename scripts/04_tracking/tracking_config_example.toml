@@ -32,7 +32,6 @@ disappear_constant = 2.0
 
 # cand graph creation params
 max_children = 3
-merges = false
 divisions = false
 min_merge_cost = 0.0
 max_merge_cost = 1.0

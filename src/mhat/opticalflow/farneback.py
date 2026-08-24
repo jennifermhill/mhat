@@ -4,8 +4,28 @@ import numpy as np
 from tqdm import tqdm
 from scipy.ndimage import zoom
 
-from opticalflow3D.helpers.farneback_functions import farneback_3d
 from mhat.opticalflow.utils import enhance_contrast_AHE
+
+# opticalflow3D is imported inside compute_farneback_flow_3d, not here. It is an
+# optional dependency (the `flow3d` extra) that pulls in torch, and the 2D path
+# below is pure OpenCV — importing it at module scope would make torch a hard
+# requirement of the whole core install.
+
+
+def _import_farneback_3d():
+    try:
+        from opticalflow3D.helpers.farneback_functions import farneback_3d
+    except ImportError as exc:  # pragma: no cover - depends on optional install
+        raise ImportError(
+            "3D Farneback optical flow requires the 'flow3d' extra, which is not "
+            "installed. Install it with:\n"
+            '    pip install -e ".[flow3d]"\n'
+            "Note this is the PyTorch fork at "
+            "https://github.com/jennifermhill/opticalflow3d, not the cupy/CUDA "
+            "package of the same name on PyPI. The 2D Farneback path "
+            "(compute_farneback_flow_2d) needs none of this."
+        ) from exc
+    return farneback_3d
 
 
 def compute_farneback_flow_2d(config, zarr_img, output_zarr):
@@ -92,6 +112,8 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
 
 
 def compute_farneback_flow_3d(config, zarr_img, output_zarr):
+    farneback_3d = _import_farneback_3d()
+
     T, Z, Y, X = zarr_img.shape
 
     # # Check if Z dim is large enough for 3D optical flow

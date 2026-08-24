@@ -2,8 +2,6 @@ from collections import deque
 
 import numpy as np
 import toml
-import torch
-import torch.nn.functional as F
 from pathlib import Path
 from skimage.exposure import equalize_adapthist
 
@@ -58,6 +56,8 @@ def frame_average(flow_zarr, frame_avg):
 
 def get_device(device=None):
     """Resolve device: use provided, or auto-detect CUDA, or fall back to CPU."""
+    import torch
+
     if device is not None:
         return torch.device(device)
     if torch.cuda.is_available():
@@ -80,6 +80,8 @@ def correlate1d_gpu(tensor, kernel, axis):
     Returns:
         Convolved tensor, same shape as input
     """
+    import torch.nn.functional as F
+
     ndim = tensor.ndim
     # Move target axis to last position
     tensor = tensor.moveaxis(axis, -1)

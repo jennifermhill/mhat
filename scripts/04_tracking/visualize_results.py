@@ -115,7 +115,7 @@ def main(config, ground_truth: bool = False):
         
         # Load tracks using import_from_geff
         try:
-            name_map = {
+            node_name_map = {
                 "time": "time",
                 "x": "x", 
                 "y": "y",
@@ -125,7 +125,7 @@ def main(config, ground_truth: bool = False):
 
             tracks = import_from_geff(
                 track_data_zarr_path,
-                name_map,
+                node_name_map=node_name_map,
                 segmentation_path=track_seg_zarr_path,
                 scale=scale,
             )

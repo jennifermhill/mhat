@@ -429,9 +429,8 @@ def apply_mean_ablation(config: dict, track_graph: motile.TrackGraph) -> None:
                       f"on {len(vals)} edges")
 
 
-@profile
 def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True) -> nx.DiGraph:
-    """Add hyper edges representing specific merges and divisions to the graph
+    """Add hyper edges representing specific divisions to the graph
 
     A division hyperedge points at exactly two successors. That pairwise
     constraint is fixed here rather than with MaxChildren, because motile counts

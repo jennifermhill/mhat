@@ -84,13 +84,6 @@ dependencies = [
   # opencv-python-headless makes which cv2 wins depend on import order.
   "opencv-python-headless>=4.10",
   "colorcet",
-  # src/mhat/utils.py imports git at module level for get_experiment_metadata,
-  # so this is a hard runtime dep of every stage, not just the training scripts.
-  "gitpython",
-  # src/mhat/tracking/utils.py has a module-level `from line_profiler import
-  # profile` for one @profile on add_hyperedges. Goes away with the
-  # track-merging removal.
-  "line-profiler",
 ]
 
 [project.optional-dependencies]

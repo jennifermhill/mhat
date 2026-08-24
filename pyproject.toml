@@ -41,8 +41,22 @@ dependencies = [
   # SCIP is the default solver. PySCIPOpt's wheels bundle the SCIP binary, so no
   # system SCIP and no license are needed. Gurobi is the [gurobi] extra.
   "pyscipopt>=5,<7",
-  # Pulled in by motile; pinned so the SSVM objective scaling cannot shift under us.
-  "structsvm>=0.2,<0.3",
+  # Pulled in by motile, but pinned to a git SHA rather than PyPI on purpose.
+  #
+  # PyPI's structsvm 0.2.0 lacks two commits that live on the upstream branch
+  # `scale-features-and-costs` (unmerged, unreleased):
+  #     fddf5a5  Add scaling factor
+  #     6fbea1e  Rely on ilpy to include objective constant in solution value
+  # `fddf5a5` divides the SoftMarginLoss terms by the number of labeled
+  # variables, i.e. normalizes the loss per label. Without it the effective
+  # regularization is `ssvm_reg * n_labeled`, so shrinking the ground-truth set
+  # silently weakens regularization — a confound the GT-amount experiments are
+  # specifically measuring against.
+  #
+  # This must stay consistent across every branch, so it lives here in core
+  # rather than only on ssvm-fit. Both commits are archived under
+  # mhat_local_patches/structsvm_commits/ in case the upstream branch is deleted.
+  "structsvm @ git+https://github.com/funkelab/structsvm@6fbea1e9c332633cf24018801ed0dc3f39916da2",
   # --- tracks IO and evaluation ----------------------------------------------
   # funtracks <2 on purpose: 2.x is the tracksdata rewrite, and tracksdata is
   # still a release candidate.

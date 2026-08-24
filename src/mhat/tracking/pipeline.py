@@ -184,7 +184,7 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
         all_cand_graph, config["max_edge_distance"], max_children=config["max_children"]
     )
     all_cand_graph = utils.add_hyperedges(
-        all_cand_graph, divisions=config["divisions"], merges=config["merges"]
+        all_cand_graph, divisions=config["divisions"]
     )
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph, img_shape_scaled)

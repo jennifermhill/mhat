@@ -17,7 +17,7 @@ Each GT point is drawn only in its own timepoint, and copied onto the nearby z
 slices (see ``--z-spread``) so it stays visible while scrolling through z.
 
 Usage:
-    conda run -n mhat2 --no-capture-output python scripts/06_visualization/view_matched_seg_napari.py scripts/05_evaluation/eval_config.toml
+    conda run -n mhat2 --no-capture-output python scripts/05_evaluation/view_matched_seg_napari.py scripts/05_evaluation/eval_config.toml
 """
 import argparse
 from pathlib import Path

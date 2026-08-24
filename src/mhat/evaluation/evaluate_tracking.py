@@ -156,7 +156,7 @@ def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
         read from the predicted geff metadata.
     """
     # Use import_from_geff to get graph and segmentation in correct format
-    name_map = {
+    node_name_map = {
         "time": "time",
         "x": "x",
         "y": "y",
@@ -180,7 +180,7 @@ def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
             break
     gt_tracks = import_from_geff(
         gt_data_dir / "correct_tracks.zarr",
-        name_map,
+        node_name_map=node_name_map,
         segmentation_path=gt_seg_path,
         scale=scale,
     )
@@ -204,7 +204,7 @@ def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
     pred_seg_path = pred_seg_path if pred_seg_path.exists() else None
     pred_tracks = import_from_geff(
         pred_data_dir / "pred_tracks.zarr",
-        name_map,
+        node_name_map=node_name_map,
         segmentation_path=pred_seg_path,
         scale=scale,
     )

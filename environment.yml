@@ -1,44 +1,79 @@
-# Minimal cross-platform environment for the optical flow stage (scripts/03_opticalflow).
+# The one MHAT environment. Installs on Linux, Windows and macOS.
 #
-# Scope: the conda layer is a minimal cross-platform base for the optical flow stage
-# (scripts/03_opticalflow/opticalflow.py and visualize_results.py). The mhat package itself
-# is installed from this checkout via the pip section, which pulls in mhat's full dependency
-# set (motile/ilpy, gunpowder, traccuracy, neuroglancer, ...). The deep-segmentation backends
-# (waterz, cellpose) are not declared mhat deps and are still not covered here.
+# Everything comes from public PyPI — no local checkouts, no private forks on
+# disk, no network-share paths. conda supplies only the interpreter; every
+# package, napari included, is installed by pip from pyproject.toml.
 #
-# conda-forge resolves the native/GUI stack per-OS, so this file installs on both
-# macOS (Apple Silicon) and Linux. opticalflow3d is a custom PyTorch fork (not on PyPI),
-# pinned by git URL in the pip section so it installs on any machine with network access.
+# Install (run from the repo root, so the "." line resolves to this checkout):
 #
-# Install (run from the repo root so the pip "." line resolves to this checkout):
 #   conda env create -f environment.yml
+#   conda activate mhat
+#   pip install -e ".[dev]"     # test + lint tooling
+#   pytest                      # 7 passed
 #
+# ---------------------------------------------------------------------------
+# WHY PIP AND NOT CONDA FOR THE SCIENTIFIC STACK
+#
+# This looks like it is fighting conda, and it is deliberate. Measured on
+# 2026-08-24 (Windows), all three shapes were built and probed:
+#
+#   conda napari + pip torch    -> mhat.opticalflow 3D and cellpose ABORT
+#   conda napari + conda torch  -> same, they still ABORT
+#   all-pip (this file)         -> everything works, 7/7 tests pass
+#
+# The abort is:
+#     OMP: Error #15: Initializing libomp.dll, but found libiomp5md.dll
+#                     already initialized.
+#
+# Cause: conda-forge's napari drags in conda numpy (linked against MKL, which
+# loads Intel's libiomp5md) and conda numba (linked against LLVM's libomp).
+# pip's torch wheel bundles a third copy, Intel's again. Two OpenMP families in
+# one process abort — and it happens at import of exactly the paths those
+# extras exist for, not at install time.
+#
+# pip's numpy ships its own self-contained scipy-openblas instead of MKL, so an
+# all-pip environment only ever loads one OpenMP runtime. That is why this file
+# keeps the conda layer down to python + pip.
+#
+# Installing torch from conda-forge first does NOT fix the conda-napari case:
+# the [flow3d]/[segmentation] extras declare `torch`, and pip installs its own
+# wheel over the top of conda's.
+# ---------------------------------------------------------------------------
+#
+# Optional extras — none are needed for stages 02-05 or 07_plotting, and all of
+# them are safe to add to this environment:
+#
+#   pip install -e ".[flow3d]"        3D Farneback optical flow (pulls torch)
+#   pip install -e ".[segmentation]"  cellpose backend (pulls torch)
+#   pip install -e ".[all]"           napari + flow3d + segmentation
+#   pip install -e ".[waterz]"        affinity/agglomeration fragments.
+#                                     LINUX ONLY today, and needs a C++
+#                                     toolchain plus Boost headers.
+#   pip install -e ".[gurobi]"        commercial solver; needs your own licence.
+#                                     The default solver is SCIP, which ships
+#                                     inside the pyscipopt wheel and needs no
+#                                     licence.
+#
+# For CUDA torch, follow https://pytorch.org rather than pinning a +cuXXX wheel
+# here.
+#
+# Headless machines (the cluster) need none of the GUI stack. Skip this file:
+#     conda create -n mhat python=3.11
+#     conda activate mhat
+#     pip install -e .
+# On a bare Linux image, pip's PyQt5 also needs system libs that conda-forge
+# would otherwise have supplied (libGL, libxkbcommon, xcb). Another reason to
+# use the core-only install where there is no display.
 name: mhat
 channels:
   - conda-forge
 dependencies:
+  # 3.11 floor comes from motile-tracker (see pyproject.toml). conda provides
+  # the interpreter and nothing else; pip owns the rest.
   - python=3.11
   - pip
-  # numeric / imaging stack (consistent BLAS from conda-forge)
-  - numpy
-  - scipy
-  - scikit-image
-  - matplotlib
-  - dask
-  - zarr<3
-  - tifffile
-  - tqdm
-  - toml
-  - colorcet            # used by scripts/03_opticalflow/make_quiver_movie.py
-  # torch from conda-forge (NOT pip): shares conda's llvm-openmp so there is a single
-  # OpenMP runtime. pip's torch bundles its own libomp, which collides with conda's and
-  # aborts with "OMP Error #15" depending on import order. CPU/MPS on macOS, CPU on Linux
-  # (CUDA is a later, GPU-only opt-in).
-  - pytorch
-  # GUI / visualization (visualize_results.py)
-  - napari
-  - pyqt
   - pip:
-      - opencv-python-headless   # provides cv2
-      - git+https://github.com/jennifermhill/opticalflow3d
-      - .                        # the mhat package itself (from this checkout, with deps)
+      # mhat itself, from this checkout, with its full public dependency set.
+      # The [napari] extra adds motile-tracker, napari and the GUI helpers used
+      # by each stage's visualize_results.py.
+      - --editable .[napari]

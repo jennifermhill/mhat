@@ -1,17 +1,16 @@
 from pathlib import Path
 
-import motile_plugin
-import motile_plugin.data_model
 import napari
 import numpy as np
 import zarr
+from funtracks.data_model import Tracks
 from mhat.tracking.tracks_io import load_tracks_from_csv, read_gt_tracks
 from mhat.tracking.utils import (
     relabel_segmentation,
 )
-from motile_plugin.data_views.menus.multi_widget import MultiWidget
-from motile_plugin.data_views.views_coordinator import TracksViewer
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
+from motile_tracker.application_menus import MainApp
+from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
 
 
 def crop_tracks(tracks, start_frame, end_frame, frame_attr="time"):
@@ -61,9 +60,9 @@ def view_run(
 
     pred_seg = relabel_segmentation(pred_tracks, pred_seg)
 
-    run = motile_plugin.data_model.Tracks(
-        segmentation=np.expand_dims(pred_seg, axis=1),
+    run = Tracks(
         graph=pred_tracks,
+        segmentation=np.expand_dims(pred_seg, axis=1),
         pos_attr="pos",
     )
 
@@ -80,7 +79,7 @@ def view_run(
         assign_tracklet_ids(gt_tracks)
         viewer.add_labels(gt_seg, name="gt_seg")
 
-    widget = MultiWidget(viewer)
+    widget = MainApp(viewer)
     viewer.window.add_dock_widget(widget, name="Motile Widget")
     tracks_viewer = TracksViewer.get_instance(viewer)
     tracks_viewer.tracks_list.add_tracks(run, name=experiment)

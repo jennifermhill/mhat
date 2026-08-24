@@ -4,8 +4,12 @@ import statistics
 import xml.etree.ElementTree as et
 from pathlib import Path
 
-import git
 import numpy as np
+
+# gitpython is imported inside get_experiment_metadata rather than here. That is
+# its only user, and a module-level import would make gitpython a hard runtime
+# dependency of every stage — this module also provides get_axes_metadata, which
+# run_tracking.py imports.
 
 
 def get_axes_metadata(zarr_root):
@@ -38,6 +42,19 @@ def get_axes_metadata(zarr_root):
 
 
 def get_experiment_metadata():
+    """Record the current git commit, for stamping experiment outputs.
+
+    Requires gitpython, which is an optional dependency — install it with
+    ``pip install gitpython`` if you need this.
+    """
+    try:
+        import git
+    except ImportError as exc:  # pragma: no cover - depends on optional install
+        raise ImportError(
+            "get_experiment_metadata requires gitpython, which is not installed. "
+            "Install it with:\n    pip install gitpython"
+        ) from exc
+
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
     return {"git_hash": sha}

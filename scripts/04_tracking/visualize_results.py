@@ -115,7 +115,7 @@ def main(config, ground_truth: bool = False):
         
         # Load tracks using import_from_geff
         try:
-            name_map = {
+            node_name_map = {
                 "time": "time",
                 "x": "x", 
                 "y": "y",
@@ -125,7 +125,7 @@ def main(config, ground_truth: bool = False):
 
             tracks = import_from_geff(
                 track_data_zarr_path,
-                name_map,
+                node_name_map=node_name_map,
                 segmentation_path=track_seg_zarr_path,
                 scale=scale,
             )
@@ -152,7 +152,7 @@ def main(config, ground_truth: bool = False):
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\primary_nk_cells\\01_cells\\nkgraph_size120\\config.toml"
+    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-3color_mov\\01_nuclei_c0\\baseline_3x\\config.toml"
     # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\02_nuclei\\2026-03-24_17-02-10\\config.toml"
     # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
     track_config = toml.load(path_to_config)

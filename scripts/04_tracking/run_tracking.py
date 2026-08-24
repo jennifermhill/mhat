@@ -182,8 +182,8 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
             cand_graph = utils.nodes_from_segmentation(
                 fragments[timepoint],
                 raw_img=raw_img[timepoint],
-                flow_3d=flow_3d_tp if flow_3d_tp,
-                flow_2d=flow_2d_tp if flow_2d_tp,
+                flow_3d=flow_3d_tp,
+                flow_2d=flow_2d_tp,
                 confidence_3d=conf_3d_tp if conf_3d_tp,
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,

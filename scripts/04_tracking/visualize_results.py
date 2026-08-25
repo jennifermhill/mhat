@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 import napari
 import toml
@@ -20,24 +21,19 @@ def main(config, ground_truth: bool = False):
     seg_result = config["seg_result"]
     flow_result = config.get("flow_result", "")
 
-    if Path("Y:\\").exists():
-        input_base_dir = Path("Y:\\jennifer\\mhat\\data")
-        seg_base_dir = Path("Y:\\jennifer\\mhat\\experiments\\segmentation")
-        flow_base_dir = Path("Y:\\jennifer\\mhat\\experiments\\opticalflow")
-        tracking_base_dir = Path("Y:\\jennifer\\mhat\\experiments\\tracking")
-    elif Path("/groups/sgro/sgrolab").exists():
-        input_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/data")
-        seg_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation")
-        flow_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/experiments/opticalflow")
-        tracking_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking")
-    else:
-        input_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/data")
-        seg_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/experiments/segmentation")
-        flow_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/experiments/opticalflow")
-        tracking_base_dir = Path("/Volumes/sgrolab/jennifer/mhat/experiments/tracking")
+    # Base directories come from the tracking config that produced this run, so
+    # the viewer works on any machine. run_tracking.py reads these same three
+    # keys and writes a copy of the config next to its output.
+    raw_base_dir = Path(config["raw_base_dir"])
+    experiments_base_dir = Path(config["input_base_dir"])
+    output_base_dir = Path(config["output_base_dir"])
 
-    raw_cells_zarr_path = Path(input_base_dir / experiment / f"{dataset}.zarr")
-    raw_cells_fl2_zarr_path = Path(input_base_dir / experiment / f"{dataset_fl2}.zarr") if dataset_fl2 else None
+    seg_base_dir = experiments_base_dir / "segmentation"
+    flow_base_dir = experiments_base_dir / "opticalflow"
+    tracking_base_dir = output_base_dir / "tracking"
+
+    raw_cells_zarr_path = Path(raw_base_dir / experiment / f"{dataset}.zarr")
+    raw_cells_fl2_zarr_path = Path(raw_base_dir / experiment / f"{dataset_fl2}.zarr") if dataset_fl2 else None
     frag_zarr_path = Path(seg_base_dir / experiment / dataset / seg_result / 'data.zarr')
     flow_2d_zarr_path = Path(flow_base_dir / experiment / dataset / "opticalflow_2d" / flow_result / "flow.zarr") 
     flow_3d_zarr_path = Path(flow_base_dir / experiment / dataset / "opticalflow_3d" / flow_result / "flow.zarr") 
@@ -152,8 +148,16 @@ def main(config, ground_truth: bool = False):
     napari.run()
 
 if __name__ == '__main__':
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-3color_mov\\01_nuclei_c0\\baseline_3x\\config.toml"
-    # path_to_config = "Y:\\jennifer\\mhat\\experiments\\tracking\\NC281-Fl2mSiH2B\\02_nuclei\\2026-03-24_17-02-10\\config.toml"
-    # path_to_config = "/Volumes/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/2026-02-27_19-37-56/config.toml"
-    track_config = toml.load(path_to_config)
-    main(track_config, ground_truth=False)
+    parser = argparse.ArgumentParser(
+        description="View tracking results in napari. Pass the config.toml that "
+                    "run_tracking.py wrote next to the results you want to see."
+    )
+    parser.add_argument("config", help="path to a tracking run's config.toml")
+    parser.add_argument(
+        "--ground-truth",
+        action="store_true",
+        help="show the ground truth tracks instead of the predictions",
+    )
+    args = parser.parse_args()
+    track_config = toml.load(args.config)
+    main(track_config, ground_truth=args.ground_truth)

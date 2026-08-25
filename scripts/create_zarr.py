@@ -1,3 +1,4 @@
+import argparse
 import os
 
 import numpy as np
@@ -7,8 +8,15 @@ from tqdm import tqdm
 from mhat.utils import get_axes_from_ome_xml, check_uint16_safe
 
 
-def main(zarr_path):
+def main(zarr_path, output_dir, datasets):
+    """Split the channels of an OME-zarr into one zarr per dataset.
 
+    Args:
+        zarr_path: path to the source OME-zarr.
+        output_dir: directory to write ``<dataset>.zarr`` into.
+        datasets: mapping of output dataset name to source channel index,
+            e.g. ``{"01_nuclei": 0, "01_cells": 1}``.
+    """
     root = zarr.open(zarr_path, mode='r')
     img = root['0']['0']
 
@@ -31,8 +39,31 @@ def main(zarr_path):
             check_uint16_safe(frame, tp)
             dataset_zarr[tp, 0] = frame
 
+def _parse_datasets(values):
+    """Turn ["01_nuclei=0", "01_cells=1"] into {"01_nuclei": 0, "01_cells": 1}."""
+    datasets = {}
+    for item in values:
+        name, _, index = item.partition("=")
+        if not name or not index.isdigit():
+            raise argparse.ArgumentTypeError(
+                f"expected NAME=CHANNEL_INDEX, got {item!r}"
+            )
+        datasets[name] = int(index)
+    return datasets
+
+
 if __name__ == "__main__":
-    zarr_path = "/groups/sgro/sgrolab/jennifer/cryolite/Natalie/260228InterfaceTransferMirrorB1-DB.zarr"
-    output_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/InterfaceTransferMirrorB1-DB"
-    datasets = {"01_nuclei": 0, "01_cells": 1}
-    main(zarr_path)
+    parser = argparse.ArgumentParser(
+        description="Split the channels of an OME-zarr into one zarr per dataset."
+    )
+    parser.add_argument("zarr_path", help="path to the source OME-zarr")
+    parser.add_argument("output_dir", help="directory to write <dataset>.zarr into")
+    parser.add_argument(
+        "datasets",
+        nargs="+",
+        metavar="NAME=CHANNEL",
+        help="output dataset name and its source channel index, "
+             "e.g. 01_nuclei=0 01_cells=1",
+    )
+    args = parser.parse_args()
+    main(args.zarr_path, args.output_dir, _parse_datasets(args.datasets))

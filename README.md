@@ -1,9 +1,6 @@
 # mhat: Multi-Hypothesis Affinity Tracking
 
-[![tests](https://github.com/funkelab/mhat/actions/workflows/tests.yaml/badge.svg)](https://github.com/funkelab/mhat/actions/workflows/tests.yaml)
-[![black](https://github.com/funkelab/mhat/actions/workflows/black.yaml/badge.svg)](https://github.com/funkelab/mhat/actions/workflows/black.yaml)
-[![mypy](https://github.com/funkelab/mhat/actions/workflows/mypy.yaml/badge.svg)](https://github.com/funkelab/mhat/actions/workflows/mypy.yaml)
-[![codecov](https://codecov.io/gh/funkelab/mhat/branch/main/graph/badge.svg)](https://codecov.io/gh/funkelab/mhat)
+[![ci](https://github.com/jennifermhill/mhat/actions/workflows/ci.yaml/badge.svg)](https://github.com/jennifermhill/mhat/actions/workflows/ci.yaml)
 
 MHAT does multi-hypothesis segmentation and tracking for microscopy data. Fragment
 hypotheses are generated per frame, assembled into a candidate graph, and resolved into
@@ -15,12 +12,25 @@ One environment covers the whole pipeline, on Linux, Windows and macOS. Everythi
 from public conda-forge and PyPI.
 
 ```bash
-git clone https://github.com/funkelab/mhat
+git clone https://github.com/jennifermhill/mhat
 cd mhat
 conda env create -f environment.yml
 conda activate mhat
-pytest                                  # 7 passed
+pip install -e ".[dev]"                 # test tooling
+pytest                                  # 7 passed, 1 skipped
 ```
+
+For a byte-reproducible install, use the committed lockfile instead. `uv.lock` is a
+single universal lockfile — it resolves every platform at once, so the same file serves
+Linux, Windows and macOS:
+
+```bash
+uv sync --locked --extra dev            # exactly the versions CI tests
+uv run pytest
+```
+
+Regenerate it with `uv lock` whenever `pyproject.toml` changes; CI fails if the two
+drift apart.
 
 The core install is **headless and CPU-only** — no torch, no CUDA, no GPU. It covers
 stages 02_segmentation (threshold backends) through 05_evaluation, plus 07_plotting.

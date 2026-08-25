@@ -72,11 +72,13 @@ def nodes_from_segmentation(
         if size_threshold and regionprop.area < size_threshold:
             continue
         node_id = int(regionprop.label)
-        region = segmentation == node_id
+        # Read only this label's bounding box, not the whole frame
+        sl = regionprop.slice
+        region = regionprop.image
         centroid = (float(regionprop.centroid[0] * scale[1]),
                     float(regionprop.centroid[1] * scale[2]),
                     float(regionprop.centroid[2] * scale[3]))
-        region_raw = raw_img[region]
+        region_raw = raw_img[sl][region]
         intensity = np.mean(region_raw)
         z_flow_reliable = True
         if flow_3d is not None:
@@ -84,9 +86,9 @@ def nodes_from_segmentation(
             # the voxel-scaled centroids above so drift_dist computations are consistent.
             # Z component of flow can be filtered by confidence: only in-region pixels
             # whose |confidence| exceeds z_flow_conf_threshold contribute to the average.
-            vz_pixels = flow_3d[region][:, 2]
+            vz_pixels = flow_3d[sl][region][:, 2]
             if confidence_3d is not None and z_flow_conf_threshold is not None:
-                conf_pixels = np.abs(confidence_3d[region])
+                conf_pixels = np.abs(confidence_3d[sl][region])
                 conf_mask = conf_pixels > z_flow_conf_threshold
                 n_passing = int(np.sum(conf_mask))
                 if n_passing >= z_flow_min_pass_pixels:
@@ -100,12 +102,12 @@ def nodes_from_segmentation(
                 flow_z = float(np.mean(vz_pixels) * scale[1])
             if flow_2d is not None:
                 flow = (flow_z,
-                        float(np.mean(flow_2d[region][:, 1]) * scale[2]),
-                        float(np.mean(flow_2d[region][:, 0]) * scale[3]))
+                        float(np.mean(flow_2d[sl][region][:, 1]) * scale[2]),
+                        float(np.mean(flow_2d[sl][region][:, 0]) * scale[3]))
             else:
                 flow = (flow_z,
-                        float(np.mean(flow_3d[region][:, 1]) * scale[2]),
-                        float(np.mean(flow_3d[region][:, 0]) * scale[3]))
+                        float(np.mean(flow_3d[sl][region][:, 1]) * scale[2]),
+                        float(np.mean(flow_3d[sl][region][:, 0]) * scale[3]))
         else:
             flow = 0
         attrs = {

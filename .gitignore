@@ -6,15 +6,11 @@
 /workshop_paper
 /scripts/*/[a-z]*_config.toml
 /logs
+/ctc
 
 # Claude files
 /.claude
 CLAUDE.md
-
-# Locally editable installed packages
-/funtracks
-/motile_tracker
-/ctc
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

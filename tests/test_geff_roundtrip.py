@@ -46,12 +46,16 @@ def solution_graph():
     return graph
 
 
-def write_tracks(graph, path):
-    """Byte-for-byte the geff.write call in run_tracking.py."""
+def write_tracks(graph, path, prop_field="node_prop"):
+    """Byte-for-byte the geff.write call in run_tracking.py.
+
+    `prop_field` exists so a test can also produce a pre-geff-spec-1.2.1 file,
+    which used `label_prop`.
+    """
     metadata = geff.GeffMetadata(
         directed=True,
         related_objects=[
-            {"type": "labels", "path": "../pred_seg.zarr", "label_prop": "label"}
+            {"type": "labels", "path": "../pred_seg.zarr", prop_field: "label"}
         ],
         node_props_metadata={},
         edge_props_metadata={},
@@ -84,7 +88,34 @@ def test_geff_write_then_read(solution_graph, tmp_path):
 
     # The related_objects entry is how the segmentation is located downstream.
     assert metadata.related_objects
-    assert metadata.related_objects[0].label_prop == "label"
+    assert metadata.related_objects[0].node_prop == "label"
+
+
+def test_seg_label_prop_is_readable_old_and_new(solution_graph, tmp_path):
+    """`evaluate_tracking` must find the seg-label property on files of both ages.
+
+    geff-spec 1.2.1 renamed `label_prop` to `node_prop`. They are separate
+    fields rather than aliases — setting one leaves the other None — so a plain
+    rename in the writers would silently stop `remap_seg_to_track_ids` from
+    finding the property on every pred_tracks.zarr already on disk, and it would
+    quietly fall back to "track_id".
+
+    This pins the resolution expression that reader uses.
+    """
+    for prop_field in ("node_prop", "label_prop"):
+        path = tmp_path / f"tracks_{prop_field}.zarr"
+        write_tracks(solution_graph, path, prop_field=prop_field)
+
+        _, metadata = geff.read(path)
+        ro = metadata.related_objects[0]
+
+        # Exactly the expression in evaluate_tracking.remap_seg_to_track_ids.
+        resolved = ro.node_prop or ro.label_prop
+        assert resolved == "label", (
+            f"a file written with {prop_field!r} resolved to {resolved!r}; "
+            "remap_seg_to_track_ids would fall back to 'track_id' and remap "
+            "against the wrong property"
+        )
 
 
 def test_import_from_geff_roundtrip(solution_graph, tmp_path):

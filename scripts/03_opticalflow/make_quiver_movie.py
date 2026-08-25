@@ -5,7 +5,7 @@ Uses matplotlib quiver rendering (matching example_analysis_script.ipynb style).
 Slower than the OpenCV version (make_quiver_movie.py) but produces different visual output.
 
 Usage:
-    conda activate mhat2
+    conda activate mhat
     python make_quiver_movie_mpl.py movie_config.toml
 """
 
@@ -200,13 +200,11 @@ if __name__ == "__main__":
 
     if config["flow_result"] == "2d":
         # data_dir = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / exp_uid / "flow.zarr"
-        raise ValueError("2D flow visualization not implemented yet (needs confidence array). Please set flow_result to '3d' or 'lk'.")
+        raise ValueError("2D flow visualization not implemented yet (needs confidence array). Please set flow_result to '3d'.")
     elif config["flow_result"] == "3d":
         data_dir = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / exp_uid / "flow.zarr"
-    elif config["flow_result"] == "lk":
-        data_dir = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_lucaskanade" / exp_uid / "flow.zarr"
     else:
-        raise ValueError(f"Invalid flow_result value: {config['flow_result']}. Must be one of '2d', '3d', or 'lk'.")
+        raise ValueError(f"Invalid flow_result value: {config['flow_result']}. Must be '2d' or '3d'.")
     print(f"Loading data from {data_dir}")
     assert data_dir.is_dir()
 

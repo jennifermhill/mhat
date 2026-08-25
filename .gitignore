@@ -5,6 +5,7 @@
 /workshop_paper
 /scripts/*/[a-z]*_config.toml
 /logs
+/ctc
 
 # configs/ is version-controlled on this branch (unlike mhat_dicty).
 # Exclude the trackmate figure config — its consumer script isn't on this branch.
@@ -14,12 +15,6 @@
 # Claude files
 /.claude
 CLAUDE.md
-
-# Locally editable installed packages
-/funtracks
-/motile_tracker
-/ctc
-/structsvm
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

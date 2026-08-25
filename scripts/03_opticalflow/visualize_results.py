@@ -21,7 +21,6 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
     path_to_raw = Path(input_base_dir / experiment / f"{dataset}.zarr")
     path_to_2d = Path(output_base_dir / experiment / dataset / "opticalflow_2d" / exp_uid / "flow.zarr")
     path_to_3d = Path(output_base_dir / experiment / dataset / "opticalflow_3d" / exp_uid / "flow.zarr")
-    path_to_lk = Path(output_base_dir / experiment / dataset / "opticalflow_lucaskanade" / exp_uid / "flow.zarr")
 
     viewer = napari.Viewer()
 
@@ -89,38 +88,6 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
         viewer.add_image(flow_frames_3d_Z, name="3D Flow Frames (Z component)", colormap='berlin', blending='additive', scale=scale)
     else:
         print(f"3D optical flow data not found at {path_to_3d}")
-
-    if path_to_lk.exists():
-        flow_zarr = zarr.open(path_to_lk, mode='a')
-
-        path_to_flow_frames_lk_XY = path_to_lk / "flow_frames_XY"
-        if not path_to_flow_frames_lk_XY.exists(): 
-            from mhat.opticalflow.visualization import generate_flow_frames
-            
-            print(f"Flow frames path does not exist. Creating at: {path_to_lk / 'flow_frames_XY'}")
-            generate_flow_frames(flow_zarr, scale_factor=scale_factor, color_wheel=True)
-        flow_frames_lk_XY = da.from_zarr(path_to_flow_frames_lk_XY)
-
-        if compute:
-            flow_frames_lk_XY = flow_frames_lk_XY.compute()
-        print(f"Lucas-Kanade Flow frames shape: {flow_frames_lk_XY.shape}")
-        viewer.add_image(flow_frames_lk_XY, name="LK Flow Frames (XY component)", blending='additive', scale=scale)
-
-        path_to_flow_frames_lk_Z = path_to_lk / "flow_frames_Z"
-        if not path_to_flow_frames_lk_Z.exists():
-            print(f"Flow frames Z path does not exist. Creating at: {path_to_flow_frames_lk_Z}")
-            flow_raw = da.from_zarr(path_to_lk / "flow_raw")
-            T, Z, Y, X, _ = flow_raw.shape
-            flow_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
-            flow_zarr['flow_frames_Z'][:] = flow_raw[..., 2]
-        flow_frames_lk_Z = da.from_zarr(path_to_flow_frames_lk_Z)
-
-        if compute:
-            flow_frames_lk_Z = flow_frames_lk_Z.compute()
-        print(f"Lucas-Kanade Flow frames Z shape: {flow_frames_lk_Z.shape}")
-        viewer.add_image(flow_frames_lk_Z, name="LK Flow Frames (Z component)", colormap='berlin', blending='additive', scale=scale)
-    else:
-        print(f"Lucas-Kanade optical flow data not found at {path_to_lk}")
 
     napari.run()
 

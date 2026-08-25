@@ -43,15 +43,11 @@ def resolve_input_dirs(config) -> tuple[Path, Path, dict, Path]:
     flow_result = config.get("flow_result", None)
     if flow_result is not None:
         flow_base = input_base_dir / "opticalflow" / experiment / dataset
-        if config.get("use_lk", False):
-            flow_dir_3d = flow_base / "opticalflow_lucaskanade" / flow_result
+        flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
+        flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
+        if not flow_dir_2d.is_dir():
+            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D only.")
             flow_dir_2d = None
-        else:
-            flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
-            flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
-            if not flow_dir_2d.is_dir():
-                print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D only.")
-                flow_dir_2d = None
         assert flow_dir_3d.is_dir(), f"Optical flow directory {flow_dir_3d} is missing"
         flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
     else:

@@ -1,11 +1,27 @@
+import argparse
+from pathlib import Path
+
 import napari
+import toml
 import zarr
 import dask.array as da
 
 from mhat.utils import get_axes_metadata
 
 
-def main(raw_zarr_path, seg_zarr_path, compute=False):
+def main(config, compute=False):
+    # Base directories come from the seg config that produced this run, so the
+    # viewer works on any machine. create_seg_hypotheses.py reads these same
+    # keys and writes a copy of the config next to its output.
+    input_base_dir = Path(config["input_base_dir"])
+    output_base_dir = Path(config["output_base_dir"])
+    experiment = config["experiment"]
+    dataset = config["dataset"]
+    exp_uid = config["exp_uid"]
+
+    raw_zarr_path = input_base_dir / experiment / f"{dataset}.zarr"
+    seg_zarr_path = output_base_dir / experiment / dataset / exp_uid / "data.zarr"
+
     raw = da.from_zarr(raw_zarr_path)
     raw = raw[:, 0, ...]
 
@@ -42,10 +58,16 @@ def main(raw_zarr_path, seg_zarr_path, compute=False):
     napari.run()
 
 if __name__ == '__main__':
-    # raw_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/data/NC281-Fl2mSiH2B/02_cells.zarr'
-    # seg_zarr_path = '/groups/sgro/sgrolab/jennifer/mhat/experiments/segmentation/NC281-Fl2mSiH2B/03_test_data/data.zarr'
-    raw_zarr_path = "Y:\\jennifer\\mhat\\data\\Fluo-N3DL-DRO\\01_nuclei_short.zarr"
-    seg_zarr_path = 'Y:\\jennifer\\mhat\\experiments\\segmentation\\Fluo-N3DL-DRO\\01_nuclei_short\\2026-08-21_11-31-30\\data.zarr'
-    # raw_zarr_path = '/Volumes/sgrolab/jennifer/mhat/data/Fusion_vol2/00_nuclei_denoised.zarr'
-    # seg_zarr_path = '/Volumes/sgrolab/jennifer/mhat/experiments/segmentation/Fusion_vol2/00_nuclei_denoised/2026-03-03_18-13-58/data.zarr'
-    main(raw_zarr_path, seg_zarr_path, compute=False)
+    parser = argparse.ArgumentParser(
+        description="View segmentation hypotheses in napari: raw, affinities, "
+                    "fragments and agglomerated segmentations. Pass the config.toml "
+                    "that create_seg_hypotheses.py wrote next to the results."
+    )
+    parser.add_argument("config", help="path to a segmentation run's config.toml")
+    parser.add_argument(
+        "--compute",
+        action="store_true",
+        help="load the arrays into memory instead of viewing them lazily",
+    )
+    args = parser.parse_args()
+    main(toml.load(args.config), compute=args.compute)

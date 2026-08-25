@@ -1,0 +1,159 @@
+name: ci
+
+# The acceptance criterion for "installable by someone who is not us".
+#
+# Everything here installs from public PyPI via uv.lock, on all three operating
+# systems. conda supplies only the interpreter locally (see environment.yml), so
+# CI does not need conda at all.
+
+on:
+  push:
+    branches: [mhat_dicty, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lock:
+    # Fails if pyproject.toml was edited without regenerating uv.lock. Takes
+    # milliseconds and is the thing that keeps the lockfile honest while the
+    # pipeline is still moving.
+    name: lockfile in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv lock --check
+
+  core:
+    # The headless, CPU-only install: stages 02-05 and 07_plotting. No Qt, no
+    # torch, no GPU. This is what a cluster user gets.
+    name: core (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the floor (motile-tracker); 3.13 is the highest version
+        # pyproject.toml advertises. Testing both ends catches range errors.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+
+      - name: Install from the lockfile
+        run: uv sync --locked --extra dev
+
+      - name: Import the pipeline modules
+        # A plain import is worth asserting separately from the tests: it is
+        # what catches a missing dependency that the tests happen not to touch.
+        run: uv run python -c "import mhat.tracking, mhat.evaluation, mhat.opticalflow, mhat.segmentation"
+
+      - name: Core install must not pull torch or Qt
+        # The whole point of the extras split. If either of these ever appears
+        # in a core install, someone has moved a dependency into the wrong place.
+        run: uv run python -c "import importlib.util as u, sys; [sys.exit(f'{m} leaked into the core install') for m in ('torch','PyQt5','napari') if u.find_spec(m)]"
+
+      - run: uv run pytest
+      - run: uv pip check
+
+  napari:
+    # The GUI extra. Import only — constructing a Viewer needs a display, and
+    # that is not what this is checking.
+    name: napari extra (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Qt runtime libraries
+        # PyQt5 links libGL and xkbcommon at import time; GitHub's ubuntu image
+        # does not ship them.
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglib2.0-0 libegl1 \
+            libxkbcommon-x11-0 libdbus-1-3 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - run: uv sync --locked --extra napari
+
+      - name: Import the viewer stack
+        # These four are exactly what scripts/04_tracking/visualize_results.py
+        # needs. Before the motile-plugin -> motile-tracker migration, this
+        # import failed in every environment we had.
+        run: |
+          uv run python -c "
+          import napari
+          from motile_tracker.application_menus import MainApp
+          from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
+          from mhat.visualization.napari_utils import view_run
+          print('napari', napari.__version__)
+          "
+
+  waterz:
+    # Affinity/agglomeration fragment generation. Linux only: PyPI has no usable
+    # waterz, so pyproject pins a commit of funkey/waterz that needs a C++
+    # toolchain and Boost headers.
+    name: waterz extra (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boost headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-dev
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - run: uv sync --locked --extra dev --extra waterz
+
+      - name: waterz contract test
+        # Installing waterz proves nothing: on current master the agglomerate
+        # path compiles through witty.compile_cython() *inside*
+        # waterz.agglomerate(), so no C++ is built until the first call. This
+        # test makes that call and checks the merge-history field names that
+        # scripts/02_segmentation/create_seg_hypotheses.py depends on.
+        run: uv run pytest tests/test_waterz_contract.py -v
+
+  lint:
+    # Scoped to tests/ on purpose. `ruff check .` currently reports ~313
+    # pre-existing findings across src/ and scripts/, so a whole-repo gate would
+    # be permanently red and would therefore be ignored. This keeps new code
+    # clean while that debt is paid down; widen the path as directories are
+    # cleared.
+    name: ruff (tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.11"
+      - run: uv sync --locked --extra dev
+      - run: uv run ruff check tests/
+
+      - name: Report whole-repo lint debt (informational)
+        # Never fails the build; prints a summary so the number stays visible
+        # rather than quietly growing.
+        run: uv run ruff check . --statistics || true

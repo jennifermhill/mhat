@@ -188,7 +188,9 @@ def test_solution_is_deterministic(
             synthetic_fragments.copy(), synthetic_raw,
             synthetic_merge_history.copy(), tracking_config, scale,
         )
-        solutions.append(solve_with_motile(tracking_config, track_graph, exclusion_sets))
+        solutions.append(
+            solve_with_motile(tracking_config, track_graph, exclusion_sets)
+        )
 
     assert set(solutions[0].nodes) == set(solutions[1].nodes)
     assert set(solutions[0].edges) == set(solutions[1].edges)

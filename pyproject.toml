@@ -19,6 +19,7 @@ classifiers = [
 keywords = []
 license = { text = "BSD 3-Clause License" }
 authors = [
+    { email = "hillj@janelia.hhmi.org", name = "Sgro Lab" },
     { email = "malinmayorc@janelia.hhmi.org", name = "Funke Lab" },
 ]
 
@@ -61,7 +62,14 @@ dependencies = [
   # funtracks <2 on purpose: 2.x is the tracksdata rewrite, and tracksdata is
   # still a release candidate.
   "funtracks>=1.8,<2",
-  "geff>=1.1.3,<2",
+  # >=1.3 because geff 1.2.x caps geff-spec at <1.2, and `node_prop` (which
+  # replaced the deprecated `label_prop` in geff-spec 1.2.1) only exists from
+  # the 1.2 line onward.
+  "geff>=1.3,<2",
+  # Imported directly by src/mhat/evaluation/from_ctc_to_geff.py for Axis,
+  # GeffMetadata and RelatedObject, so it is declared rather than relied on as
+  # a transitive of geff.
+  "geff-spec>=1.2,<2",
   "traccuracy>=0.4.3,<0.5",
   # --- arrays, imaging, IO ----------------------------------------------------
   # zarr <3 because src/mhat/data.py and the stage 02/03 scripts use v2-only
@@ -95,6 +103,30 @@ dependencies = [
 # conda-forge's pyqt on purpose: a conda GUI stack drags in conda numpy (MKL)
 # and conda numba (llvm-openmp), which collide with pip's torch and abort the
 # flow3d/segmentation extras. See the long note in environment.yml.
+#
+# PyQt5-Qt5 is the Qt runtime PyQt5 loads. Its wheel coverage is *disjoint*
+# across its own releases and it publishes no sdist at any version, so no
+# single version installs everywhere:
+#     5.15.2             win32, win_amd64, macosx_10_13_intel, manylinux2014_x86_64
+#     5.15.16 - 5.15.19  macosx_10_13_x86_64, macosx_11_0_arm64, manylinux2014_x86_64
+# 5.15.2 is the only release with Windows wheels and the only one *without* an
+# Apple-silicon wheel. macos-latest has been arm64 since 2024.
+#
+# Left alone, uv's universal resolution forks that split exactly backwards --
+# 5.15.19 on win32, 5.15.2 everywhere else -- so both windows-latest and
+# macos-latest resolve to a version with no wheel for them. The cause is a typo
+# in napari's own metadata: its [pyqt5] extra declares
+#     pyqt5-qt5<=5.15.2; sys_platform == "Windows"
+# and "Windows" is never a real sys_platform value (it is "win32"). The pin is
+# therefore inert at install time, but a universal resolver cannot prove that,
+# so it caps the non-win32 fork -- the one that actually contains macOS -- at
+# 5.15.2.
+#
+# A normal dependency pin cannot undo that -- it just makes the resolution
+# unsatisfiable -- so the split is forced with `override-dependencies` under
+# [tool.uv] at the bottom of this file, which is the mechanism for exactly this
+# case: upstream metadata that is wrong. Plain `pip install mhat[napari]` is
+# unaffected either way; pip resolves one platform at a time and backtracks.
 napari = [
   "motile-tracker>=4.6.1,<5",
   "napari[pyqt5]>=0.6.2,<1",
@@ -168,8 +200,8 @@ all = [
 ]
 
 [project.urls]
-homepage = "https://github.com/funkelab/mhat"
-repository = "https://github.com/funkelab/mhat"
+homepage = "https://github.com/jennifermhill/mhat"
+repository = "https://github.com/jennifermhill/mhat"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -195,4 +227,16 @@ extend-select = [
 ignore = [
   "S311",   # random numbers for cryptography
   "S101",   # asserts not allowed
+]
+
+[tool.uv]
+# Force PyQt5-Qt5's platform split. See the long note above the [napari] extra:
+# no single release has wheels for both Windows and Apple silicon, there is no
+# sdist to fall back on, and napari's `sys_platform == "Windows"` typo makes
+# uv's universal resolver cap the wrong fork. An override rather than a
+# dependency because it has to *replace* napari's pin, not be reconciled with
+# it. Both bounds sit inside PyQt5 5.15.11's own >=5.15.2,<5.16 requirement.
+override-dependencies = [
+  "PyQt5-Qt5==5.15.2; sys_platform == 'win32'",
+  "PyQt5-Qt5>=5.15.17,<5.16; sys_platform != 'win32'",
 ]

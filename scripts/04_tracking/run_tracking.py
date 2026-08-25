@@ -303,7 +303,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
                                  related_objects=[{
                                      "type": "labels", 
                                      "path": "../pred_seg.zarr",
-                                     "label_prop": "label"
+                                     "node_prop": "label"
                                  }],
                                  node_props_metadata={},
                                  edge_props_metadata={},
@@ -344,21 +344,15 @@ if __name__ == "__main__":
 
     flow_result = config.get("flow_result", None)
     if flow_result is not None:
-        if config["use_lk"]:
-            flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_lucaskanade" / flow_result
-            assert flow_dir_3d.is_dir(), f"Optical flow directory {flow_dir_3d} is missing"
+        flow_dir_2d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / config["flow_result"]
+        flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / config["flow_result"]
+        if not flow_dir_2d.is_dir():
+            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
             flow_dir_2d = None
         else:
-            flow_dir_2d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / config["flow_result"]
-            flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / config["flow_result"]
-            if not flow_dir_2d.is_dir():
-                print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
-                flow_dir_2d = None
-            else:
-                print(f"Loading 2D optical flow data from {flow_dir_2d}")
-                assert flow_dir_2d.is_dir(), f"2D optical flow data directory {flow_dir_2d} is missing"
-            print(f"Loading 3D optical flow data from {flow_dir_3d}")
-            assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
+            print(f"Loading 2D optical flow data from {flow_dir_2d}")
+        print(f"Loading 3D optical flow data from {flow_dir_3d}")
+        assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
         flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
     else:
         flow_dirs = {"2d": None, "3d": None}

@@ -7,7 +7,6 @@ dataset = "dataset_1"
 
 seg_result = "seg_result"
 flow_result = "flow_result"
-use_lk = false
 
 # Print graph attributes table
 verbose = false

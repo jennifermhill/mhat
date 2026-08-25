@@ -42,14 +42,3 @@ enhance_contrast = true
 temporal_smoothing = true
 temporal_smoothing_sigma = 0.7
 frame_averaging = 3
-
-# lucas kanade parameters
-[lucaskanade]
-do_lucaskanade = false
-xyz_sig = 5
-z_sig = 1
-w_sig = 8
-t_sig = 1
-[lucaskanade.hyperparams]
-enhance_contrast = true
-

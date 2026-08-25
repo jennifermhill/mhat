@@ -15,7 +15,7 @@ Two things make this test worth having rather than relying on a clean
    importing waterz proves the C++ toolchain works. Only calling it does.
 
 2. **`create_seg_hypotheses.py` depends on the merge-history row format**, not
-   just on the function existing. At scripts/02_segmentation/create_seg_hypotheses.py:187
+   just on the function existing. At create_seg_hypotheses.py:187
    it does `row['cost'] = row.pop('score')`, so a rename of that field upstream
    would produce a KeyError deep in stage 02 rather than anything obvious here.
 

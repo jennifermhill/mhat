@@ -10,12 +10,11 @@ from tqdm import tqdm
 
 from mhat.opticalflow.utils import rename_flow_uid, frame_average
 from mhat.opticalflow.farneback import compute_farneback_flow_2d, compute_farneback_flow_3d
-from mhat.opticalflow.lucaskanade import compute_lucaskanade_flow_3d
 from mhat.opticalflow.visualization import generate_flow_frames
 from mhat.utils import get_axes_metadata
 
 
-def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = False, do_lk: bool = False):
+def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = False):
     '''
     config: dictionary of configuration parameters
     zarr_path: path to zarr directory containing .zarray
@@ -36,10 +35,6 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
         output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
         output_zarr.create_dataset('confidence', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
         flow_function = compute_farneback_flow_3d
-    elif do_lk:
-        output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
-        output_zarr.create_dataset('confidence', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
-        flow_function = compute_lucaskanade_flow_3d
     else:
         output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 2), chunks=(1, 1, Y, X, 2), dtype=np.float32)
         flow_function = compute_farneback_flow_2d
@@ -54,7 +49,7 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
 
     generate_flow_frames(flow_zarr=output_zarr, color_wheel=True)
 
-    if do_3d or do_lk:
+    if do_3d:
         output_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
         output_zarr['flow_frames_Z'][:] = flow[..., 2]
 
@@ -113,17 +108,5 @@ if __name__ == "__main__":
     elif rerun_uid:
         prev_flow_dir = output_base_dir / experiment / dataset / "opticalflow_3d" / rerun_uid
         rename_flow_uid(prev_flow_dir, exp_uid)
-
-    if config["lucaskanade"]["do_lucaskanade"]:
-        print("Calculating 3D Lucas-Kanade optical flow...")
-        output_dir = output_base_dir / experiment / dataset / "opticalflow_lucaskanade" / exp_uid
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Saving 3D Lucas-Kanade optical flow results to {output_dir}")
-
-        config_filepath = output_dir / "config.toml"
-        with open(config_filepath, 'w') as config_file:
-            toml.dump(config, config_file)
-
-        calculate_flow(config["lucaskanade"], data_dir, output_dir, do_lk=True)
 
     

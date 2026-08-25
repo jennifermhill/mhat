@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 import numpy as np
 import toml
@@ -12,17 +13,14 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
     dataset = config["dataset"]
     exp_uid = config["exp_uid"]
 
-    if Path("Y:\\").exists():
-        input_base_dir = Path("Y:\\jennifer\\mhat\\data")
-        output_base_dir = Path("Y:\\jennifer\\mhat\\experiments\\opticalflow")
-    else:
-        input_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/data")
-        output_base_dir = Path("/groups/sgro/sgrolab/jennifer/mhat/experiments/opticalflow")
+    # Base directories come from the flow config that produced this run, so the
+    # viewer works on any machine. opticalflow.py reads these same two keys.
+    input_base_dir = Path(config["input_base_dir"])
+    output_base_dir = Path(config["output_base_dir"])
 
     path_to_raw = Path(input_base_dir / experiment / f"{dataset}.zarr")
     path_to_2d = Path(output_base_dir / experiment / dataset / "opticalflow_2d" / exp_uid / "flow.zarr")
     path_to_3d = Path(output_base_dir / experiment / dataset / "opticalflow_3d" / exp_uid / "flow.zarr")
-    path_to_lk = Path(output_base_dir / experiment / dataset / "opticalflow_lucaskanade" / exp_uid / "flow.zarr")
 
     viewer = napari.Viewer()
 
@@ -91,42 +89,24 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
     else:
         print(f"3D optical flow data not found at {path_to_3d}")
 
-    if path_to_lk.exists():
-        flow_zarr = zarr.open(path_to_lk, mode='a')
-
-        path_to_flow_frames_lk_XY = path_to_lk / "flow_frames_XY"
-        if not path_to_flow_frames_lk_XY.exists(): 
-            from mhat.opticalflow.visualization import generate_flow_frames
-            
-            print(f"Flow frames path does not exist. Creating at: {path_to_lk / 'flow_frames_XY'}")
-            generate_flow_frames(flow_zarr, scale_factor=scale_factor, color_wheel=True)
-        flow_frames_lk_XY = da.from_zarr(path_to_flow_frames_lk_XY)
-
-        if compute:
-            flow_frames_lk_XY = flow_frames_lk_XY.compute()
-        print(f"Lucas-Kanade Flow frames shape: {flow_frames_lk_XY.shape}")
-        viewer.add_image(flow_frames_lk_XY, name="LK Flow Frames (XY component)", blending='additive', scale=scale)
-
-        path_to_flow_frames_lk_Z = path_to_lk / "flow_frames_Z"
-        if not path_to_flow_frames_lk_Z.exists():
-            print(f"Flow frames Z path does not exist. Creating at: {path_to_flow_frames_lk_Z}")
-            flow_raw = da.from_zarr(path_to_lk / "flow_raw")
-            T, Z, Y, X, _ = flow_raw.shape
-            flow_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
-            flow_zarr['flow_frames_Z'][:] = flow_raw[..., 2]
-        flow_frames_lk_Z = da.from_zarr(path_to_flow_frames_lk_Z)
-
-        if compute:
-            flow_frames_lk_Z = flow_frames_lk_Z.compute()
-        print(f"Lucas-Kanade Flow frames Z shape: {flow_frames_lk_Z.shape}")
-        viewer.add_image(flow_frames_lk_Z, name="LK Flow Frames (Z component)", colormap='berlin', blending='additive', scale=scale)
-    else:
-        print(f"Lucas-Kanade optical flow data not found at {path_to_lk}")
-
     napari.run()
 
 
 if __name__ == "__main__":
-    path_to_config = "Y:\\jennifer\\mhat\\experiments\\opticalflow\\NC281-3color_mov\\01_nuclei_c0\\opticalflow_2d\\2026-08-20_17-22-24\\config.toml"
-    config = toml.load(path_to_config)
-    main(config, compute=False, scale_factor=1)
+    parser = argparse.ArgumentParser(
+        description="View optical flow results in napari. Pass the config.toml "
+                    "that opticalflow.py wrote next to the results you want to see."
+    )
+    parser.add_argument("config", help="path to an optical flow run's config.toml")
+    parser.add_argument(
+        "--compute",
+        action="store_true",
+        help="load the flow arrays into memory instead of viewing them lazily",
+    )
+    parser.add_argument(
+        "--scale-factor", type=float, default=1.0,
+        help="scale factor applied to the flow vectors when displaying (default: 1.0)",
+    )
+    args = parser.parse_args()
+    config = toml.load(args.config)
+    main(config, compute=args.compute, scale_factor=args.scale_factor)

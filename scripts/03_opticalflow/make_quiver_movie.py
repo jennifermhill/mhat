@@ -5,7 +5,7 @@ Uses matplotlib quiver rendering (matching example_analysis_script.ipynb style).
 Slower than the OpenCV version (make_quiver_movie.py) but produces different visual output.
 
 Usage:
-    conda activate mhat2
+    conda activate mhat
     python make_quiver_movie_mpl.py movie_config.toml
 """
 

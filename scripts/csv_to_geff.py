@@ -71,8 +71,6 @@ def csv_to_geff(
         node_name_map=node_name_map,
     )
 
-    breakpoint()
-
     print(f"Created Tracks object:")
     print(f"  Nodes: {tracks.graph.number_of_nodes()}")
     print(f"  Edges: {tracks.graph.number_of_edges()}")

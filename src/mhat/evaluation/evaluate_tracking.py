@@ -34,7 +34,7 @@ def remap_seg_to_track_ids(geff_path, graph, segmentation):
 
     import_from_geff renumbers track_id, so seg labels no longer match.
     This reads the raw geff to find which node property corresponds to the
-    seg labels (via related_objects.label_prop), then remaps per frame.
+    seg labels (via related_objects.node_prop), then remaps per frame.
     """
     (raw_graph, metadata) = geff.read(geff_path)
 
@@ -42,8 +42,11 @@ def remap_seg_to_track_ids(geff_path, graph, segmentation):
     label_prop = "track_id"
     if metadata.related_objects:
         for ro in metadata.related_objects:
-            if ro.type == "labels" and ro.label_prop:
-                label_prop = ro.label_prop
+            if ro.type != "labels":
+                continue
+            prop = ro.node_prop or ro.label_prop
+            if prop:
+                label_prop = prop
                 break
 
     remapped = np.zeros_like(segmentation)

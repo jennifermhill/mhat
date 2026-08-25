@@ -233,7 +233,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
                                  related_objects=[{
                                      "type": "labels", 
                                      "path": "../pred_seg.zarr",
-                                     "label_prop": "label"
+                                     "node_prop": "label"
                                  }],
                                  node_props_metadata={},
                                  edge_props_metadata={},

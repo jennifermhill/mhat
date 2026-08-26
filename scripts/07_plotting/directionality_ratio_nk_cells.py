@@ -53,7 +53,7 @@ TRACKS_ZARR = RESULT_DIR / "pred_tracks.zarr"
 MIN_FRAMES = 5  # tracks with fewer detections are too noisy to be meaningful
 N_BINS = 40  # ~29 tracks/bin at the default filter, still well populated
 
-MHAT_COLOR = "#56B4E9"  # sky blue, as in the other 07_plotting figures
+MHAT_COLOR = "#CC79A7"  # reddish pink, as in the other 07_plotting figures
 STAT_COLOR = "#B0B0B0"
 
 

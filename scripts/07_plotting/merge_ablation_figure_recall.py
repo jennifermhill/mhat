@@ -20,10 +20,10 @@ CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
 # Same palette as merge_ablation_figure.py / merge_ablation_delta_mda231_02.py.
 PALETTE = {
-    "baseline": "#56B4E9",       # sky blue
-    "no_cohesion": "#009E73",    # bluish green
-    "no_affinities": "#000000",  # black
-    "no_merges": "#CC79A7",      # reddish purple
+    "baseline": "#CC79A7",       # reddish purple
+    "no_cohesion": "#D55E00",    # vermillion (reddish orange)
+    "no_affinities": "#009E73",  # bluish green
+    "no_merges": "#000000",      # black
 }
 
 PLACEHOLDER = "<fill in>"

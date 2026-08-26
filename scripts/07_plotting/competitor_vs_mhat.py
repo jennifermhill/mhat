@@ -30,7 +30,7 @@ Config schema (TOML) -- see configs/evaluation/trackmate_vs_mhat.toml:
     method_order = ["mhat", "trackmate"]
     [methods.mhat]
     label        = "MHAT"
-    color        = "#56B4E9"
+    color        = "#CC79A7"
     tracking_uid = "2026-07-02_10-55-33"
 
 Usage:

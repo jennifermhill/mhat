@@ -34,13 +34,13 @@ json_path = ["BasicMetrics", "Node Recall"]
 label = "Edge\nrecall"
 json_path = ["BasicMetrics", "Edge Recall"]
 
-# series: MHAT first in each group, in the sky blue that marks it in the
+# series: MHAT first in each group, in the reddish pink that marks it in the
 # leaderboard figure; the competing method is gray.
 method_order = ["mhat", "ultrack"]
 
 [methods.mhat]
 label = "MHAT"
-color = "#56B4E9"
+color = "#CC79A7"
 tracking_uid = "nkgraph_size120"  # campaign best (Phase 6 Stage 2: size_threshold=120, max_children=5)
 
 [methods.ultrack]

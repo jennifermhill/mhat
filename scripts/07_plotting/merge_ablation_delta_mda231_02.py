@@ -37,13 +37,12 @@ import toml
 CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
 # Wong colorblind-friendly palette, per-concept. Baseline is the Δ=0 reference
-# line, not a bar, and uses the same light blue that marks MHAT in the
-# leaderboard comparison figure.
+# line, not a bar.
 PALETTE = {
-    "baseline": "#56B4E9",       # sky blue
-    "no_cohesion": "#009E73",    # bluish green
-    "no_affinities": "#000000",  # black
-    "no_merges": "#CC79A7",      # reddish purple
+    "baseline": "#CC79A7",       # reddish purple
+    "no_cohesion": "#D55E00",    # vermillion (reddish orange)
+    "no_affinities": "#009E73",  # bluish green
+    "no_merges": "#000000",      # black
 }
 
 # SEG replaces LNK here (all three read from CTCMetrics).

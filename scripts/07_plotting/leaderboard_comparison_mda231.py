@@ -58,9 +58,9 @@ CTC_TOP3 = {
 }
 METRICS = ["TRA", "DET", "SEG"]
 
-# MHAT is highlighted in light blue; every competing method is the same gray.
+# MHAT is highlighted in reddish pink; every competing method is the same gray.
 # Methods are identified by the x tick labels, not by color.
-MHAT_COLOR = "#56B4E9"   # sky blue (Wong colorblind-safe palette)
+MHAT_COLOR = "#CC79A7"   # reddish purple/pink (Wong colorblind-safe palette)
 OTHER_COLOR = "#B0B0B0"  # gray
 
 

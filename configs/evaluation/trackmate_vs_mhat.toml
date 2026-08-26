@@ -28,13 +28,13 @@ label = "Track\npurity"
 json_path = ["TrackOverlapMetrics", "track_purity"]
 
 # series: the two methods being compared. MHAT is first in each group and gets
-# the sky blue that marks it in the leaderboard figure; the competing method is
-# gray, matching the leaderboard convention.
+# the reddish pink that marks it in the leaderboard figure; the competing method
+# is gray, matching the leaderboard convention.
 method_order = ["mhat", "trackmate"]
 
 [methods.mhat]
 label = "MHAT"
-color = "#56B4E9"
+color = "#CC79A7"
 tracking_uid = "2026-07-02_10-55-33"  # hand-tuned baseline
 
 [methods.trackmate]

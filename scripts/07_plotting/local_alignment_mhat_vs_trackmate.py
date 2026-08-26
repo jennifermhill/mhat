@@ -56,8 +56,8 @@ DEFAULT_OUTPUT = MHAT_RESULT.parent / "local_alignment_mhat_vs_trackmate.png"
 
 DEFAULT_K = 4  # number of nearest cells (by world distance) to average over
 
-# MHAT first, in the same sky blue / gray as the competitor_vs_mhat bar figure.
-MHAT_COLOR = "#56B4E9"
+# MHAT first, in the same reddish pink / gray as the competitor_vs_mhat bar figure.
+MHAT_COLOR = "#CC79A7"
 TRACKMATE_COLOR = "#B0B0B0"
 
 # GEFF -> funtracks attribute names; "id" is the per-track id, constant in time.

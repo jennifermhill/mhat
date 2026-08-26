@@ -28,25 +28,16 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from mhat.tracking.utils import build_merge_dict
+
 
 def build_node_to_fragments(track_graph, merge_history) -> dict[int, list[int]]:
     """Map every candidate node ID to the list of leaf fragment IDs it owns.
 
-    Mirrors the merge-walking logic in run_tracking.get_solution_seg, but
-    over the full candidate graph rather than the solved subgraph.
+    Same merge walk as utils.get_solution_lookup, but over the full candidate
+    graph rather than the solved subgraph.
     """
-    merge_dict: dict[int, list[int]] = {}
-    for merge in merge_history:
-        a, b, c, _cost, _tp = merge
-        a = int(a)
-        b = int(b)
-        c = int(c)
-        children = [a, b]
-        if a in merge_dict:
-            children.extend(merge_dict[a])
-        if b in merge_dict:
-            children.extend(merge_dict[b])
-        merge_dict[c] = children
+    merge_dict = build_merge_dict(merge_history)
 
     node_to_fragments: dict[int, list[int]] = {}
     for node in track_graph.nodes:

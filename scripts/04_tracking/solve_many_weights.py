@@ -31,7 +31,6 @@ from mhat.tracking import utils
 from mhat.tracking.pipeline import build_track_graph, resolve_input_dirs
 from mhat.tracking.solve_with_motile import solve_with_motile
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
-from run_tracking import get_solution_seg
 
 
 def _graph_key(config) -> tuple:
@@ -93,6 +92,14 @@ def main() -> None:
     no_merges = len(merge_history) == 0
     print(f"  {len(track_graph.nodes)} nodes, {len(track_graph.edges)} edges")
 
+    # build_track_graph returns fragments as a lazy zarr. Collect the leaf ids one
+    # frame at a time, once — they are the same for every config below.
+    frag_ids = set()
+    for t in range(fragments.shape[0]):
+        frag_ids.update(int(v) for v in np.unique(fragments[t]))
+    frag_ids.discard(0)
+    max_frag_id = max(frag_ids) if frag_ids else 0
+
     failures = []
     for path, config in configs:
         exp_uid = config.get("exp_uid") or path.stem
@@ -113,7 +120,9 @@ def main() -> None:
                 failures.append((exp_uid, "empty_solution"))
                 continue
 
-            solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
+            lookup = utils.get_solution_lookup(
+                merge_history, solution_graph, frag_ids, max_frag_id, fragments.dtype
+            )
             assign_tracklet_ids(solution_graph)
 
             seg_root = zarr.open(
@@ -125,7 +134,8 @@ def main() -> None:
             )
             if axes is not None:
                 seg_root.attrs["axes"] = axes
-            seg_root[:] = solution_seg
+            for t in range(fragments.shape[0]):
+                seg_root[t] = lookup[fragments[t]]
 
             metadata = geff.GeffMetadata(
                 directed=True,

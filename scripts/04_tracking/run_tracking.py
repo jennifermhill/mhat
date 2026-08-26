@@ -18,7 +18,13 @@ from mhat.utils import get_axes_metadata
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 
-def get_solution_seg(fragments, merge_history, solution_graph):
+
+def get_solution_lookup(merge_history, solution_graph, frag_ids, max_frag_id, dtype):
+    """Build a leaf-fragment-id -> solution-node-id lookup table.
+
+    Applying it to one frame with lookup[frame] relabels that frame in a single
+    vectorized pass, so the movie is never relabelled in memory all at once.
+    """
     merge_dict = {}
     for merge in merge_history:
         a, b, c, cost, tp = merge
@@ -32,15 +38,10 @@ def get_solution_seg(fragments, merge_history, solution_graph):
             children.extend(merge_dict[b])
         merge_dict[c] = children
 
-    frag_ids = set(np.unique(fragments))
-    frag_ids.discard(0)
-
-    # Build a lookup table mapping each leaf fragment id -> owning solution node id,
-    # then apply it in a single vectorized pass. Merged/intermediate ids are all
-    # > max(fragments) (see renumber_merge_history), so they never index into the
-    # volume and only leaf slots are needed.
-    max_frag_id = int(fragments.max())
-    lookup = np.zeros(max_frag_id + 1, dtype=fragments.dtype)
+    # Merged/intermediate ids are all > max(fragments) (see
+    # renumber_merge_history), so they never index into the volume and only
+    # leaf slots are needed.
+    lookup = np.zeros(max_frag_id + 1, dtype=dtype)
 
     for node in solution_graph.nodes():
         if node in merge_dict:
@@ -61,8 +62,7 @@ def get_solution_seg(fragments, merge_history, solution_graph):
             )
             lookup[child] = node
 
-    # Single O(n_pixels) vectorized remap.
-    return lookup[fragments]
+    return lookup
 
 
 def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path):
@@ -84,15 +84,24 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     flow_group = "flow_raw"
 
     max_edge_distance = config["max_edge_distance"]
+    max_timepoints = config.get("max_timepoints", None)
 
-    raw_img = zarr.open(raw_zarr_path)[:, 0, ...]
+    # Raw, fragments and flow are all left as zarr arrays and read one timepoint
+    # at a time; nothing here pulls a whole movie into memory.
+    raw_zarr = zarr.open(raw_zarr_path)
     seg_zarr_root = zarr.open(seg_zarr_path)
-    fragments = seg_zarr_root[seg_group][:]
+    fragments = seg_zarr_root[seg_group]
+    n_total_frames = fragments.shape[0]
+    n_frames = (
+        min(max_timepoints, n_total_frames) if max_timepoints is not None
+        else n_total_frames
+    )
+    if n_frames < n_total_frames:
+        print(f"Truncating to first {n_frames} timepoints (of {n_total_frames})")
     if flow_2d_zarr_path is not None:
         flow_2d_zarr_root = zarr.open(flow_2d_zarr_path)
         flow_2d_zarr = flow_2d_zarr_root[flow_group]
         flow_2d_shape = flow_2d_zarr.shape
-        n_flow_frames_2d = flow_2d_shape[0]
     else:
         flow_2d_zarr = None
         flow_2d_shape = None
@@ -100,7 +109,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         flow_3d_zarr_root = zarr.open(flow_3d_zarr_path)
         flow_3d_zarr = flow_3d_zarr_root[flow_group]
         flow_3d_shape = flow_3d_zarr.shape
-        n_flow_frames_3d = flow_3d_shape[0]
         # Try to load the per-pixel confidence array from the same zarr (optional).
         if "confidence" in flow_3d_zarr_root:
             confidence_3d_zarr = flow_3d_zarr_root["confidence"]
@@ -111,14 +119,19 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         flow_3d_shape = None
         confidence_3d_zarr = None
 
-    def load_flow_timepoint(zarr_arr, n_frames, timepoint):
-        """Load a single timepoint from a flow zarr, returning zeros for the last frame."""
+    def load_timepoint(zarr_arr, timepoint, channel=None):
+        """Load a single timepoint from a zarr, or zeros if it is past the end.
+
+        Flow zarrs are one frame shorter than the movie (the last frame has no
+        successor), so those timepoints come back as zeros. Passing a channel
+        selects it while reading, so the other channels are never fetched.
+        """
         if zarr_arr is None:
             return None
-        if timepoint < n_frames:
-            return zarr_arr[timepoint]
-        else:
-            return np.zeros(zarr_arr.shape[1:], dtype=zarr_arr.dtype)
+        if timepoint >= zarr_arr.shape[0]:
+            frame_shape = zarr_arr.shape[1:] if channel is None else zarr_arr.shape[2:]
+            return np.zeros(frame_shape, dtype=zarr_arr.dtype)
+        return zarr_arr[timepoint] if channel is None else zarr_arr[timepoint, channel]
 
     # Create wrapper objects that support [timepoint] indexing for lazy loading
     # and is-not-None checks for downstream flow detection
@@ -126,18 +139,30 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     flow_3d = flow_3d_zarr  # None if no 3D flow
     confidence_3d = confidence_3d_zarr  # None if no confidence
 
-    print(f"Raw image shape: {raw_img.shape}, segmentation shape: {fragments.shape}, flow_2d shape: {flow_2d_shape if flow_2d_zarr is not None else None}, flow_3d shape: {flow_3d_shape if flow_3d_zarr is not None else None}")
+    # max_timepoints truncates the run to a prefix of the movie. img_shape is the
+    # shape actually processed, so the timepoint loops, add_disappear and the
+    # output zarr all follow from it rather than from the zarr on disk.
+    img_shape = (n_frames,) + tuple(fragments.shape[1:])
+    raw_shape = (n_frames,) + raw_zarr.shape[2:]
+    print(f"Raw image shape: {raw_shape}, segmentation shape: {img_shape}, flow_2d shape: {flow_2d_shape if flow_2d_zarr is not None else None}, flow_3d shape: {flow_3d_shape if flow_3d_zarr is not None else None}")
     axes = get_axes_metadata(seg_zarr_root[seg_group])
     scale = [axis["scale"] for axis in axes]
-    max_node_id = np.max(fragments)
-    img_shape = fragments.shape
+    # renumber_merge_history needs the largest fragment id up front; take it one
+    # frame at a time rather than holding the whole array.
+    max_node_id = max(int(fragments[t].max()) for t in range(n_frames))
     img_shape_scaled = [img_shape[0]] + [
         int(img_shape[i] * scale[i]) for i in range(1, len(img_shape))
     ]
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
+    # Drop merges for timepoints that are not processed. max_node_id above only
+    # covers the frames we keep, so leaving them in would let
+    # renumber_merge_history hand out ids that collide with fragment ids from
+    # the dropped frames and corrupt the merge chains.
+    merge_history = merge_history[merge_history[:, 4] < n_frames]
     no_merges = len(merge_history) == 0
 
+    fields = ["a", "b", "c", "cost", "timepoint"]
     if no_merges:
         print("No merge history found. Running in no-merge (fragments-only) mode.")
         # Warn if cohesion/adhesion config is nonzero
@@ -145,7 +170,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         if any(config.get(k, 0.0) != 0.0 for k in coh_adh_keys):
             print("Warning: cohesion/adhesion weights/constants are nonzero but will be ignored in no-merge mode")
         # Write empty normalized merge history for consistency
-        fields = ["a", "b", "c", "cost", "timepoint"]
         with open(normalized_merge_history_csv_path, "w") as f:
             writer = csv.writer(f)
             writer.writerow(fields)
@@ -156,8 +180,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         )
 
         # Save the normalized and renumbered merge history
-        fields = ["a", "b", "c", "cost", "timepoint"]
-
         with open(normalized_merge_history_csv_path, "w") as f:
             writer = csv.writer(f)
             writer.writerow(fields)
@@ -172,19 +194,25 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
             f"min passing pixels={z_flow_min_pass_pixels}"
         )
 
+    frag_ids = set()
     for timepoint in range(img_shape[0]):
         print(f"Processing timepoint {timepoint}")
-        # Lazy-load flow data for this timepoint
-        flow_2d_tp = load_flow_timepoint(flow_2d_zarr, n_flow_frames_2d, timepoint) if flow_2d_zarr is not None else None
-        flow_3d_tp = load_flow_timepoint(flow_3d_zarr, n_flow_frames_3d, timepoint) if flow_3d_zarr is not None else None
-        conf_3d_tp = load_flow_timepoint(confidence_3d_zarr, n_flow_frames_3d, timepoint) if confidence_3d_zarr is not None else None
+        # Lazy-load raw, fragment and flow data for this timepoint
+        raw_tp = load_timepoint(raw_zarr, timepoint, channel=0)
+        frag_tp = load_timepoint(fragments, timepoint)
+        flow_2d_tp = load_timepoint(flow_2d_zarr, timepoint)
+        flow_3d_tp = load_timepoint(flow_3d_zarr, timepoint)
+        conf_3d_tp = load_timepoint(confidence_3d_zarr, timepoint)
+        # Gathered here, while the frame is in hand, instead of in a separate
+        # pass over the whole movie
+        frag_ids.update(int(v) for v in np.unique(frag_tp))
         if no_merges:
             cand_graph = utils.nodes_from_segmentation(
-                fragments[timepoint],
-                raw_img=raw_img[timepoint],
+                frag_tp,
+                raw_img=raw_tp,
                 flow_3d=flow_3d_tp,
                 flow_2d=flow_2d_tp,
-                confidence_3d=conf_3d_tp if conf_3d_tp,
+                confidence_3d=conf_3d_tp,
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,
                 size_threshold=config["size_threshold"],
@@ -196,11 +224,11 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
             exclusion_sets = []
         else:
             cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
-                fragments[timepoint],
+                frag_tp,
                 merge_history[merge_history[:, 4] == timepoint],
                 min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
                 max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
-                raw_img=raw_img[timepoint],
+                raw_img=raw_tp,
                 flow_2d=flow_2d_tp,
                 flow_3d=flow_3d_tp,
                 confidence_3d=conf_3d_tp,
@@ -261,14 +289,18 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         return
 
     print("Saving results...")
- 
-    solution_seg = get_solution_seg(fragments, merge_history, solution_graph)
- 
+
+    frag_ids.discard(0)
+    lookup = get_solution_lookup(
+        merge_history, solution_graph, frag_ids, max_node_id, fragments.dtype
+    )
+
     assign_tracklet_ids(solution_graph)
 
-    output_zarr_root = zarr.open(output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
+    output_zarr_root = zarr.open(output_seg_path, mode="a", shape=img_shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
     output_zarr_root.attrs["axes"] = axes
-    output_zarr_root[:] = solution_seg
+    for timepoint in range(img_shape[0]):
+        output_zarr_root[timepoint] = lookup[fragments[timepoint]]
 
     # Save tracks to geff file format
     metadata = geff.GeffMetadata(directed=True, 

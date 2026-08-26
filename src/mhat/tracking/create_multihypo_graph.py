@@ -4,6 +4,7 @@ from typing import Any
 
 import networkx as nx
 import numpy as np
+import skimage
 from tqdm import trange
 
 from .utils import nodes_from_segmentation
@@ -123,6 +124,14 @@ def compute_conflicts(
     return conflict_sets
 
 
+def _union_slice(s1, s2):
+    """Smallest bounding box containing both inputs (either may be None)."""
+    if s1 is None or s2 is None:
+        return s1 if s2 is None else s2
+    return tuple(slice(min(a.start, b.start), max(a.stop, b.stop))
+                 for a, b in zip(s1, s2))
+
+
 def nodes_from_fragments(
     fragments: np.ndarray,
     merge_history: np.ndarray,
@@ -183,6 +192,9 @@ def nodes_from_fragments(
     leaf_counts = {}
 
     fragments = fragments.copy()
+    # Bounding box of every live label, so a merge only ever touches the
+    # sub-volume that can contain the labels involved.
+    bboxes = {int(rp.label): rp.slice for rp in skimage.measure.regionprops(fragments)}
 
     graph: nx.DiGraph | None = None
     conflict_sets = {}
@@ -205,28 +217,42 @@ def nodes_from_fragments(
                 tp=tp, scale=scale
             )
 
-        # merge the fragments and add to history
-        fragments[fragments == a] = c
-        fragments[fragments == b] = c
+        # merge the fragments and add to history. Only the union of the two
+        # children's boxes can hold either label, so this stays local.
+        sl = _union_slice(bboxes.pop(a, None), bboxes.pop(b, None))
+        if sl is not None:
+            sub = fragments[sl]
+            sub[(sub == a) | (sub == b)] = c
+            bboxes[c] = sl
         last_costs[c] = cost
         next_costs[a] = cost
         next_costs[b] = cost
         leaf_counts[c] = leaf_counts.get(a, 1) + leaf_counts.get(b, 1)
 
         if cost >= min_cost and cost < max_cost:
-            # add the new node to the graph
-            new_seg_only = np.zeros_like(fragments)
-            new_seg_only[fragments == c] = c
-            node_graph = nodes_from_segmentation(
-                new_seg_only, raw_img=raw_img,
-                flow_3d=flow_3d, flow_2d=flow_2d,
-                confidence_3d=confidence_3d,
-                z_flow_conf_threshold=z_flow_conf_threshold,
-                z_flow_min_pass_pixels=z_flow_min_pass_pixels,
-                size_threshold=size_threshold,
-                tp=tp, scale=scale
-            )
-            graph.add_nodes_from(node_graph.nodes(data=True))
+            # add the new node to the graph, measuring it in its box only
+            if sl is not None:
+                sub = fragments[sl]
+                node_graph = nodes_from_segmentation(
+                    np.where(sub == c, sub, 0),
+                    raw_img=raw_img[sl] if raw_img is not None else None,
+                    flow_3d=flow_3d[sl] if flow_3d is not None else None,
+                    flow_2d=flow_2d[sl] if flow_2d is not None else None,
+                    confidence_3d=(
+                        confidence_3d[sl] if confidence_3d is not None else None),
+                    z_flow_conf_threshold=z_flow_conf_threshold,
+                    z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+                    size_threshold=size_threshold,
+                    tp=tp, scale=scale
+                )
+                # shift the cropped centroid back into whole-frame coordinates
+                for _, data in node_graph.nodes(data=True):
+                    data["centroid"] = tuple(
+                        p + s.start * sc
+                        for p, s, sc in zip(data["centroid"], sl, scale[1:])
+                    )
+                    data["z"], data["y"], data["x"] = data["centroid"]
+                graph.add_nodes_from(node_graph.nodes(data=True))
 
             # add conflicting segs to conflict sets
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)

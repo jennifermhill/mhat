@@ -64,6 +64,9 @@ def resolve_input_dirs(config) -> tuple[Path, Path, dict, Path]:
 def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     """Load arrays, run multi-hypo construction, attach attributes.
 
+    Raw, fragments and flow are all read one timepoint at a time, so the
+    movie is never held in memory while the graph is built.
+
     Returns:
         (track_graph, fragments, merge_history, exclusion_sets, scale, axes)
     """
@@ -73,19 +76,17 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     flow_3d_zarr_path = flow_dirs["3d"] / "flow.zarr" if flow_dirs["3d"] is not None else None
     merge_history_csv_path = seg_dir / "merge_history.csv"
 
-    raw_img = zarr.open(raw_zarr_path)[:, 0, ...]
+    raw_zarr = zarr.open(raw_zarr_path)
     seg_zarr_root = zarr.open(seg_zarr_path)
-    fragments = seg_zarr_root["fragments"][:]
+    fragments = seg_zarr_root["fragments"]
 
     if flow_2d_zarr_path is not None:
         flow_2d_zarr = zarr.open(flow_2d_zarr_path)["flow_raw"]
-        n_flow_frames_2d = flow_2d_zarr.shape[0]
     else:
         flow_2d_zarr = None
     if flow_3d_zarr_path is not None:
         flow_3d_root = zarr.open(flow_3d_zarr_path)
         flow_3d_zarr = flow_3d_root["flow_raw"]
-        n_flow_frames_3d = flow_3d_zarr.shape[0]
         if "confidence" in flow_3d_root:
             confidence_3d_zarr = flow_3d_root["confidence"]
         else:
@@ -94,14 +95,19 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
         flow_3d_zarr = None
         confidence_3d_zarr = None
 
-    def load_flow_timepoint(zarr_arr, n_frames, timepoint):
-        """Load a single timepoint from a flow zarr, returning zeros for the last frame."""
+    def load_timepoint(zarr_arr, timepoint, channel=None):
+        """Load a single timepoint from a zarr, or zeros if it is past the end.
+
+        Flow zarrs are one frame shorter than the movie (the last frame has no
+        successor), so those timepoints come back as zeros. Passing a channel
+        selects it while reading, so the other channels are never fetched.
+        """
         if zarr_arr is None:
             return None
-        if timepoint < n_frames:
-            return zarr_arr[timepoint]
-        else:
-            return np.zeros(zarr_arr.shape[1:], dtype=zarr_arr.dtype)
+        if timepoint >= zarr_arr.shape[0]:
+            frame_shape = zarr_arr.shape[1:] if channel is None else zarr_arr.shape[2:]
+            return np.zeros(frame_shape, dtype=zarr_arr.dtype)
+        return zarr_arr[timepoint] if channel is None else zarr_arr[timepoint, channel]
 
     # Keep the zarr handles around so downstream is-not-None checks still work.
     flow_2d = flow_2d_zarr
@@ -115,7 +121,6 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     img_shape_scaled = [img_shape[0]] + [
         int(img_shape[i] * scale[i]) for i in range(1, len(img_shape))
     ]
-    max_node_id = int(np.max(fragments))
 
     merge_history = create_multihypo_graph.load_merge_history(merge_history_csv_path)
     # A cellpose / skip-merges segmentation has no merge hierarchy. Mirror
@@ -125,6 +130,10 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     if no_merges:
         print("No merge history found. Building candidate graph in no-merge mode.")
     else:
+        # renumber_merge_history needs the largest fragment id up front; take it
+        # one frame at a time rather than materializing the whole array. Only
+        # this path needs it, so no-merge mode skips the read entirely.
+        max_node_id = max(int(fragments[t].max()) for t in range(img_shape[0]))
         merge_history = create_multihypo_graph.normalize_costs(merge_history)
         merge_history = create_multihypo_graph.renumber_merge_history(merge_history, max_node_id)
 
@@ -134,14 +143,16 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     all_cand_graph = None
     all_exclusion_sets: list = []
     for t in range(img_shape[0]):
-        # Lazy-load flow data for this timepoint
-        flow_2d_tp = load_flow_timepoint(flow_2d_zarr, n_flow_frames_2d, t) if flow_2d_zarr is not None else None
-        flow_3d_tp = load_flow_timepoint(flow_3d_zarr, n_flow_frames_3d, t) if flow_3d_zarr is not None else None
-        conf_3d_tp = load_flow_timepoint(confidence_3d_zarr, n_flow_frames_3d, t) if confidence_3d_zarr is not None else None
+        # Lazy-load raw, fragment and flow data for this timepoint
+        raw_tp = load_timepoint(raw_zarr, t, channel=0)
+        frag_tp = load_timepoint(fragments, t)
+        flow_2d_tp = load_timepoint(flow_2d_zarr, t)
+        flow_3d_tp = load_timepoint(flow_3d_zarr, t)
+        conf_3d_tp = load_timepoint(confidence_3d_zarr, t)
         if no_merges:
             cand_graph = utils.nodes_from_segmentation(
-                fragments[t],
-                raw_img=raw_img[t],
+                frag_tp,
+                raw_img=raw_tp,
                 flow_3d=flow_3d_tp,
                 flow_2d=flow_2d_tp,
                 confidence_3d=conf_3d_tp,
@@ -156,11 +167,11 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
             exclusion_sets = []
         else:
             cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
-                fragments[t],
+                frag_tp,
                 merge_history[merge_history[:, 4] == t],
                 min_cost=config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
                 max_cost=config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
-                raw_img=raw_img[t],
+                raw_img=raw_tp,
                 flow_2d=flow_2d_tp,
                 flow_3d=flow_3d_tp,
                 confidence_3d=conf_3d_tp,

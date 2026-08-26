@@ -228,6 +228,72 @@ def relabel_segmentation(
     return tracked_masks
 
 
+def build_merge_dict(merge_history) -> dict[int, list[int]]:
+    """Map each merged node id to every leaf fragment id underneath it.
+
+    The merge history is ordered, so walking it once and extending from the
+    entries already recorded gives each parent the full transitive set of its
+    leaves. Ids absent from the result are leaves themselves.
+    """
+    merge_dict: dict[int, list[int]] = {}
+    for merge in merge_history:
+        a, b, c, _cost, _tp = merge
+        a = int(a)
+        b = int(b)
+        c = int(c)
+        children = [a, b]
+        if a in merge_dict:
+            children.extend(merge_dict[a])
+        if b in merge_dict:
+            children.extend(merge_dict[b])
+        merge_dict[c] = children
+    return merge_dict
+
+
+def get_solution_lookup(merge_history, solution_graph, frag_ids, max_frag_id, dtype):
+    """Build a leaf-fragment-id -> solution-node-id lookup table.
+
+    Applying it to one frame with ``lookup[frame]`` relabels that frame in a
+    single vectorized pass, so the movie is never relabelled in memory all at
+    once.
+
+    Args:
+        merge_history: Renumbered merge history (see renumber_merge_history).
+        solution_graph: The solved subgraph whose nodes claim the fragments.
+        frag_ids: Every leaf fragment id present in the volume, used to check
+            that a node without merges really is a fragment.
+        max_frag_id: Largest leaf fragment id; sizes the table.
+        dtype: dtype of the fragments array, so the remap preserves it.
+    """
+    merge_dict = build_merge_dict(merge_history)
+
+    # Merged/intermediate ids are all > max(fragments) (see
+    # renumber_merge_history), so they never index into the volume and only
+    # leaf slots are needed.
+    lookup = np.zeros(max_frag_id + 1, dtype=dtype)
+
+    for node in solution_graph.nodes():
+        if node in merge_dict:
+            children = merge_dict[node]
+        else:
+            assert node in frag_ids, f"Node {node} not in merge dict or frag ids"
+            children = [node]
+
+        for child in children:
+            if child > max_frag_id:
+                continue  # intermediate/merged id, never present in the volume
+            # Each leaf fragment may be claimed by at most one selected node (the ILP
+            # ExclusiveNodes invariant). This preserves the original per-fragment
+            # assertion as an O(children) check instead of a full-volume scan.
+            assert lookup[child] == 0, (
+                f"Child {child} fragment already assigned to node {lookup[child]}, "
+                f"cannot reassign to {node}"
+            )
+            lookup[child] = node
+
+    return lookup
+
+
 def add_appear_ignore_attr(cand_graph):
     for node_id, attrs in cand_graph.nodes(data=True):
         if "time" not in attrs:

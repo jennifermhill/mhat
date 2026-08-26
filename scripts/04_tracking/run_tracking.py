@@ -17,51 +17,6 @@ from mhat.tracking.tracks_io import save_tracks_to_csv
 from mhat.utils import get_axes_metadata
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
-def get_solution_lookup(merge_history, solution_graph, frag_ids, max_frag_id, dtype):
-    """Build a leaf-fragment-id -> solution-node-id lookup table.
-
-    Applying it to one frame with lookup[frame] relabels that frame in a single
-    vectorized pass, so the movie is never relabelled in memory all at once.
-    """
-    merge_dict = {}
-    for merge in merge_history:
-        a, b, c, cost, tp = merge
-        a = int(a)
-        b = int(b)
-        c = int(c)
-        children = [a, b]
-        if a in merge_dict:
-            children.extend(merge_dict[a])
-        if b in merge_dict:
-            children.extend(merge_dict[b])
-        merge_dict[c] = children
-
-    # Merged/intermediate ids are all > max(fragments) (see
-    # renumber_merge_history), so they never index into the volume and only
-    # leaf slots are needed.
-    lookup = np.zeros(max_frag_id + 1, dtype=dtype)
-
-    for node in solution_graph.nodes():
-        if node in merge_dict:
-            children = merge_dict[node]
-        else:
-            assert node in frag_ids, f"Node {node} not in merge dict or frag ids"
-            children = [node]
-
-        for child in children:
-            if child > max_frag_id:
-                continue  # intermediate/merged id, never present in the volume
-            # Each leaf fragment may be claimed by at most one selected node (the ILP
-            # ExclusiveNodes invariant). This preserves the original per-fragment
-            # assertion as an O(children) check instead of a full-volume scan.
-            assert lookup[child] == 0, (
-                f"Child {child} fragment already assigned to node {lookup[child]}, "
-                f"cannot reassign to {node}"
-            )
-            lookup[child] = node
-
-    return lookup
-
 
 def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path):
 
@@ -250,7 +205,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     print("Saving results...")
 
     frag_ids.discard(0)
-    lookup = get_solution_lookup(
+    lookup = utils.get_solution_lookup(
         merge_history, solution_graph, frag_ids, max_node_id, fragments.dtype
     )
 

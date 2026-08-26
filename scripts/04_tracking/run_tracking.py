@@ -65,50 +65,6 @@ def get_solution_lookup(merge_history, solution_graph, frag_ids, max_frag_id, dt
     return lookup
 
 
-def get_premerge_lookup(merge_history, max_cost, max_frag_id):
-    """Build a leaf-fragment-id -> pre-merged-id lookup table.
-
-    Applying it with lookup[frame] agglomerates one frame up to max_cost in a
-    single vectorized pass. This replaces rewriting the fragment volume in
-    place, which is no longer possible now that fragments is a lazily read zarr
-    (and which would have modified the input segmentation on disk).
-
-    merge_history must already be normalized and renumbered, so that every
-    merged id is unique across timepoints and greater than max_frag_id.
-    """
-    parent = {}
-    for merge in merge_history:
-        a, b, c, cost, _tp = merge
-        if cost > max_cost:
-            continue
-        a, b, c = int(a), int(b), int(c)
-        if c == a or c == b:
-            # waterz reuses a child's id as the merge result; renumbering is what
-            # makes c distinct. Without it find() below would never terminate.
-            raise ValueError(
-                f"merge {a}+{b}->{c} reuses a child id; merge_history must be "
-                "renumbered before building the pre-merge lookup"
-            )
-        parent[a] = c
-        parent[b] = c
-
-    def find(node):
-        # Merges chain (the c of one merge is the a or b of a later one), so
-        # walk to the top of the chain, compressing the path on the way out.
-        path = []
-        while node in parent:
-            path.append(node)
-            node = parent[node]
-        for step in path:
-            parent[step] = node
-        return node
-
-    lookup = np.arange(max_frag_id + 1, dtype=np.int64)
-    for frag_id in range(1, max_frag_id + 1):
-        lookup[frag_id] = find(frag_id)
-    return lookup
-
-
 def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path, stats_only: bool = False):
 
     raw_zarr_path = raw_dir
@@ -204,12 +160,15 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     # renumber_merge_history hand out ids that collide with fragment ids from
     # the dropped frames and corrupt the merge chains.
     merge_history = merge_history[merge_history[:, 4] < n_frames]
-    skip_merge_hypotheses = config.get("skip_merge_hypotheses", False)
     no_merges = len(merge_history) == 0
 
     fields = ["a", "b", "c", "cost", "timepoint"]
     if no_merges:
         print("No merge history found. Running in no-merge (fragments-only) mode.")
+        # Warn if cohesion/adhesion config is nonzero
+        coh_adh_keys = ["cohesion_weight", "cohesion_constant", "adhesion_weight", "adhesion_constant"]
+        if any(config.get(k, 0.0) != 0.0 for k in coh_adh_keys):
+            print("Warning: cohesion/adhesion weights/constants are nonzero but will be ignored in no-merge mode")
         # Write empty normalized merge history for consistency
         with open(normalized_merge_history_csv_path, "w") as f:
             writer = csv.writer(f)
@@ -227,27 +186,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
             for row in merge_history:
                 writer.writerow(row)
 
-    # Relabels each fragment frame as it is loaded. None means "use the fragments
-    # as they are on disk"; skip_merge_hypotheses replaces it with a real table.
-    premerge_lookup = None
-
-    if skip_merge_hypotheses and not no_merges:
-        # Pre-merge fragments to max_merge_cost level, then run as no-merge mode
-        print("skip_merge_hypotheses=true: pre-merging fragments and running without multi-hypothesis")
-        max_cost = config.get("max_merge_cost", config.get("max_merge_score", 1.0))
-        premerge_lookup = get_premerge_lookup(merge_history, max_cost, max_node_id)
-        # The merged ids replace the leaf ids in every frame from here on, so
-        # everything downstream has to be sized for them instead.
-        max_node_id = int(premerge_lookup.max())
-        merge_history = np.empty((0, 5))
-        no_merges = True
-
-    if no_merges:
-        # Warn if cohesion/adhesion config is nonzero
-        coh_adh_keys = ["cohesion_weight", "cohesion_constant", "adhesion_weight", "adhesion_constant"]
-        if any(config.get(k, 0.0) != 0.0 for k in coh_adh_keys):
-            print("Warning: cohesion/adhesion weights/constants are nonzero but will be ignored in no-merge mode")
-
     z_flow_conf_threshold = config.get("z_flow_conf_threshold", None)
     z_flow_min_pass_pixels = config.get("z_flow_min_pass_pixels", 10)
     if confidence_3d is not None and z_flow_conf_threshold is not None:
@@ -262,8 +200,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
         # Lazy-load raw, fragment and flow data for this timepoint
         raw_tp = load_timepoint(raw_zarr, timepoint, channel=0)
         frag_tp = load_timepoint(fragments, timepoint)
-        if premerge_lookup is not None:
-            frag_tp = premerge_lookup[frag_tp]
         flow_2d_tp = load_timepoint(flow_2d_zarr, timepoint)
         flow_3d_tp = load_timepoint(flow_3d_zarr, timepoint)
         conf_3d_tp = load_timepoint(confidence_3d_zarr, timepoint)
@@ -364,11 +300,6 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     lookup = get_solution_lookup(
         merge_history, solution_graph, frag_ids, max_node_id, fragments.dtype
     )
-
-    if premerge_lookup is not None:
-        # Fold the pre-merge in, so a frame still takes one indexing pass to go
-        # from raw fragment ids to solution ids.
-        lookup = lookup[premerge_lookup]
 
     assign_tracklet_ids(solution_graph)
 

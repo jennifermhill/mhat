@@ -68,7 +68,6 @@ OPTIONAL_KEYS = {
     "z_flow_conf_threshold",
     "z_flow_min_pass_pixels",
     "max_timepoints",
-    "skip_merge_hypotheses",
 }
 
 TRACK_INNER = (

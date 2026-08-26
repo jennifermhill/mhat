@@ -275,9 +275,13 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     utils.add_intensity_diff_attr(track_graph)
     utils.add_division_attr(track_graph)
 
-    # Save candidate edge list for analysis
+    # Save candidate edge list for analysis (simple edges only, skip hyperedges)
     cand_edges_path = output_dir / "candidate_edges.npy"
-    cand_edge_list = np.array([(e[0], e[1]) for e in track_graph.edges], dtype=np.int64)
+    simple_edges = [(e[0], e[1]) for e in track_graph.edges if isinstance(e[0], (int, np.integer)) and isinstance(e[1], (int, np.integer))]
+    if simple_edges:
+        cand_edge_list = np.array(simple_edges, dtype=np.int64)
+    else:
+        cand_edge_list = np.empty((0, 2), dtype=np.int64)
     np.save(cand_edges_path, cand_edge_list)
     print(f"Saved {len(cand_edge_list)} candidate edges to {cand_edges_path}")
 

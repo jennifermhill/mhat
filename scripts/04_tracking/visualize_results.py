@@ -9,6 +9,7 @@ from typing import Any
 from funtracks.import_export import import_from_geff
 from motile_tracker.application_menus import MainApp
 from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
+from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids_lazy
 from mhat.utils import get_axes_metadata
 
 
@@ -92,9 +93,12 @@ def main(config, ground_truth: bool = False, compute: bool = False):
                 tracks_viewer.tracking_layers.tracks_layer.tail_width = 2.0
                 tracks_viewer.tracking_layers.points_layer.visible = False
 
-            # Load segmentation as dask array outside of track import to avoid memory issues
+            # Load segmentation outside of track import to avoid memory issues.
+            # The store is labelled by node id, so relabel to track_id to colour
+            # each track consistently over time, as the compute=True path does.
+            # This stays lazy: only the slice on screen is read.
             if not compute and track_seg_zarr_path is not None:
-                track_seg = da.from_zarr(track_seg_zarr_path)
+                track_seg = remap_seg_to_track_ids_lazy(tracks.graph, track_seg_zarr_path)
                 print(f"Successfully loaded segmentation for tracks from {track_seg_zarr_path}")
                 viewer.add_labels(track_seg, name='Track Segmentation', opacity=0.5, scale=scale)
 

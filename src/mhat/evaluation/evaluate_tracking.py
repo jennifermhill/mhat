@@ -30,7 +30,7 @@ matchers_dict = {
     "ctc": matchers.CTCMatcher,
 }
 
-def remap_seg_to_track_ids(graph, segmentation):
+def remap_seg_to_track_ids(graph, seg_path):
     """Relabel a node-id-labelled segmentation to the graph's track_ids.
 
     Every segmentation this pipeline reads is labelled by graph node id --
@@ -42,7 +42,20 @@ def remap_seg_to_track_ids(graph, segmentation):
     sees them.
 
     The mapping is applied per frame through a lookup table: one pass over each
-    frame, rather than one full-volume comparison per node.
+    frame, rather than one full-volume comparison per node. The zarr is read a
+    frame at a time, so peak memory is the returned array rather than the input
+    and a copy of it.
+
+    We load the segmentation here instead of letting ``import_from_geff`` do it,
+    because funtracks validates the store by scaling every coordinate by its
+    axis scale -- including ``time``, which is a frame index, not a physical
+    coordinate. On a dataset with a real frame interval (DRO: 30 s/frame) it
+    reads frame ``int(t / 30)`` and rejects a perfectly good segmentation. Note
+    ``t`` is used directly as an index below, never scaled.
+
+    Args:
+        graph: The imported funtracks graph (its ``track_id`` is what we map to).
+        seg_path: Path to the segmentation zarr, labelled by graph node id.
     """
     # Group (node id -> track_id) by frame. Doing this per frame rather than
     # globally keeps the mapping correct even if a label were ever reused
@@ -54,10 +67,15 @@ def remap_seg_to_track_ids(graph, segmentation):
         per_frame.setdefault(int(data["time"]), []).append((int(node), track_id))
         max_track_id = max(max_track_id, track_id)
 
+    segmentation = zarr.open(str(seg_path), mode="r")
     dtype = np.promote_types(np.min_scalar_type(max_track_id), np.uint16)
     remapped = np.zeros(segmentation.shape, dtype=dtype)
-    for t, pairs in per_frame.items():
+    checked = False
+    for t, pairs in sorted(per_frame.items()):
         frame = np.asarray(segmentation[t])
+        if not checked:
+            _check_labelled_by_node_id(frame, pairs, seg_path, t)
+            checked = True
         # Labels with no node in this frame index a 0 entry and stay background.
         size = max(int(frame.max()), max(node for node, _ in pairs)) + 1
         lut = np.zeros(size, dtype=dtype)
@@ -67,30 +85,23 @@ def remap_seg_to_track_ids(graph, segmentation):
     return remapped
 
 
-def _import_tracks(geff_path, seg_path, node_name_map, scale, kind):
-    """import_from_geff with a clearer error when the seg convention is wrong.
+def _check_labelled_by_node_id(frame, pairs, seg_path, t, sample=5):
+    """Fail loudly if a segmentation frame is not labelled by graph node id.
 
-    funtracks checks that the label under one node's centroid equals that
-    node's id, and raises a bare "Error testing seg id:" when it doesn't. That
-    happens for stores written before segmentations were labelled by node id --
-    regenerate them rather than working around it here.
+    Every node in a frame came from an object in that frame, so under the
+    convention its node id must appear as a label. A store written before the
+    convention is labelled by track_id instead, where the node ids are absent --
+    which would otherwise map every object to background in silence.
     """
-    try:
-        return import_from_geff(
-            geff_path,
-            node_name_map=node_name_map,
-            segmentation_path=seg_path,
-            scale=scale,
-        )
-    except ValueError as err:
-        if "seg id" not in str(err):
-            raise
+    missing = [node for node, _ in pairs[:sample] if not np.any(frame == node)]
+    if missing:
         raise ValueError(
-            f"{kind} segmentation at {seg_path} is not labelled by graph node id "
-            f"(funtracks said: {err}). Stores written before this convention "
-            f"labelled the segmentation by track_id; delete {geff_path} and its "
-            f"segmentation and let them be regenerated."
-        ) from err
+            f"Segmentation at {seg_path} is not labelled by graph node id: "
+            f"node ids {missing} have no pixels in frame {t}. Stores written "
+            f"before this convention labelled the segmentation by track_id -- "
+            f"delete the tracks store and its segmentation and let them be "
+            f"regenerated."
+        )
 
 
 def _slice_seg_jaccard(ref, pred):
@@ -206,18 +217,19 @@ def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
     else:
         scale = [a.scale for a in axes if a.scale is not None]  # Extract scale values
 
-    gt_seg_path = None
-    for candidate in ("correct_seg.zarr", "segmentation"):
-        p = gt_data_dir / candidate
-        if p.exists():
-            gt_seg_path = p
-            break
-    gt_tracks = _import_tracks(
-        gt_data_dir / "correct_tracks.zarr", gt_seg_path, node_name_map, scale, "GT"
+    gt_seg_path = gt_data_dir / "correct_seg.zarr"
+    gt_seg_path = gt_seg_path if gt_seg_path.exists() else None
+    # Segmentations are loaded by remap_seg_to_track_ids, not funtracks -- see
+    # the note there about funtracks scaling the time index.
+    gt_tracks = import_from_geff(
+        gt_data_dir / "correct_tracks.zarr",
+        node_name_map=node_name_map,
+        segmentation_path=None,
+        scale=scale,
     )
 
-    if gt_tracks.segmentation is not None:
-        gt_seg = remap_seg_to_track_ids(gt_tracks.graph, gt_tracks.segmentation)
+    if gt_seg_path is not None:
+        gt_seg = remap_seg_to_track_ids(gt_tracks.graph, gt_seg_path)
     else:
         gt_seg = None
 
@@ -231,13 +243,15 @@ def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
 
     pred_seg_path = pred_data_dir / "pred_seg.zarr"
     pred_seg_path = pred_seg_path if pred_seg_path.exists() else None
-    pred_tracks = _import_tracks(
-        pred_data_dir / "pred_tracks.zarr", pred_seg_path, node_name_map, scale,
-        "Prediction",
+    pred_tracks = import_from_geff(
+        pred_data_dir / "pred_tracks.zarr",
+        node_name_map=node_name_map,
+        segmentation_path=None,
+        scale=scale,
     )
 
-    if pred_tracks.segmentation is not None:
-        pred_seg = remap_seg_to_track_ids(pred_tracks.graph, pred_tracks.segmentation)
+    if pred_seg_path is not None:
+        pred_seg = remap_seg_to_track_ids(pred_tracks.graph, pred_seg_path)
     else:
         pred_seg = None
 

@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+import dask.array as da
 import geff
 import numpy as np
 import tifffile
@@ -30,62 +31,98 @@ matchers_dict = {
     "ctc": matchers.CTCMatcher,
 }
 
-def remap_seg_to_track_ids(graph, seg_path):
-    """Relabel a node-id-labelled segmentation to the graph's track_ids.
+def build_node_id_lut(graph):
+    """Lookup table from segmentation label (= graph node id) to ``track_id``.
 
-    Every segmentation this pipeline reads is labelled by graph node id --
-    ``pred_seg.zarr`` from run_tracking, ``correct_seg.zarr`` from
-    from_ctc_to_geff -- which is also the invariant funtracks relies on
+    Segmentations in this pipeline are labelled by graph node id -- both
+    ``pred_seg.zarr`` from run_tracking and ``correct_seg.zarr`` from
+    from_ctc_to_geff -- which is the invariant funtracks relies on as well
     (``Tracks.get_pixels`` does ``segmentation[time] == node``).
-    ``import_from_geff`` renumbers ``track_id``, so the labels still have to be
-    mapped node id -> track_id before traccuracy, which matches on ``track_id``,
-    sees them.
+    ``import_from_geff`` renumbers ``track_id``, so labels still need mapping
+    before traccuracy, which matches on ``track_id``, sees them.
 
-    The mapping is applied per frame through a lookup table: one pass over each
-    frame, rather than one full-volume comparison per node. The zarr is read a
-    frame at a time, so peak memory is the returned array rather than the input
-    and a copy of it.
+    Node ids are unique per node, so one table covers the whole movie rather
+    than one per frame. It is indexed by label, so it is sized by the largest
+    node id: under a megabyte even for a 230k-node graph. Labels with no node
+    map to 0 and stay background.
+    """
+    max_node = max(graph.nodes(), default=0)
+    max_track_id = max(
+        (int(data["track_id"]) for _, data in graph.nodes(data=True)), default=0
+    )
+    dtype = np.promote_types(np.min_scalar_type(max_track_id), np.uint16)
+    lut = np.zeros(int(max_node) + 1, dtype=dtype)
+    for node, data in graph.nodes(data=True):
+        lut[int(node)] = int(data["track_id"])
+    return lut
 
-    We load the segmentation here instead of letting ``import_from_geff`` do it,
-    because funtracks validates the store by scaling every coordinate by its
-    axis scale -- including ``time``, which is a frame index, not a physical
+
+def _apply_lut(block, lut, seg_path):
+    """Map one block of labels through ``lut``, refusing out-of-range labels."""
+    if block.size:
+        highest = int(block.max())
+        if highest >= lut.size:
+            raise ValueError(
+                f"Segmentation at {seg_path} holds label {highest}, which is not "
+                f"a graph node id (largest is {lut.size - 1}). The segmentation "
+                f"and its tracks store are out of step -- regenerate them."
+            )
+    return lut[block]
+
+
+def remap_seg_to_track_ids(graph, seg_path):
+    """Relabel a node-id-labelled segmentation to the graph's ``track_id``s.
+
+    Reads the zarr a frame at a time and maps each through
+    :func:`build_node_id_lut`, so peak memory is the returned array rather than
+    the input plus a copy of it, and the cost is one pass per frame instead of
+    one full-volume comparison per node.
+
+    We load the segmentation here rather than letting ``import_from_geff`` do
+    it, because funtracks validates the store by scaling every coordinate by
+    its axis scale -- including ``time``, which is a frame index, not a physical
     coordinate. On a dataset with a real frame interval (DRO: 30 s/frame) it
     reads frame ``int(t / 30)`` and rejects a perfectly good segmentation. Note
-    ``t`` is used directly as an index below, never scaled.
+    that ``t`` below is used directly as an index, never scaled.
 
-    Args:
-        graph: The imported funtracks graph (its ``track_id`` is what we map to).
-        seg_path: Path to the segmentation zarr, labelled by graph node id.
+    Returns an in-memory array; use :func:`remap_seg_to_track_ids_lazy` when the
+    whole volume does not need to be resident (a full-resolution label volume is
+    ~10 GB on a dataset the size of Fluo-N3DL-DRO).
     """
-    # Group (node id -> track_id) by frame. Doing this per frame rather than
-    # globally keeps the mapping correct even if a label were ever reused
-    # across frames.
-    per_frame: dict[int, list[tuple[int, int]]] = {}
-    max_track_id = 0
-    for node, data in graph.nodes(data=True):
-        track_id = int(data["track_id"])
-        per_frame.setdefault(int(data["time"]), []).append((int(node), track_id))
-        max_track_id = max(max_track_id, track_id)
-
+    lut = build_node_id_lut(graph)
     segmentation = zarr.open(str(seg_path), mode="r")
-    dtype = np.promote_types(np.min_scalar_type(max_track_id), np.uint16)
-    remapped = np.zeros(segmentation.shape, dtype=dtype)
+    remapped = np.zeros(segmentation.shape, dtype=lut.dtype)
     checked = False
-    for t, pairs in sorted(per_frame.items()):
+    for t in range(segmentation.shape[0]):
         frame = np.asarray(segmentation[t])
         if not checked:
-            _check_labelled_by_node_id(frame, pairs, seg_path, t)
-            checked = True
-        # Labels with no node in this frame index a 0 entry and stay background.
-        size = max(int(frame.max()), max(node for node, _ in pairs)) + 1
-        lut = np.zeros(size, dtype=dtype)
-        for node, track_id in pairs:
-            lut[node] = track_id
-        remapped[t] = lut[frame]
+            nodes_here = [n for n, d in graph.nodes(data=True) if int(d["time"]) == t]
+            if nodes_here:
+                _check_labelled_by_node_id(frame, nodes_here, seg_path, t)
+                checked = True
+        remapped[t] = _apply_lut(frame, lut, seg_path)
     return remapped
 
 
-def _check_labelled_by_node_id(frame, pairs, seg_path, t, sample=5):
+def remap_seg_to_track_ids_lazy(graph, seg_path):
+    """``remap_seg_to_track_ids`` as a lazy dask array, for viewing.
+
+    The mapping is elementwise, so it applies per chunk and nothing beyond the
+    chunks actually touched is ever read: pulling one z-slice of a 10 GB volume
+    costs a few MB. Use this wherever the segmentation is displayed rather than
+    measured -- napari pulls only the slice on screen.
+
+    Unlike the eager version this cannot check the node-id convention up front,
+    since that would mean reading a frame; a mislabelled store shows up as
+    background instead of raising.
+    """
+    lut = build_node_id_lut(graph)
+    return da.from_zarr(seg_path).map_blocks(
+        _apply_lut, lut=lut, seg_path=seg_path, dtype=lut.dtype
+    )
+
+
+def _check_labelled_by_node_id(frame, nodes, seg_path, t, sample=5):
     """Fail loudly if a segmentation frame is not labelled by graph node id.
 
     Every node in a frame came from an object in that frame, so under the
@@ -93,7 +130,7 @@ def _check_labelled_by_node_id(frame, pairs, seg_path, t, sample=5):
     convention is labelled by track_id instead, where the node ids are absent --
     which would otherwise map every object to background in silence.
     """
-    missing = [node for node, _ in pairs[:sample] if not np.any(frame == node)]
+    missing = [n for n in nodes[:sample] if not np.any(frame == n)]
     if missing:
         raise ValueError(
             f"Segmentation at {seg_path} is not labelled by graph node id: "

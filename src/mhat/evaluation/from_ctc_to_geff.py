@@ -22,6 +22,21 @@ from geff_spec import Axis, GeffMetadata, RelatedObject
 SEG_DTYPE = np.uint32
 
 
+def _seg_chunks(spatial_shape, tile=512):
+    """Chunk shape for the exported segmentation: one tile of one slice.
+
+    Matches how ``run_tracking.py`` chunks ``pred_seg.zarr``. Chunking a whole
+    frame together would mean reading the entire frame (hundreds of MB on a
+    large 3D dataset) to display a single slice, which defeats viewing the
+    segmentation lazily.
+    """
+    n = len(spatial_shape)
+    return (1, *(
+        min(tile, size) if i >= n - 2 else 1
+        for i, size in enumerate(spatial_shape)
+    ))
+
+
 def from_ctc_to_geff(
     ctc_path: Path,
     geff_path: Path,
@@ -118,7 +133,7 @@ def from_ctc_to_geff(
                 segm_array = zarr.open_array(
                     segmentation_store,
                     shape=(len(sorted_files), *n_1_padding, *frame.shape),
-                    chunks=(1, *n_1_padding, *frame.shape),
+                    chunks=_seg_chunks((*n_1_padding, *frame.shape)),
                     dtype=SEG_DTYPE,
                     mode="w" if overwrite else "w-",
                     zarr_format=zarr_format,

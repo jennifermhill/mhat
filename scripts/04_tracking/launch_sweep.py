@@ -68,6 +68,8 @@ OPTIONAL_KEYS = {
     "z_flow_conf_threshold",
     "z_flow_min_pass_pixels",
     "max_timepoints",
+    "division_weight",
+    "graph_cache_dir",
 }
 
 TRACK_INNER = (
@@ -159,6 +161,20 @@ def validate_spec(spec, allow_protected=False):
         check_keys(run.get("overrides", {}), f"run {run['label']!r}")
 
 
+def config_path_for_cmd(path):
+    """Path to hand the inner command, which runs with ``cwd=REPO``.
+
+    Sweep artifacts live under ``output_base_dir``, which is only inside the repo
+    when the checkout and the data tree are the same directory. In a worktree
+    (repo ``mhat-cluster``, data ``mhat``) they are siblings, so fall back to the
+    absolute path rather than failing.
+    """
+    try:
+        return str(path.relative_to(REPO))
+    except ValueError:
+        return str(path)
+
+
 def build_configs(spec, sweep_dir):
     """Write per-run tracking and eval configs; return the run records."""
     base = spec["base"]
@@ -205,8 +221,8 @@ def build_configs(spec, sweep_dir):
                 # effective values rather than on which keys happened to be
                 # written as run-level overrides.
                 "effective": {k: v for k, v in track_config.items() if k != "exp_uid"},
-                "track_config": str(track_path.relative_to(REPO)),
-                "eval_config": str(eval_path.relative_to(REPO)),
+                "track_config": config_path_for_cmd(track_path),
+                "eval_config": config_path_for_cmd(eval_path),
             }
         )
     return records

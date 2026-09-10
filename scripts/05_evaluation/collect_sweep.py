@@ -18,7 +18,9 @@ Usage::
 
 ``--metric-set ctc`` reports TRA/DET/LNK for CTC-ground-truth datasets;
 ``--metric-set overlap`` reports TE/TF plus the edge and node recalls, for the
-sparse-ground-truth datasets where precision and purity are not optimizable.
+sparse-ground-truth datasets where precision and purity are not optimizable;
+``--metric-set dro`` reports TE/TF with CTC fn/SEG/LNK diagnostics, for
+Fluo-N3DL-DRO, whose GT is sparse *and* matched many-to-one (so no BasicMetrics).
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ TUNABLE_KEYS = {
     "intensity_weight", "intensity_constant", "curvature_weight", "curvature_constant",
     "cohesion_weight", "cohesion_constant", "adhesion_weight", "adhesion_constant",
     "appear_constant", "disappear_constant", "base_edge_constant",
+    "division_weight",
 }
 
 METRIC_SETS = {
@@ -65,6 +68,19 @@ METRIC_SETS = {
         ("NodeR", "BasicMetrics", "Node Recall"),
         ("FN_e", "BasicMetrics", "False Negative Edges"),
         ("Purity", "TrackOverlapMetrics", "track_purity"),
+    ],
+    # Fluo-N3DL-DRO: sparse GT *and* a many-to-one CTC matcher, so BasicMetrics
+    # (which requires one-to-one matching) cannot exist here and TRA/DET/purity
+    # are artifacts of the 222k unannotated-but-correct objects. TE leads; the
+    # fn_* columns are diagnostics only -- note the edge report assumes
+    # higher-is-better, which holds for the first column and not for those.
+    "dro": [
+        ("TE",   "TrackOverlapMetrics", "target_effectiveness"),
+        ("TF",   "TrackOverlapMetrics", "track_fractions"),
+        ("fn_n", "CTCMetrics", "fn_nodes"),
+        ("fn_e", "CTCMetrics", "fn_edges"),
+        ("SEG",  "CTCMetrics", "SEG"),
+        ("LNK",  "CTCMetrics", "LNK"),
     ],
 }
 

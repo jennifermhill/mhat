@@ -50,7 +50,20 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
     # per-slice), not the coarse `TRA` markers used for TRA/DET/LNK matching.
     if "ctc" in config.get("metrics", []):
         seg_gt_dir = gt_data_dir / ctc_gt / "SEG"
-        pred_seg_path = pred_data_dir / "pred_seg.zarr"
+        # `seg_track_result` lets SEG be scored against a different tracking
+        # result than TRA/DET/LNK. That is needed whenever `track_result` has
+        # been pruned to the CTC-evaluated lineages (see ctc_seed_prune): the
+        # SEG reference annotates cells the tracking benchmark excludes, and the
+        # segmentation benchmark filters extras itself, so SEG belongs on the
+        # unpruned run. Left unset, SEG uses `track_result` as before.
+        # Not `seg_result` -- in a *tracking* config that name is the
+        # segmentation-stage uid (run_tracking.py, fn_analysis.py).
+        seg_track_result = config.get("seg_track_result", None)
+        seg_dir = pred_data_dir
+        if seg_track_result is not None:
+            seg_dir = pred_data_dir.parent / seg_track_result
+            print(f"SEG measured on {seg_dir} (seg_track_result)")
+        pred_seg_path = seg_dir / "pred_seg.zarr"
         if seg_gt_dir.is_dir() and pred_seg_path.exists():
             seg_score = compute_ctc_seg(seg_gt_dir, pred_seg_path)
             if seg_score is not None:

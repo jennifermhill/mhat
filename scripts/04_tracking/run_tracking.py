@@ -14,7 +14,7 @@ import networkx as nx
 from mhat.evaluation.eval_io import check_video_dir
 from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
 from mhat.tracking.tracks_io import save_tracks_to_csv
-from mhat.utils import get_axes_metadata
+from mhat.utils import get_axes_metadata, seg_chunks
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 
@@ -100,6 +100,14 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     print(f"Raw image shape: {raw_shape}, segmentation shape: {img_shape}, flow_2d shape: {flow_2d_shape if flow_2d_zarr is not None else None}, flow_3d shape: {flow_3d_shape if flow_3d_zarr is not None else None}")
     axes = get_axes_metadata(seg_zarr_root[seg_group])
     scale = [axis["scale"] for axis in axes]
+    # One source of truth for the rank: the fragments array itself, which the
+    # axes metadata above always agrees with. geff axis names, the flow gating
+    # and every position attribute follow from it rather than assuming 3D.
+    ndim = fragments.ndim - 1
+    assert len(axes) == ndim + 1, (
+        f"{seg_zarr_path}/{seg_group} is {fragments.ndim}D but its axes "
+        f"metadata names {len(axes)} axes: {[a['name'] for a in axes]}"
+    )
     # renumber_merge_history needs the largest fragment id up front; take it one
     # frame at a time rather than holding the whole array.
     max_node_id = max(int(fragments[t].max()) for t in range(n_frames))
@@ -129,6 +137,12 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
 
     z_flow_conf_threshold = config.get("z_flow_conf_threshold", None)
     z_flow_min_pass_pixels = config.get("z_flow_min_pass_pixels", 10)
+    if ndim == 2 and z_flow_conf_threshold is not None:
+        print(
+            "Warning: z_flow_conf_threshold / z_flow_min_pass_pixels filter the "
+            "axial flow component, which 2D data does not have. Ignoring them."
+        )
+        z_flow_conf_threshold = None
     if confidence_3d is not None and z_flow_conf_threshold is not None:
         print(
             f"Confidence-based Z flow filtering enabled: threshold={z_flow_conf_threshold}, "
@@ -159,6 +173,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
             z_flow_conf_threshold=z_flow_conf_threshold,
             z_flow_min_pass_pixels=z_flow_min_pass_pixels,
             size_threshold=config["size_threshold"],
+            timepoint=timepoint,
             scale=scale,
         )
         if timepoint == 0:
@@ -186,7 +201,10 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     utils.add_appear_ignore_attr(all_cand_graph)
     utils.add_disappear(all_cand_graph, img_shape_scaled)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
-    if flow_3d is not None:   
+    # Either flow is enough to predict motion. On 3D data this is unchanged in
+    # practice -- the assert below refuses a 2D-flow-only 3D run -- but on 2D
+    # data the 2D flow is the only flow there is.
+    if flow_3d is not None or flow_2d is not None:
         print("Calculating drift distances using optical flow...")
         utils.add_flow_dist_attr(track_graph)
     elif "drift_distance" in config:
@@ -211,7 +229,7 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
 
     assign_tracklet_ids(solution_graph)
 
-    output_zarr_root = zarr.open(output_seg_path, mode="a", shape=img_shape, chunks=(1, 1, 512, 512), dtype=np.uint32)
+    output_zarr_root = zarr.open(output_seg_path, mode="a", shape=img_shape, chunks=seg_chunks(img_shape[1:]), dtype=np.uint32)
     output_zarr_root.attrs["axes"] = axes
     for timepoint in range(img_shape[0]):
         output_zarr_root[timepoint] = lookup[fragments[timepoint]]
@@ -226,10 +244,19 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
                                  node_props_metadata={},
                                  edge_props_metadata={},
                                  )
+    # Axis names come from the data's own metadata rather than a 3D literal, so
+    # a 2D run writes ["time", "y", "x"] and does not declare a z axis that no
+    # node property backs. On every 3D dataset in this repo the metadata already
+    # reads exactly time/z/y/x, so this is byte-identical there.
+    axis_names = [axis["name"] for axis in axes]
+    axis_types = [
+        axis.get("type", "time" if i == 0 else "space")
+        for i, axis in enumerate(axes)
+    ]
     geff.write(solution_graph,
                output_filepath_geff,
-               axis_names=["time", "z", "y", "x"],
-               axis_types=["time", "space", "space", "space"],
+               axis_names=axis_names,
+               axis_types=axis_types,
                axis_scales=scale,
                metadata=metadata,
                overwrite=True)
@@ -258,17 +285,34 @@ if __name__ == "__main__":
     print(f"Loading segmentation data from {seg_dir}")
     assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
 
+    # Which flow a run requires depends on the data's rank, so read it from the
+    # fragments array before deciding. This is metadata only -- no pixels.
+    data_ndim = zarr.open(seg_dir / "data.zarr")["fragments"].ndim - 1
+
     flow_result = config.get("flow_result", None)
     if flow_result is not None:
-        flow_dir_2d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / config["flow_result"]
-        flow_dir_3d = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / config["flow_result"]
-        if not flow_dir_2d.is_dir():
-            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
-            flow_dir_2d = None
+        flow_base = input_base_dir / "opticalflow" / experiment / dataset
+        flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
+        flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
+        if data_ndim == 3:
+            # 3D data must have a 3D flow: nothing else can estimate axial
+            # motion. A 2D flow beside it is optional and, when present,
+            # supplies the better-resolved in-plane components.
+            assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
+            print(f"Loading 3D optical flow data from {flow_dir_3d}")
+            if not flow_dir_2d.is_dir():
+                print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
+                flow_dir_2d = None
+            else:
+                print(f"Loading 2D optical flow data from {flow_dir_2d}")
         else:
+            # 2D data has no 3D flow to look for, so the 2D one is required.
+            assert flow_dir_2d.is_dir(), (
+                f"2D optical flow data directory {flow_dir_2d} is missing -- "
+                "2D data has no 3D flow to fall back on"
+            )
             print(f"Loading 2D optical flow data from {flow_dir_2d}")
-        print(f"Loading 3D optical flow data from {flow_dir_3d}")
-        assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
+            flow_dir_3d = None
         flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
     else:
         flow_dirs = {"2d": None, "3d": None}

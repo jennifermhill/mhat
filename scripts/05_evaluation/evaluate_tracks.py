@@ -10,6 +10,70 @@ import zarr
 from mhat.evaluation.diagnostics import run_diagnostics
 from mhat.evaluation.evaluate_tracking import compute_ctc_seg, evaluate_tracking
 from mhat.evaluation.from_ctc_to_geff import from_ctc_to_geff
+from mhat.evaluation.linajea_metrics import (
+    MATCHING_THRESHOLD_UM,
+    crop_time,
+    evaluate as evaluate_linajea,
+    load_geff_tracks,
+)
+
+
+# linajea is not a traccuracy metric, so it is dispatched separately below and
+# must be kept out of the list handed to evaluate_tracking.
+LINAJEA_METRIC = "linajea"
+
+
+def run_linajea_metrics(config, gt_data_dir, pred_data_dir):
+    """Score the prediction using the linajea error definitions.
+
+    Separate from ``evaluate_tracking`` because linajea is not a traccuracy
+    metric: it does its own nearest-neighbour edge matching within
+    ``matching_threshold`` micrometers and reports error *counts* normalized by
+    the number of GT edges, which is the form the published linajea/TGMM
+    baselines are quoted in.
+
+    The DRO ground truth ships as two independently annotated sides, so each is
+    scored on its own -- matching how ``linajea_baselines_t261-310.json``
+    reports ``linajea_side_1`` and ``linajea_side_2`` separately.
+    """
+    gt_sides = config.get("linajea_gt", ["gt_side_1", "gt_side_2"])
+    threshold = config.get("linajea_match_threshold", MATCHING_THRESHOLD_UM)
+    sparse = config.get("linajea_sparse", True)
+    t_min = config.get("linajea_t_min", None)
+    t_max = config.get("linajea_t_max", None)
+
+    rec_full = load_geff_tracks(pred_data_dir / "pred_tracks.zarr")
+
+    results = {}
+    for side in gt_sides:
+        gt_path = gt_data_dir / side / "correct_tracks.zarr"
+        if not gt_path.is_dir():
+            print(f"Skipping linajea GT '{side}': missing {gt_path}")
+            continue
+        gt = load_geff_tracks(gt_path)
+        rec = rec_full
+        # Both graphs must be cropped with the same bounds, or an edge
+        # straddling a boundary is dropped from one side only and scores as a
+        # spurious FN. Left unset when the GT geff is already written on the
+        # same frame range as the tracked crop (the DRO gt_side_* geffs are).
+        if t_min is not None or t_max is not None:
+            lo = t_min if t_min is not None else -(2 ** 31)
+            hi = t_max if t_max is not None else 2 ** 31
+            gt = crop_time(gt, lo, hi)
+            rec = crop_time(rec_full, lo, hi)
+        report = evaluate_linajea(
+            gt, rec, matching_threshold=threshold, sparse=sparse
+        )
+        results[side] = report.as_dict()
+        norm = report.normalized()
+        print(
+            f"linajea {side}: sum_errors={report.sum_errors} "
+            f"(normalized {norm['sum']:.4f}) | fn_edges={report.fn_edges}, "
+            f"identity_switches={report.identity_switches}, "
+            f"fp_divisions={report.fp_divisions}, "
+            f"fn_divisions={report.fn_divisions}/{report.gt_divisions}"
+        )
+    return results
 
 
 def run_evaluation(config, gt_data_dir, pred_data_dir):
@@ -33,18 +97,34 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
                 axes=axes,
             )
 
-    results, matched = evaluate_tracking(
-        config,
-        gt_data_dir,
-        pred_data_dir,
-        return_matched=True,
-    )
+    requested_metrics = list(config.get("metrics", []))
+    run_linajea = LINAJEA_METRIC in requested_metrics
+    # evaluate_tracking validates every name against its traccuracy
+    # metrics_dict and raises on anything unknown, so strip linajea first.
+    traccuracy_metrics = [m for m in requested_metrics if m != LINAJEA_METRIC]
 
     track_metrics = {}
-    for metric in results:
-        metric_name = metric['metric']['name']
-        metric_results = metric['results']
-        track_metrics[metric_name] = metric_results
+    matched = None
+    # When linajea is the only metric requested there is nothing for traccuracy
+    # to do, and calling it anyway would silently fall back to its
+    # ["basic", "track_overlap"] default on an empty list.
+    if run_linajea and not traccuracy_metrics:
+        print("Only linajea metrics requested; skipping traccuracy evaluation.")
+    else:
+        tc_config = (
+            {**config, "metrics": traccuracy_metrics} if run_linajea else config
+        )
+        results, matched = evaluate_tracking(
+            tc_config,
+            gt_data_dir,
+            pred_data_dir,
+            return_matched=True,
+        )
+
+        for metric in results:
+            metric_name = metric['metric']['name']
+            metric_results = metric['results']
+            track_metrics[metric_name] = metric_results
 
     # CTC SEG uses the sparse `SEG` ground-truth folder (pixel-accurate,
     # per-slice), not the coarse `TRA` markers used for TRA/DET/LNK matching.
@@ -70,6 +150,11 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
                 track_metrics.setdefault("CTCMetrics", {})["SEG"] = seg_score
         else:
             print(f"Skipping SEG: missing {seg_gt_dir} or {pred_seg_path}")
+
+    if run_linajea:
+        track_metrics["LinajeaMetrics"] = run_linajea_metrics(
+            config, gt_data_dir, pred_data_dir
+        )
 
     return track_metrics, matched
 

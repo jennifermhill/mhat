@@ -3,6 +3,7 @@
 /data
 /experiments
 /workshop_paper
+/scripts/_scratch
 /scripts/*/[a-z]*_config.toml
 /logs
 /ctc

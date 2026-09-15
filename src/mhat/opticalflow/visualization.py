@@ -69,8 +69,14 @@ def create_flow_color_wheel(width, height):
 
 
 def generate_flow_frame(flow, scale_factor=1):
-    depth, height, width, _ = flow.shape
-    hsv = np.zeros((depth, height, width, 3), dtype=np.uint8)  # initialize hsv image
+    """Colour-wheel image of one flow timepoint, (*lead, y, x, 2) -> (*lead, y, x, 3).
+
+    ``lead`` is the z axis for 3D flow and empty for 2D, so the HSV->BGR loop
+    below runs once per z slice in 3D and exactly once in 2D (``np.ndindex()``
+    with no arguments yields one empty index).
+    """
+    *lead, height, width, _ = flow.shape
+    hsv = np.zeros((*lead, height, width, 3), dtype=np.uint8)  # initialize hsv image
     hsv[..., 1] = 255  # set saturation to maximum
 
     mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])  # calculate magnitude and angle
@@ -78,8 +84,8 @@ def generate_flow_frame(flow, scale_factor=1):
     hsv[..., 2] = np.clip(mag * 255 * scale_factor, 0, 255).astype(np.uint8) # dim = 2550, medium = 25500, bright = 255000
 
     rgb = np.zeros_like(hsv, dtype=np.uint8)  # initialize rgb image
-    for zslice in range(depth):
-        rgb[zslice, ...] = cv2.cvtColor(hsv[zslice], cv2.COLOR_HSV2BGR)  # convert hsv to bgr
+    for plane in np.ndindex(*lead):
+        rgb[plane] = cv2.cvtColor(hsv[plane], cv2.COLOR_HSV2BGR)  # convert hsv to bgr
 
     # Create a copy of the flow visualization
     final_frame = rgb.copy()
@@ -90,7 +96,7 @@ def generate_flow_frame(flow, scale_factor=1):
 def generate_flow_frames(flow_zarr, scale_factor=0.1, color_wheel=False):
     flow_raw = flow_zarr['flow_raw']
 
-    T, Z, Y, X, D = flow_raw.shape
+    T, *lead, Y, X, D = flow_raw.shape
 
     # Calculate scale factor
     # percentile_75 = np.percentile(np.linalg.norm(flow_raw, axis=-1), 75)
@@ -98,8 +104,8 @@ def generate_flow_frames(flow_zarr, scale_factor=0.1, color_wheel=False):
     # scale_factor = 255.0 / percentile_75
     print(f"Using scale factor for flow visualization: {scale_factor}")
 
-    flow_zarr.create_dataset('flow_frames_XY', shape=(T, Z, Y, X, 3), chunks=(1, Z, Y, X, 3), dtype=np.uint8)
-    flow_frames = np.zeros((T, Z, Y, X, 3), dtype=np.uint8)
+    flow_zarr.create_dataset('flow_frames_XY', shape=(T, *lead, Y, X, 3), chunks=(1, *lead, Y, X, 3), dtype=np.uint8)
+    flow_frames = np.zeros((T, *lead, Y, X, 3), dtype=np.uint8)
     for i in tqdm(range(T), desc="Generating flow visualization frames"):
         flow_frame = generate_flow_frame(flow_raw[i, ...], scale_factor=scale_factor)
         flow_frames[i, ...] = flow_frame

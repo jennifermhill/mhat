@@ -49,6 +49,13 @@ import zarr
 # what makes the per-marker assignment unambiguous.
 CTC_DETECTION_FRACTION = 0.5
 
+# Copied verbatim from the source run into the pruned one. `config.toml` carries
+# provenance and lets the diagnostics resolve the segmentation stage the run came
+# from; `candidate_edges.npy` is what lets fn_analysis split a missed link into
+# "the ILP rejected this candidate" vs "it was never a candidate". Both describe
+# the graph build, which pruning does not change, so they transfer unaltered.
+SIDECAR_FILES = ("config.toml", "candidate_edges.npy")
+
 
 def read_first_frame_markers(tra_dir):
     """Read the first frame of a CTC ``TRA`` folder.
@@ -223,10 +230,8 @@ def write_pruned_tracks(graph, metadata, keep, dst_path):
 def prune_to_ctc_seeds(pred_dir, tra_dir, out_dir, dry_run=False):
     """Prune a tracking result to the lineages seeded by the frame-0 CTC markers.
 
-    The source ``config.toml`` is copied into ``out_dir`` so the pruned result
-    keeps its provenance and the evaluation diagnostics can still resolve the
-    segmentation stage it came from (``fn_analysis`` reads ``seg_result`` out of
-    it to separate solver misses from segmentation misses).
+    ``SIDECAR_FILES`` are copied into ``out_dir`` so the pruned result keeps its
+    provenance and the evaluation diagnostics stay fully functional against it.
 
     Args:
         pred_dir: tracking result holding ``pred_tracks.zarr`` and
@@ -274,9 +279,9 @@ def prune_to_ctc_seeds(pred_dir, tra_dir, out_dir, dry_run=False):
             keep,
             max_label=max(graph.nodes),
         )
-        source_config = pred_dir / "config.toml"
-        if source_config.is_file():
-            shutil.copy2(source_config, out_dir / "config.toml")
+        for sidecar in SIDECAR_FILES:
+            if (pred_dir / sidecar).is_file():
+                shutil.copy2(pred_dir / sidecar, out_dir / sidecar)
 
     survival = np.array(sorted(last_frame.values())) if last_frame else np.array([])
     report = {

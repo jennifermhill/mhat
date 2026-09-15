@@ -14,7 +14,7 @@ A re-eval is described by a spec TOML::
     all_runs = true            # or: uids = ["full", "no_drift", ...]
 
     [lsf]
-    env = "mhat2"
+    env = "mhat-cluster"
     queue = "local"
     eval_slots = 1
     eval_walltime = "0:30"
@@ -29,13 +29,23 @@ A re-eval is described by a spec TOML::
 ``all_runs = true`` discovers every subdirectory of the dataset's tracking
 directory that holds a ``pred_tracks.zarr``.
 
+For the sparsely annotated CTC datasets (Fluo-N3DL-DRO / TRIC / TRIF), adding::
+
+    prune_to_ctc_seeds = true
+    prune_suffix = "_ctcseeded"   # optional, this is the default
+
+puts a ``prune_to_ctc_seeds.py`` job in front of each eval and points the eval at
+the pruned result, so ``TRA``/``DET``/``LNK`` mean something. ``seg_track_result``
+is set back to the unpruned run, because the SEG reference annotates cells the
+tracking benchmark excludes. Use ``--metric-set ctc`` when collecting.
+
 **``evaluate_tracks.py`` writes ``track_metrics.json`` in place**, so re-running
 an eval destroys the previous metrics for that ``exp_uid``. That is the point
 here, but it means the old numbers only survive wherever they were written down.
 
 Usage, from the repo root on the cluster::
 
-    conda run -n mhat2 python scripts/05_evaluation/launch_evals.py \\
+    conda run -n mhat-cluster python scripts/05_evaluation/launch_evals.py \\
         configs/sweeps/nk_cells_reeval_corrgt.toml [--dry-run] [--only UID ...]
 
 Read back the results with ``scripts/05_evaluation/collect_sweep.py``.
@@ -57,6 +67,14 @@ REPO = Path(__file__).resolve().parents[2]
 # it runs nothing.
 sys.path.insert(0, str(REPO / "scripts" / "04_tracking"))
 from launch_sweep import EVAL_INNER, bsub, check_no_windows_paths  # noqa: E402
+
+# Prune each run to the CTC-evaluated lineages before scoring it. Only used when
+# the spec sets `prune_to_ctc_seeds`; see the module docstring.
+PRUNE_INNER = (
+    "conda run -n {env} --no-capture-output "
+    "python -u scripts/05_evaluation/prune_to_ctc_seeds.py {cfg} "
+    "--track-result {uid} --suffix {suffix}"
+)
 
 
 def validate_spec(spec):
@@ -97,18 +115,38 @@ def discover_uids(track_dir):
     )
 
 
+def _job_path(path):
+    """Path to hand a bsub inner command, which runs with ``cwd=REPO``.
+
+    Relative when it can be, so the submitted command stays readable, but the
+    experiments tree does not have to live under the repo -- from a worktree it
+    generally does not -- in which case the absolute path is what works.
+    """
+    try:
+        return str(path.relative_to(REPO))
+    except ValueError:
+        return str(path)
+
+
 def build_configs(spec, reeval_dir, track_dir, uids):
     """Write one eval config per uid; return the manifest run records."""
     eval_stub = spec["eval"]
     eval_dir = reeval_dir / "eval_configs"
     eval_dir.mkdir(parents=True, exist_ok=True)
 
+    prune = spec.get("prune_to_ctc_seeds", False)
+    suffix = spec.get("prune_suffix", "_ctcseeded")
+
     records = []
     for uid in uids:
         eval_config = copy.deepcopy(eval_stub)
         eval_config["experiment"] = spec["experiment"]
         eval_config["dataset"] = spec["dataset"]
-        eval_config["track_result"] = uid
+        eval_config["track_result"] = f"{uid}{suffix}" if prune else uid
+        if prune:
+            # SEG must stay on the unpruned run: pruning zeroes exactly the cells
+            # the SEG reference annotates. See mhat.evaluation.ctc_seed_prune.
+            eval_config["seg_track_result"] = uid
         eval_path = eval_dir / f"{uid}.toml"
         with open(eval_path, "w") as handle:
             toml.dump(eval_config, handle)
@@ -132,11 +170,15 @@ def build_configs(spec, reeval_dir, track_dir, uids):
             {
                 "label": uid,
                 "condition": spec.get("condition", ""),
-                "exp_uid": uid,
+                # The directory the metrics land in -- collect_sweep.py reads
+                # eval_root/<exp_uid>/track_metrics.json -- which under pruning
+                # is the pruned result, not the run it came from.
+                "exp_uid": f"{uid}{suffix}" if prune else uid,
+                "source_uid": uid,
                 "overrides": {},
                 "condition_deltas": {},
                 "effective": effective,
-                "eval_config": str(eval_path.relative_to(REPO)),
+                "eval_config": _job_path(eval_path),
             }
         )
     return records
@@ -158,7 +200,7 @@ def main():
     validate_spec(spec)
 
     lsf = spec.get("lsf", {})
-    env = lsf.get("env", "mhat2")
+    env = lsf.get("env", "mhat-cluster")
     queue = lsf.get("queue", "local")
     eval_slots = lsf.get("eval_slots", 1)
     eval_walltime = lsf.get("eval_walltime", "0:30")
@@ -190,14 +232,38 @@ def main():
             raise SystemExit(f"unknown exp_uids: {unknown}")
         selected = [record for record in records if record["label"] in args.only]
 
+    prune = spec.get("prune_to_ctc_seeds", False)
+    suffix = spec.get("prune_suffix", "_ctcseeded")
+    prune_slots = lsf.get("prune_slots", 4)
+    prune_walltime = lsf.get("prune_walltime", "4:00")
+
     for record in selected:
         label = record["label"]
         print(f"[{label}]")
+        dep_job = None
+        if prune:
+            # ended(), not done(): the prune is cheap to re-read but the eval
+            # should still fire if the job exits nonzero after writing output,
+            # matching how launch_sweep chains tracking -> eval.
+            dep_job = record["prune_job_id"] = bsub(
+                f"{spec['reeval_id']}_prn_{label}",
+                prune_slots, prune_walltime, queue,
+                str(log_dir / f"prune_{label}"),
+                PRUNE_INNER.format(
+                    env=env, cfg=record["eval_config"],
+                    uid=record["source_uid"], suffix=suffix,
+                ),
+                dry_run=args.dry_run,
+            ) or ""
+            # Empty only on a dry run, where bsub returns no id; do not emit a
+            # malformed `-w ended()`.
+            dep_job = dep_job or None
         record["eval_job_id"] = bsub(
             f"{spec['reeval_id']}_evl_{label}",
             eval_slots, eval_walltime, queue,
             str(log_dir / f"eval_{label}"),
             EVAL_INNER.format(threads=eval_slots, env=env, cfg=record["eval_config"]),
+            dep_job=dep_job,
             dry_run=args.dry_run,
         ) or ""
 
@@ -212,9 +278,14 @@ def main():
         for record in records:
             if not record.get("eval_job_id"):
                 record["eval_job_id"] = previous.get(record["label"], {}).get("eval_job_id", "")
+            if prune and not record.get("prune_job_id"):
+                earlier = previous.get(record["label"], {})
+                record["prune_job_id"] = earlier.get("prune_job_id", "")
     else:
         for record in records:
             record.setdefault("eval_job_id", "")
+            if prune:
+                record.setdefault("prune_job_id", "")
 
     manifest = {
         "sweep_id": spec["reeval_id"],

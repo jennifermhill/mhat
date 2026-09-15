@@ -272,55 +272,6 @@ def read_name_map_and_scale(tracks_path: Path):
     return node_name_map, scale
 
 
-def read_name_map_and_scale(tracks_path: Path):
-    """The funtracks ``node_name_map`` and axis scales for one geff store.
-
-    funtracks derives dimensionality from the *caller's* map, never from the
-    file: ``import_export/geff/_import.py`` counts how many of z/y/x appear in
-    the map and sets ``ndims = that + 1``. So a hardcoded 3D map handed an
-    honest 2D geff fails *silently* -- the rename loop is guarded by
-    ``if source_key in node_props``, so the absent z is skipped without
-    complaint while ``ndims`` stays 4, disagreeing with the length-3 scale
-    derived from the same file's axes and surfacing far from the cause.
-
-    The composite ``"pos"`` form funtracks also accepts is ndim-generic by
-    construction, so building it from the store's own space axes keeps the map,
-    the scale and the file in step whatever the rank.
-
-    Note there is deliberately no ``"seg_id"`` entry. funtracks' docstring
-    shows one, but adding it would make funtracks load the label array and
-    attach a seg_id, which cuts against the design here: this module passes
-    ``segmentation_path=None`` and does its own ``remap_seg_to_track_ids``, to
-    dodge the funtracks bug that scales the *time* index by its axis scale (see
-    the note in ``remap_seg_to_track_ids``). The label<->node-id convention
-    stays owned by ``build_node_id_lut`` / ``remap_seg_to_track_ids``.
-
-    Returns:
-        (node_name_map, scale), where scale has one entry per axis in the file.
-    """
-    metadata = geff.GeffMetadata.read(tracks_path)
-    axes = metadata.axes
-    if axes is None:
-        # No axes metadata at all: fall back to unit-scale 3D, which is what
-        # every store predating this metadata was.
-        return (
-            {"time": "time", "pos": ["z", "y", "x"]},
-            [1.0, 1.0, 1.0, 1.0],
-        )
-
-    node_name_map = {"time": "time", "pos": spatial_axis_names(axes)}
-    # One entry per axis, not "per axis that happens to carry a scale" -- the
-    # old comprehension silently shortened the list when one axis lacked a
-    # scale, which then misaligned every position it was applied to.
-    scale = [1.0 if a.scale is None else a.scale for a in axes]
-    assert len(scale) == len(node_name_map["pos"]) + 1, (
-        f"{tracks_path} has {len(axes)} axes but "
-        f"{len(node_name_map['pos'])} of them are spatial: "
-        f"{[a.name for a in axes]}"
-    )
-    return node_name_map, scale
-
-
 def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
     """Load GT and predicted tracks (with segmentations) as traccuracy graphs.
 

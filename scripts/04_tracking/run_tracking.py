@@ -1,6 +1,10 @@
 import csv
 import argparse
 import datetime
+import hashlib
+import json
+import os
+import pickle
 from pathlib import Path
 
 import motile
@@ -19,20 +23,98 @@ from mhat.utils import get_axes_metadata
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 
-def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_dir: Path, stats_only: bool = False):
+# ---------------------------------------------------------------------------
+# Candidate-graph cache
+#
+# Building the candidate graph dominates the runtime on large movies (~11.9 h of
+# a 12.7 h Fluo-N3DL-DRO run; the ILP solve is ~10 min). Cost weights and
+# constants are applied *after* the graph exists, so a single cached graph serves
+# every cost-only sweep. The keys below are exactly the ones that change the
+# graph itself -- every weight/constant, appear/disappear, division_weight,
+# verbose, exp_uid and use_lk are deliberately absent. Getting this boundary
+# wrong silently reuses a stale graph, so the resolved key and cache path are
+# logged on every run, hit or miss.
+# ---------------------------------------------------------------------------
 
+GRAPH_CACHE_VERSION = 1
+
+GRAPH_CACHE_KEYS = [
+    "experiment",
+    "dataset",
+    "seg_result",
+    "flow_result",
+    "max_timepoints",
+    "size_threshold",
+    "z_flow_conf_threshold",
+    "z_flow_min_pass_pixels",
+    "max_children",
+    "max_edge_distance",
+    "divisions",
+]
+
+
+def graph_cache_key(config, include_drift_distance):
+    """The graph-affecting subset of a tracking config, as a JSON-able dict.
+
+    ``include_drift_distance`` is set only when no 3D flow exists: with flow,
+    ``add_flow_dist_attr`` wins and ``drift_distance`` never touches the graph.
+    """
+    key = {"_version": GRAPH_CACHE_VERSION}
+    for name in GRAPH_CACHE_KEYS:
+        key[name] = config.get(name)
+    # These two carry legacy aliases; resolve them the same way the builder does
+    # so an old-style config keys to the same cache as a new-style one.
+    key["min_merge_cost"] = config.get("min_merge_cost", config.get("min_merge_score", 0.0))
+    key["max_merge_cost"] = config.get("max_merge_cost", config.get("max_merge_score", 1.0))
+    if include_drift_distance:
+        key["drift_distance"] = config.get("drift_distance")
+    return key
+
+
+def graph_cache_paths(config, cache_dir, include_drift_distance):
+    """Resolve ``(key, pickle path, sidecar json path)`` for this config."""
+    key = graph_cache_key(config, include_drift_distance)
+    blob = json.dumps(key, sort_keys=True, default=str)
+    digest = hashlib.sha256(blob.encode()).hexdigest()[:16]
+    base = Path(cache_dir) / config["experiment"] / config["dataset"]
+    return key, base / f"{digest}.pkl", base / f"{digest}.json"
+
+
+def save_graph_bundle(bundle, key, pkl_path, json_path):
+    """Write the bundle atomically, so a killed job never leaves a torn cache."""
+    pkl_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = pkl_path.with_suffix(f".pkl.tmp.{os.getpid()}")
+    with open(tmp_path, "wb") as handle:
+        pickle.dump(bundle, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    os.replace(tmp_path, pkl_path)
+    with open(json_path, "w") as handle:
+        json.dump(key, handle, indent=2, sort_keys=True, default=str)
+    size_gb = pkl_path.stat().st_size / 1e9
+    print(f"Saved candidate graph cache to {pkl_path} ({size_gb:.2f} GB)")
+
+
+def write_merge_history_csv(path, merge_history, no_merges):
+    fields = ["a", "b", "c", "cost", "timepoint"]
+    with open(path, "w") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(fields)
+        if not no_merges:
+            for row in merge_history:
+                writer.writerow(row)
+
+
+def build_candidate_graph(config, raw_dir, seg_dir, flow_dirs):
+    """Build the candidate graph and everything the solve/save path needs from it.
+
+    Returns a bundle dict that is exactly what gets pickled into the graph cache.
+    The ``fragments`` zarr is deliberately not part of it -- it is cheap to
+    reopen from ``seg_dir``.
+    """
     raw_zarr_path = raw_dir
     seg_zarr_path = seg_dir / "data.zarr"
     flow_2d_zarr_path = flow_dirs["2d"] / "flow.zarr" if flow_dirs["2d"] is not None else None
     flow_3d_zarr_path = flow_dirs["3d"] / "flow.zarr" if flow_dirs["3d"] is not None else None
-    output_seg_path = output_dir / "pred_seg.zarr"
     merge_history_csv_path = seg_dir / "merge_history.csv"
-    normalized_merge_history_csv_path = output_dir / "normalized_merge_history.csv"
-    config_filepath = output_dir / "config.toml"
-    output_filepath_geff = output_dir / "pred_tracks.zarr"
-
-    with open(config_filepath, "w") as config_file:
-        toml.dump(config, config_file)
 
     seg_group = "fragments"
     flow_group = "flow_raw"
@@ -116,29 +198,13 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     merge_history = merge_history[merge_history[:, 4] < n_frames]
     no_merges = len(merge_history) == 0
 
-    fields = ["a", "b", "c", "cost", "timepoint"]
     if no_merges:
         print("No merge history found. Running in no-merge (fragments-only) mode.")
-        # Warn if cohesion/adhesion config is nonzero
-        coh_adh_keys = ["cohesion_weight", "cohesion_constant", "adhesion_weight", "adhesion_constant"]
-        if any(config.get(k, 0.0) != 0.0 for k in coh_adh_keys):
-            print("Warning: cohesion/adhesion weights/constants are nonzero but will be ignored in no-merge mode")
-        # Write empty normalized merge history for consistency
-        with open(normalized_merge_history_csv_path, "w") as f:
-            writer = csv.writer(f)
-            writer.writerow(fields)
     else:
         merge_history = create_multihypo_graph.normalize_costs(merge_history)
         merge_history = create_multihypo_graph.renumber_merge_history(
             merge_history, max_node_id
         )
-
-        # Save the normalized and renumbered merge history
-        with open(normalized_merge_history_csv_path, "w") as f:
-            writer = csv.writer(f)
-            writer.writerow(fields)
-            for row in merge_history:
-                writer.writerow(row)
 
     z_flow_conf_threshold = config.get("z_flow_conf_threshold", None)
     z_flow_min_pass_pixels = config.get("z_flow_min_pass_pixels", 10)
@@ -230,6 +296,81 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     utils.add_intensity_diff_attr(track_graph)
     utils.add_division_attr(track_graph)
 
+    return {
+        "track_graph": track_graph,
+        "all_exclusion_sets": all_exclusion_sets,
+        "no_merges": no_merges,
+        "merge_history": merge_history,
+        "frag_ids": frag_ids,
+        "max_node_id": max_node_id,
+        "img_shape": img_shape,
+        "img_shape_scaled": img_shape_scaled,
+        "axes": axes,
+        "scale": scale,
+    }
+
+
+def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bool = False,
+                 use_graph_cache: bool = True, force_save_graph: bool = False):
+
+    seg_zarr_path = seg_dir / "data.zarr"
+    output_seg_path = output_dir / "pred_seg.zarr"
+    normalized_merge_history_csv_path = output_dir / "normalized_merge_history.csv"
+    config_filepath = output_dir / "config.toml"
+    output_filepath_geff = output_dir / "pred_tracks.zarr"
+
+    with open(config_filepath, "w") as config_file:
+        toml.dump(config, config_file)
+
+    seg_group = "fragments"
+
+    # With 3D flow, add_flow_dist_attr wins over the drift_distance parameter, so
+    # drift_distance only belongs in the cache key when there is no 3D flow.
+    has_3d_flow = flow_dirs["3d"] is not None
+
+    cache_dir = config.get("graph_cache_dir", None)
+    pkl_path = json_path = None
+    if cache_dir is not None and use_graph_cache:
+        key, pkl_path, json_path = graph_cache_paths(config, cache_dir, not has_3d_flow)
+        print(f"Graph cache key: {json.dumps(key, sort_keys=True, default=str)}")
+        print(f"Graph cache path: {pkl_path}")
+    elif cache_dir is not None:
+        print("Graph cache disabled for this run (--no-graph-cache); building fresh.")
+    else:
+        print("No graph_cache_dir configured; building the candidate graph.")
+
+    bundle = None
+    if pkl_path is not None and pkl_path.is_file() and not force_save_graph:
+        print(f"Graph cache HIT -- loading {pkl_path}")
+        with open(pkl_path, "rb") as handle:
+            bundle = pickle.load(handle)
+    elif pkl_path is not None:
+        reason = "forced rebuild (--save-graph)" if force_save_graph else "MISS"
+        print(f"Graph cache {reason} -- building the candidate graph.")
+
+    if bundle is None:
+        bundle = build_candidate_graph(config, raw_dir, seg_dir, flow_dirs)
+        if pkl_path is not None:
+            save_graph_bundle(bundle, key, pkl_path, json_path)
+
+    track_graph = bundle["track_graph"]
+    all_exclusion_sets = bundle["all_exclusion_sets"]
+    no_merges = bundle["no_merges"]
+    merge_history = bundle["merge_history"]
+    frag_ids = set(bundle["frag_ids"])
+    max_node_id = bundle["max_node_id"]
+    img_shape = bundle["img_shape"]
+    axes = bundle["axes"]
+    scale = bundle["scale"]
+
+    if no_merges:
+        # Warned here rather than in the builder so a cache hit says it too --
+        # it is a statement about the cost config, not about the graph.
+        coh_adh_keys = ["cohesion_weight", "cohesion_constant", "adhesion_weight", "adhesion_constant"]
+        if any(config.get(k, 0.0) != 0.0 for k in coh_adh_keys):
+            print("Warning: cohesion/adhesion weights/constants are nonzero but will be ignored in no-merge mode")
+    write_merge_history_csv(normalized_merge_history_csv_path, merge_history, no_merges)
+
     if stats_only:
         report_graph_statistics(config, track_graph)
         print("Stats-only mode: skipping ILP solve and result saving.")
@@ -249,6 +390,9 @@ def run_tracking(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict, output_d
     solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets, no_merges=no_merges)
 
     print("Saving results...")
+
+    # Reopened rather than cached: the fragments zarr is lazy and costs nothing.
+    fragments = zarr.open(seg_zarr_path)[seg_group]
 
     frag_ids.discard(0)
     lookup = utils.get_solution_lookup(
@@ -286,6 +430,10 @@ if __name__ == "__main__":
     parser.add_argument("config")
     parser.add_argument("--stats-only", action="store_true",
                         help="Build candidate graph and print attribute statistics, then exit.")
+    parser.add_argument("--no-graph-cache", action="store_true",
+                        help="Ignore graph_cache_dir entirely: build the graph fresh and do not save it.")
+    parser.add_argument("--save-graph", action="store_true",
+                        help="Rebuild the candidate graph and overwrite any existing cache entry.")
     args = parser.parse_args()
     config = toml.load(args.config)
 
@@ -330,4 +478,5 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only=args.stats_only)
+    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only=args.stats_only,
+                 use_graph_cache=not args.no_graph_cache, force_save_graph=args.save_graph)

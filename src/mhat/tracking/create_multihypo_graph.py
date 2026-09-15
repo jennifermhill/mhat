@@ -151,7 +151,7 @@ def nodes_from_fragments(
     z_flow_conf_threshold: float | None = None,
     z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
-    tp: int | None = None,
+    timepoint: int | None = None,
     scale: list[float] | None = None,
 ) -> tuple[nx.DiGraph, list[tuple]]:
     """Compute the nodes of a candidate graph from a set of fragments and a

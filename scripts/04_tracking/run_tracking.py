@@ -269,7 +269,7 @@ def build_candidate_graph(config, raw_dir, seg_dir, flow_dirs):
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,
                 size_threshold=config["size_threshold"],
-                tp=timepoint,
+                timepoint=timepoint,
                 scale=scale,
             )
         if timepoint == 0:

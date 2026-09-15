@@ -23,7 +23,7 @@ node-local scratch, so the compute nodes can read it.
 
 Usage, from the repo root on the cluster::
 
-    conda run -n mhat2 python scripts/04_tracking/launch_sweep.py \\
+    conda run -n mhat-cluster python scripts/04_tracking/launch_sweep.py \\
         configs/sweeps/mda231_01cells_stageA.toml [--dry-run] [--only LABEL ...]
 
 Read back the results with ``scripts/05_evaluation/collect_sweep.py``.
@@ -228,7 +228,17 @@ def build_configs(spec, sweep_dir):
     return records
 
 
-def bsub(job_name, slots, walltime, queue, log_stem, inner, dep_job=None, dry_run=False):
+def bsub(
+    job_name, slots, walltime, queue, log_stem, inner,
+    dep_job=None, dry_run=False, gpu=None, raw_dep=False,
+):
+    """Submit one job; return its id (None on a dry run).
+
+    ``gpu`` is passed straight to ``-gpu`` (e.g. ``"num=1"``) for the queues that
+    need one. ``raw_dep`` treats ``dep_job`` as a complete LSF dependency
+    expression instead of a single job id, which is how a job waits on a whole
+    fan-out ("ended(1) && ended(2) && ...").
+    """
     cmd = [
         "bsub",
         "-J", job_name,
@@ -239,8 +249,10 @@ def bsub(job_name, slots, walltime, queue, log_stem, inner, dep_job=None, dry_ru
     ]
     if queue:
         cmd += ["-q", queue]
+    if gpu:
+        cmd += ["-gpu", gpu]
     if dep_job is not None:
-        cmd += ["-w", f"ended({dep_job})"]
+        cmd += ["-w", dep_job if raw_dep else f"ended({dep_job})"]
     cmd += [inner]
 
     if dry_run:
@@ -268,7 +280,7 @@ def main():
     validate_spec(spec, allow_protected=args.allow_protected)
 
     lsf = spec.get("lsf", {})
-    env = lsf.get("env", "mhat2")
+    env = lsf.get("env", "mhat-cluster")
     queue = lsf.get("queue", "local")
     track_slots = lsf.get("track_slots", 2)
     track_walltime = lsf.get("track_walltime", "1:00")

@@ -12,7 +12,7 @@ direction; an interior winner means it is safe to stop.
 
 Usage::
 
-    conda run -n mhat2 python scripts/05_evaluation/collect_sweep.py \\
+    conda run -n mhat-cluster python scripts/05_evaluation/collect_sweep.py \\
         experiments/tracking/Fluo-C3DL-MDA231/01_cells/sweeps/<sweep_id>/manifest.toml \\
         [--baseline TRA DET LNK] [--metric-set ctc|overlap]
 

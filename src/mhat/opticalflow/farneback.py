@@ -29,7 +29,13 @@ def _import_farneback_3d():
 
 
 def compute_farneback_flow_2d(config, zarr_img, output_zarr):
-    T, Z, Y, X = zarr_img.shape
+    """In-plane Farneback flow, computed independently on every 2D plane.
+
+    ``zarr_img`` is (t, *lead, y, x): ``lead`` is the z axis for a 3D movie and
+    empty for a 2D one, so the plane loop below runs once per z slice in 3D and
+    exactly once in 2D. Nothing else about the computation differs.
+    """
+    T, *lead, Y, X = zarr_img.shape
 
     # Check if Y, or X dims are odd, and pad if so
     pad_y = 0
@@ -39,20 +45,24 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
     if X % 2 != 0:
         pad_x = 1
     if pad_y != 0 or pad_x != 0:
-        zarr_img = da.pad(zarr_img, ((0,0),(0,0),(0,pad_y),(0,pad_x)), mode='edge')
+        pad_width = ((0, 0),) * (1 + len(lead)) + ((0, pad_y), (0, pad_x))
+        zarr_img = da.pad(zarr_img, pad_width, mode='edge')
 
     ds_factor = config.get('downsample_factor', 1)
 
-    frames_ds = zarr_img[:, :, ::ds_factor, ::ds_factor]
+    leading = (slice(None),) * (1 + len(lead))
+    frames_ds = zarr_img[(*leading, slice(None, None, ds_factor),
+                          slice(None, None, ds_factor))]
 
     print("Normalizing all frames...")
     max_val = frames_ds.max()
     min_val = frames_ds.min()
     frames_norm = ((frames_ds - min_val) / (max_val - min_val) * 255).astype(np.uint8)
 
-    for z_slice in range(Z):
-        print(f"Computing flow for Z slice {z_slice}/{Z-1}")
-        frames_slice = frames_norm[:, z_slice, :, :]    
+    n_planes = int(np.prod(lead)) if lead else 1
+    for plane_no, plane in enumerate(np.ndindex(*lead)):
+        print(f"Computing flow for plane {plane_no}/{n_planes - 1} {plane}")
+        frames_slice = frames_norm[(slice(None), *plane)]
         prev_frame = frames_slice[0].compute()
         if config['hyperparams']["enhance_contrast"]:
             prev_frame = enhance_contrast_AHE(prev_frame)
@@ -103,17 +113,25 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
             if pad_y != 0 or pad_x != 0:
                 flow = flow[:Y, :X, :]
 
-            output_zarr['flow_raw'][i-1, z_slice, ...] = flow.astype(np.float32)
+            output_zarr['flow_raw'][(i - 1, *plane)] = flow.astype(np.float32)
 
     # Add empty flow for the last frame (since we compute flow between pairs of frames)
-    output_zarr['flow_raw'][-1, ...] = np.zeros((Z, Y, X, 2), dtype=np.float32)
+    output_zarr['flow_raw'][-1, ...] = np.zeros((*lead, Y, X, 2), dtype=np.float32)
 
     return output_zarr['flow_raw']  # return the computed flow dataset
 
 
 def compute_farneback_flow_3d(config, zarr_img, output_zarr):
+    """Volumetric Farneback flow. 3D data only -- there is no 2D analogue.
+
+    2D datasets use compute_farneback_flow_2d alone; opticalflow.py refuses to
+    ask for a 3D flow on a 2D movie rather than reaching here.
+    """
     farneback_3d = _import_farneback_3d()
 
+    assert zarr_img.ndim == 4, (
+        f"3D optical flow needs a (t, z, y, x) movie, got shape {zarr_img.shape}"
+    )
     T, Z, Y, X = zarr_img.shape
 
     # # Check if Z dim is large enough for 3D optical flow

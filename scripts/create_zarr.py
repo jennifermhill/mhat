@@ -22,15 +22,19 @@ def main(zarr_path, output_dir, datasets):
 
     axes = get_axes_from_ome_xml(zarr_path)
 
-    T, _, Z, Y, X = img.shape
+    # (t, c, *spatial): (t, c, z, y, x) for a 3D movie, (t, c, y, x) for a 2D one.
+    T = img.shape[0]
+    spatial_shape = img.shape[2:]
+    # One chunk per displayed plane: singleton along everything but the last two.
+    chunks = (1, 1) + (1,) * (len(spatial_shape) - 2) + spatial_shape[-2:]
     for dataset in datasets.keys():
         dataset_zarr_path = os.path.join(output_dir, f"{dataset}.zarr")
         os.makedirs(dataset_zarr_path, exist_ok=True)
         print(f"Creating Zarr dataset for {dataset} at {dataset_zarr_path}")
         dataset_zarr = zarr.open(dataset_zarr_path, 
                                  mode="a", 
-                                 shape=(T, 1, Z, Y, X), 
-                                 chunks=(1, 1, 1, Y, X),
+                                 shape=(T, 1, *spatial_shape), 
+                                 chunks=chunks,
                                  dtype=np.uint16,
                                  )
         dataset_zarr.attrs["axes"] = axes

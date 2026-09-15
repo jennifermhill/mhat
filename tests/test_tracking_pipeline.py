@@ -46,6 +46,7 @@ def build_candidate_graph(fragments, raw, merge_history, config, scale):
             max_cost=config["max_merge_cost"],
             raw_img=raw[timepoint],
             size_threshold=config["size_threshold"],
+            timepoint=timepoint,
             scale=scale,
         )
         if all_cand_graph is None:
@@ -81,8 +82,58 @@ def build_candidate_graph(fragments, raw, merge_history, config, scale):
     return track_graph, all_exclusion_sets
 
 
+def test_segmentation_run_without_agglomeration(
+    synthetic_fragments, synthetic_raw, tracking_config, scale, tmp_path
+):
+    """A movie with no merge history at all goes through the normal path.
+
+    This is the segmentation-run-with-merges-skipped case, and also what waterz
+    emits for any frame whose objects never touch (cellpose produces no merges
+    on 30 of the 48 Fluo-C2DL-MSC frames): `merge_history.csv` is header-only,
+    so every frame's slice is empty. run_tracking.py does not branch for it --
+    the helpers keep the array 2-D, normalize_costs is a no-op, and
+    nodes_from_fragments falls back to the leaf fragments per frame. This used
+    to raise "'NoneType' object has no attribute 'nodes'" because the graph was
+    only ever seeded from inside the merge loop.
+    """
+    merge_csv = tmp_path / "merge_history.csv"
+    merge_csv.write_text("a,b,c,cost,timepoint\n")
+
+    merge_history = create_multihypo_graph.load_merge_history(merge_csv)
+    assert merge_history.shape == (0, 5), "column indexing needs the second axis"
+
+    # The three whole-movie steps run_tracking.py applies before the frame loop.
+    merge_history = merge_history[merge_history[:, 4] < synthetic_fragments.shape[0]]
+    merge_history = create_multihypo_graph.normalize_costs(merge_history)
+    merge_history = create_multihypo_graph.renumber_merge_history(
+        merge_history, int(np.max(synthetic_fragments))
+    )
+
+    for timepoint in range(synthetic_fragments.shape[0]):
+        cand_graph, exclusion_sets = create_multihypo_graph.nodes_from_fragments(
+            synthetic_fragments[timepoint],
+            merge_history[merge_history[:, 4] == timepoint],
+            min_cost=tracking_config["min_merge_cost"],
+            max_cost=tracking_config["max_merge_cost"],
+            raw_img=synthetic_raw[timepoint],
+            size_threshold=tracking_config["size_threshold"],
+            timepoint=timepoint,
+            scale=scale,
+        )
+        assert cand_graph.number_of_nodes() > 0
+        assert exclusion_sets == []
+        for _, data in cand_graph.nodes(data=True):
+            assert data["time"] == timepoint
+            # The attributes the ILP's cohesion/adhesion costs read must exist
+            # even here, or solving raises KeyError.
+            assert data["cohesion"] == 1.0
+            assert data["adhesion"] == 1.0
+            assert data["num_leaves"] == 1
+
+
 def test_candidate_graph_structure(
-    synthetic_fragments, synthetic_raw, synthetic_merge_history, tracking_config, scale
+    synthetic_fragments, synthetic_raw, synthetic_merge_history, tracking_config,
+    scale, ndim,
 ):
     """The graph carries the multi-hypothesis structure the ILP needs."""
     track_graph, exclusion_sets = build_candidate_graph(
@@ -96,12 +147,18 @@ def test_candidate_graph_structure(
     )
 
     # Every real node must carry the attributes the costs read, or the ILP would
-    # silently price them as missing.
+    # silently price them as missing. The per-axis position scalars follow the
+    # data's rank: a 2D node has y and x and must NOT have a z, since a phantom
+    # z is exactly what makes a 2D geff declare an axis with no backing property.
+    position_keys = ("z", "y", "x") if ndim == 3 else ("y", "x")
     for node in real_nodes:
         attrs = track_graph.nodes[node]
-        for key in ("time", "z", "y", "x", "centroid", "area", "intensity",
-                    "cohesion", "adhesion", "num_leaves"):
+        for key in ("time", "centroid", "area", "intensity",
+                    "cohesion", "adhesion", "num_leaves", *position_keys):
             assert key in attrs, f"node {node} missing {key!r}"
+        assert len(attrs["centroid"]) == ndim
+        if ndim == 2:
+            assert "z" not in attrs, f"2D node {node} has a phantom z"
 
     # Agglomeration must produce parent/child conflicts, otherwise the
     # ExclusiveNodes constraint below is vacuous and the test proves nothing.

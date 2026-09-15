@@ -17,24 +17,11 @@ import geff
 from geff.core_io import write_arrays
 from geff_spec import Axis, GeffMetadata, RelatedObject
 
+from mhat.utils import seg_chunks
+
 # Node ids run to one per object per frame, which outgrows the uint16 the CTC
 # marker tifs use; uint32 also matches the dtype run_tracking writes.
 SEG_DTYPE = np.uint32
-
-
-def _seg_chunks(spatial_shape, tile=512):
-    """Chunk shape for the exported segmentation: one tile of one slice.
-
-    Matches how ``run_tracking.py`` chunks ``pred_seg.zarr``. Chunking a whole
-    frame together would mean reading the entire frame (hundreds of MB on a
-    large 3D dataset) to display a single slice, which defeats viewing the
-    segmentation lazily.
-    """
-    n = len(spatial_shape)
-    return (1, *(
-        min(tile, size) if i >= n - 2 else 1
-        for i, size in enumerate(spatial_shape)
-    ))
 
 
 def from_ctc_to_geff(
@@ -114,10 +101,14 @@ def from_ctc_to_geff(
     for t, filepath in enumerate(sorted_files):
         frame = tifffile.imread(filepath)
 
-        if segmentation_store is not None and segm_array is None:
-            if frame.ndim == 3:
-                node_props["z"] = []
+        # A 3D frame needs somewhere to put its z centroids. This is keyed off
+        # the frame's rank alone: it used to sit inside the segmentation-store
+        # branch below, so converting 3D markers without exporting a
+        # segmentation raised a KeyError from the centroid loop.
+        if t == 0 and frame.ndim == 3:
+            node_props["z"] = []
 
+        if segmentation_store is not None and segm_array is None:
             # created in first iteration
             if tczyx:
                 n_1_padding = (1,) * (5 - frame.ndim - 1)  # forcing data to be (T, C, Z, Y, X)
@@ -133,7 +124,7 @@ def from_ctc_to_geff(
                 segm_array = zarr.open_array(
                     segmentation_store,
                     shape=(len(sorted_files), *n_1_padding, *frame.shape),
-                    chunks=_seg_chunks((*n_1_padding, *frame.shape)),
+                    chunks=seg_chunks((*n_1_padding, *frame.shape)),
                     dtype=SEG_DTYPE,
                     mode="w" if overwrite else "w-",
                     zarr_format=zarr_format,

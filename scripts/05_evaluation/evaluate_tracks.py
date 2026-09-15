@@ -16,6 +16,37 @@ from mhat.evaluation.linajea_metrics import (
     evaluate as evaluate_linajea,
     load_geff_tracks,
 )
+from mhat.utils import spatial_axis_names
+
+
+def report_axis_consistency(gt_tracks_path, pred_axes):
+    """Report -- and only report -- a GT/prediction axis-name disagreement.
+
+    An existing ``correct_tracks.zarr`` is reused as-is, so one converted under
+    different axes than the current prediction would have its coordinates
+    matched against the wrong axes. Worth saying early and in context.
+
+    This deliberately does not act. For the CTC datasets the GT store can be
+    rebuilt from ``01_GT``, but for NC281 and primary_nk_cells the
+    ``correct_tracks.zarr`` store is the ONLY copy of those annotations and
+    cannot be regenerated -- so a disagreement is something to repair in place,
+    never something to resolve by deleting the store.
+    """
+    if pred_axes is None:
+        return
+    gt_axes = geff.GeffMetadata.read(gt_tracks_path).axes
+    if gt_axes is None:
+        return
+    gt_names = spatial_axis_names(gt_axes)
+    pred_names = spatial_axis_names(pred_axes)
+    if gt_names != pred_names:
+        print(
+            f"WARNING: ground truth at {gt_tracks_path} has spatial axes "
+            f"{gt_names} but the prediction has {pred_names}. Matching them "
+            f"would compare different coordinates. Repair the ground truth "
+            f"store in place -- do NOT delete it, it may be the only copy of "
+            f"those annotations."
+        )
 
 
 # linajea is not a traccuracy metric, so it is dispatched separately below and
@@ -96,6 +127,9 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
                 segmentation_store=gt_data_dir / "correct_seg.zarr",
                 axes=axes,
             )
+
+    if gt_tracks_path.is_dir():
+        report_axis_consistency(gt_tracks_path, pred_metadata.axes)
 
     requested_metrics = list(config.get("metrics", []))
     run_linajea = LINAJEA_METRIC in requested_metrics

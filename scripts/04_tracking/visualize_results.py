@@ -9,7 +9,10 @@ from typing import Any
 from funtracks.import_export import import_from_geff
 from motile_tracker.application_menus import MainApp
 from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
-from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids_lazy
+from mhat.evaluation.evaluate_tracking import (
+    read_name_map_and_scale,
+    remap_seg_to_track_ids_lazy,
+)
 from mhat.utils import get_axes_metadata
 
 
@@ -69,11 +72,13 @@ def main(config, ground_truth: bool = False, compute: bool = False):
         
         # Load tracks using import_from_geff
         try:
+            # Built from the store's own axes rather than hardcoded to 3D --
+            # funtracks infers dimensionality from this map, so a 3D map on a
+            # 2D file silently declares an axis that is not there. See
+            # read_name_map_and_scale for the whole story.
+            name_map, _ = read_name_map_and_scale(track_data_zarr_path)
             node_name_map = {
-                "time": "time",
-                "x": "x", 
-                "y": "y",
-                "z": "z",
+                **name_map,
                 "id": "track_id",    # track_id stays constant across frames
             }
 

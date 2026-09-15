@@ -1,9 +1,11 @@
-"""Convert a Cell Tracking Challenge image sequence (tXXX.tif) to the flat 5D
-(t, c, z, y, x) zarr used by the rest of the pipeline.
+"""Convert a Cell Tracking Challenge image sequence (tXXX.tif) to the flat
+(t, c, *spatial) zarr used by the rest of the pipeline.
 
-The CTC folders hold one TIFF per timepoint, each a (z, y, x) stack. This writes
-a single zarr array with a singleton channel axis and an "axes" attribute
-matching the other raw zarrs in data/ (see scripts/create_zarr.py).
+The CTC folders hold one TIFF per timepoint: a (z, y, x) stack for a 3D dataset
+or a (y, x) image for a 2D one. This writes a single zarr array with a singleton
+channel axis and an "axes" attribute matching the other raw zarrs in data/ (see
+scripts/create_zarr.py) -- (t, c, z, y, x) with four axes for 3D data, or
+(t, c, y, x) with three for 2D. The rank follows the TIFFs; nothing is padded.
 
 Voxel size is read from the TIFF resolution tags when available (CTC exports put
 z spacing in private tag 65001) and can be overridden on the command line.
@@ -62,13 +64,18 @@ def get_voxel_size_from_tiff(tiff_path):
 
 
 def build_axes(voxel_size, time_scale, time_unit):
-    z, y, x = voxel_size
+    """Axes metadata for a (t, c, *spatial) raw zarr.
+
+    One space axis per ``voxel_size`` entry, named from the tail of (z, y, x),
+    so a 2-tuple describes a 2D movie and a 3-tuple a 3D one.
+    """
+    names = ("z", "y", "x")[-len(voxel_size):]
     return [
         dict(name="time", type="time", unit=time_unit, scale=float(time_scale)),
         dict(name="channel", type="channel", scale=1.0),
-        dict(name="z", type="space", unit="micrometer", scale=float(z)),
-        dict(name="y", type="space", unit="micrometer", scale=float(y)),
-        dict(name="x", type="space", unit="micrometer", scale=float(x)),
+    ] + [
+        dict(name=name, type="space", unit="micrometer", scale=float(size))
+        for name, size in zip(names, voxel_size, strict=True)
     ]
 
 
@@ -85,9 +92,10 @@ def main():
     parser.add_argument(
         "--voxel-size",
         type=float,
-        nargs=3,
-        metavar=("Z", "Y", "X"),
-        help="Voxel size in micrometers, overriding the TIFF resolution tags",
+        nargs="+",
+        metavar="SIZE",
+        help="Voxel size in micrometers, overriding the TIFF resolution tags. "
+             "Z Y X for a 3D sequence, Y X for a 2D one",
     )
     parser.add_argument(
         "--dtype", default=None, help="Output dtype (default: the TIFF dtype)"
@@ -106,30 +114,44 @@ def main():
         series = tif.series[0]
         shape = tuple(series.shape)
         src_dtype = series.dtype
-    if len(shape) != 3:
-        raise SystemExit(f"Expected (z, y, x) TIFFs, got shape {shape}")
+    if len(shape) not in (2, 3):
+        raise SystemExit(
+            f"Expected (z, y, x) or (y, x) TIFFs, got shape {shape}"
+        )
 
     T = len(tiff_paths)
-    Z, Y, X = shape
+    ndim = len(shape)
+    axis_labels = ("z", "y", "x")[-ndim:]
     dtype = np.dtype(args.dtype) if args.dtype else src_dtype
 
-    voxel_size = args.voxel_size or get_voxel_size_from_tiff(tiff_paths[0])
+    # The TIFF tags are read as (z, y, x); a 2D sequence uses the tail of that.
+    voxel_size = args.voxel_size or get_voxel_size_from_tiff(tiff_paths[0])[-ndim:]
+    if len(voxel_size) != ndim:
+        raise SystemExit(
+            f"--voxel-size takes {ndim} values for these {ndim}D TIFFs "
+            f"({' '.join(n.upper() for n in axis_labels)}), got {len(voxel_size)}"
+        )
     if any(v is None for v in voxel_size):
         raise SystemExit(
             f"Could not read voxel size from {tiff_paths[0].name} "
-            f"(got z, y, x = {voxel_size}); pass --voxel-size Z Y X"
+            f"(got {', '.join(axis_labels)} = {voxel_size}); pass --voxel-size "
+            f"{' '.join(n.upper() for n in axis_labels)}"
         )
     axes = build_axes(voxel_size, args.time_scale, args.time_unit)
 
-    print(f"Shape (t, c, z, y, x): {(T, 1, Z, Y, X)}, dtype: {dtype}")
-    print(f"Voxel size (z, y, x) um: {tuple(float(v) for v in voxel_size)}")
+    # One chunk per displayed plane: singleton along everything but the last two.
+    chunks = (1, 1) + (1,) * (ndim - 2) + shape[-2:]
+
+    print(f"Shape (t, c, {', '.join(axis_labels)}): {(T, 1, *shape)}, dtype: {dtype}")
+    print(f"Voxel size ({', '.join(axis_labels)}) um: "
+          f"{tuple(float(v) for v in voxel_size)}")
 
     args.output_zarr.parent.mkdir(parents=True, exist_ok=True)
     out = zarr.open(
         str(args.output_zarr),
         mode="w" if args.overwrite else "a",
-        shape=(T, 1, Z, Y, X),
-        chunks=(1, 1, 1, Y, X),
+        shape=(T, 1, *shape),
+        chunks=chunks,
         dtype=dtype,
     )
     out.attrs["axes"] = axes

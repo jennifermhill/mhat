@@ -28,14 +28,19 @@ from tqdm import tqdm
 
 
 def build_axes(voxel_size, time_scale, time_unit):
-    z, y, x = voxel_size
+    """Axes metadata for a (t, c, *spatial) raw zarr.
+
+    One space axis per ``voxel_size`` entry, named from the tail of (z, y, x),
+    so a 2-tuple describes a 2D movie and a 3-tuple a 3D one.
+    """
+    names = ("z", "y", "x")[-len(voxel_size):]
     return [
         {"name": "time", "type": "time", "unit": time_unit,
          "scale": float(time_scale)},
         {"name": "channel", "type": "channel", "scale": 1.0},
-        {"name": "z", "type": "space", "unit": "micrometer", "scale": float(z)},
-        {"name": "y", "type": "space", "unit": "micrometer", "scale": float(y)},
-        {"name": "x", "type": "space", "unit": "micrometer", "scale": float(x)},
+    ] + [
+        {"name": name, "type": "space", "unit": "micrometer", "scale": float(size)}
+        for name, size in zip(names, voxel_size, strict=True)
     ]
 
 
@@ -47,8 +52,8 @@ def main():
     parser.add_argument("--t-min", type=int, required=True, help="first frame (incl)")
     parser.add_argument("--t-max", type=int, required=True, help="last frame (incl)")
     parser.add_argument(
-        "--voxel-size", type=float, nargs=3, metavar=("Z", "Y", "X"), required=True,
-        help="Voxel size in micrometers",
+        "--voxel-size", type=float, nargs="+", metavar="SIZE", required=True,
+        help="Voxel size in micrometers: Z Y X for a 3D volume, Y X for a 2D one",
     )
     parser.add_argument("--time-scale", type=float, default=1.0)
     parser.add_argument("--time-unit", default="second")
@@ -60,8 +65,15 @@ def main():
     from zarr.n5 import N5Store
 
     src = zarr.open(store=N5Store(str(args.input_n5)), mode="r")[args.dataset]
-    if src.ndim != 4:
-        raise SystemExit(f"expected a 4D (t, z, y, x) dataset, got {src.shape}")
+    if src.ndim not in (3, 4):
+        raise SystemExit(
+            f"expected a (t, z, y, x) or (t, y, x) dataset, got {src.shape}"
+        )
+    if src.ndim - 1 != len(args.voxel_size):
+        raise SystemExit(
+            f"--voxel-size has {len(args.voxel_size)} values but the source is "
+            f"{src.ndim - 1}D: {src.shape}"
+        )
 
     n_t = src.shape[0]
     if not 0 <= args.t_min <= args.t_max < n_t:
@@ -71,15 +83,17 @@ def main():
         )
 
     T = args.t_max - args.t_min + 1
-    Z, Y, X = src.shape[1:]
+    spatial_shape = src.shape[1:]
+    # One chunk per displayed plane: singleton along everything but the last two.
+    chunks = (1, 1) + (1,) * (len(spatial_shape) - 2) + spatial_shape[-2:]
     print(f"source {src.shape} {src.dtype}, chunks {src.chunks}")
     print(f"cropping t {args.t_min}..{args.t_max} -> {T} frames, rebased to 0..{T-1}")
 
     out = zarr.open(
         str(args.output_zarr),
         mode="w" if args.overwrite else "w-",
-        shape=(T, 1, Z, Y, X),
-        chunks=(1, 1, 1, Y, X),
+        shape=(T, 1, *spatial_shape),
+        chunks=chunks,
         dtype=src.dtype,
         compressor=Blosc(cname="lz4", clevel=5, shuffle=Blosc.SHUFFLE),
     )
@@ -101,7 +115,7 @@ def main():
     nonzero = np.count_nonzero(out[0, 0])
     print(f"wrote {args.output_zarr}")
     print(f"  shape {out.shape} chunks {out.chunks} dtype {out.dtype}")
-    print(f"  frame 0 nonzero fraction {nonzero / (Z * Y * X):.3f}")
+    print(f"  frame 0 nonzero fraction {nonzero / int(np.prod(spatial_shape)):.3f}")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ import numpy as np
 import skimage
 from tqdm import trange
 
-from .utils import nodes_from_segmentation
+from .utils import nodes_from_segmentation, set_position_attrs
 
 
 def load_merge_history(merge_path: Path) -> np.ndarray:
@@ -32,7 +32,14 @@ def load_merge_history(merge_path: Path) -> np.ndarray:
             timepoint = int(row["timepoint"])
             merge_history.append([a, b, c, cost, timepoint])
 
-    merge_history = np.array(merge_history)
+    if len(merge_history) == 0:
+        # np.array([]) is 1-D, and every consumer indexes column-wise
+        # (merge_history[:, 4] == timepoint). A segmentation run with no
+        # agglomeration at all writes a header-only csv, so keep the second
+        # axis rather than making each caller special-case the shape.
+        merge_history = np.empty((0, 5))
+    else:
+        merge_history = np.array(merge_history)
     return merge_history
 
 
@@ -46,6 +53,9 @@ def normalize_costs(merge_history: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: The merge history with normalized costs.
     """
+    if len(merge_history) == 0:
+        # Nothing to normalize; np.min would raise on the empty slice.
+        return merge_history
     costs = merge_history[:, 3]
     min_cost = np.min(costs)
     max_cost = np.max(costs)
@@ -141,7 +151,8 @@ def nodes_from_fragments(
     z_flow_conf_threshold: float | None = None,
     z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
-    scale: list[float] = [1.0, 1.0, 1.0, 1.0],
+    timepoint: int | None = None,
+    scale: list[float] | None = None,
 ) -> tuple[nx.DiGraph, list[tuple]]:
     """Compute the nodes of a candidate graph from a set of fragments and a
     merge history.
@@ -173,14 +184,22 @@ def nodes_from_fragments(
             of the fragments. Defaults to None.
         size_threshold (int, optional): Exclude candidates with area less than
             size_threshold pixels from the graph. Defaults to None.
-        scale (list[float], optional): The scaling factors for each axis of
-            the fragments array. Defaults to [1.0, 1.0, 1.0, 1.0].
+        timepoint (int, optional): The timepoint these fragments come from.
+            Normally read from the merge history, which carries it on every
+            row; required only when this frame has no merges at all (see the
+            note in the body).
+        scale (list[float], optional): The scaling factors for the time axis
+            and each spatial axis of the fragments array, so it is one longer
+            than the frame's rank. Defaults to unit scale.
 
     Returns:
         tuple[nx.DiGraph, list[tuple, ...]]: returns a networkx graph with all
         the nodes added, and a list of exclusion sets for nodes in the graph
         (nodes that cannot be selected together).
     """
+    if scale is None:
+        scale = [1.0] * (fragments.ndim + 1)
+
     # create a dictionary from node_ids to last merge costs used to create the node
     last_costs = {}
     # create a dictionary from node_ids to next merge costs used to merge the node
@@ -244,18 +263,58 @@ def nodes_from_fragments(
                 )
                 # shift the cropped centroid back into whole-frame coordinates
                 for _, data in node_graph.nodes(data=True):
-                    data["centroid"] = tuple(
+                    set_position_attrs(data, [
                         p + s.start * sc
-                        for p, s, sc in zip(data["centroid"], sl, scale[1:])
-                    )
-                    data["z"], data["y"], data["x"] = data["centroid"]
+                        for p, s, sc in zip(
+                            data["centroid"], sl, scale[1:], strict=True
+                        )
+                    ])
                 graph.add_nodes_from(node_graph.nodes(data=True))
 
             # add conflicting segs to conflict sets
             conflict_sets = compute_conflicts(conflict_sets, a, b, c)
 
+    if graph is None:
+        # No merge in this frame reached min_cost, so the loop above never
+        # seeded the graph and everything downstream would fail with
+        # "'NoneType' object has no attribute 'nodes'". That is not an error
+        # case. It covers both of the ways a frame can arrive without merge
+        # hypotheses:
+        #   - the segmentation was run with agglomeration skipped entirely, so
+        #     the merge history is empty for every frame;
+        #   - waterz emitted no merges for this frame because its objects do
+        #     not touch, which is routine for a segmenter that returns separate
+        #     masks (cellpose produces none on 30 of the 48 Fluo-C2DL-MSC
+        #     frames).
+        # Either way the leaf fragments are still perfectly good candidates --
+        # they simply have no merge hypotheses above them, and so no exclusion
+        # sets either, and the cohesion/adhesion defaults below give them the
+        # 1.0 that "never merged, never merged away" means.
+        #
+        # Seeded after the loop rather than before it so that any merges that
+        # fell below min_cost have already been applied to `fragments`: those
+        # are pre-merged by design, not candidates. With an empty history the
+        # loop is a no-op, so this is the frame exactly as segmented.
+        if timepoint is None:
+            if len(merge_history) == 0:
+                raise ValueError(
+                    "This frame has no merges at all, so its timepoint cannot "
+                    "be read off the merge history -- pass timepoint= "
+                    "explicitly."
+                )
+            timepoint = int(tp)
+        graph = nodes_from_segmentation(
+            fragments, raw_img=raw_img,
+            flow_3d=flow_3d, flow_2d=flow_2d,
+            confidence_3d=confidence_3d,
+            z_flow_conf_threshold=z_flow_conf_threshold,
+            z_flow_min_pass_pixels=z_flow_min_pass_pixels,
+            size_threshold=size_threshold,
+            tp=timepoint, scale=scale,
+        )
+
     for node in graph.nodes():
-        cohesion = 1 -last_costs.get(node, 0.0)
+        cohesion = 1 - last_costs.get(node, 0.0)
         adhesion = next_costs.get(node, 1.0)
         graph.nodes[node]["cohesion"] = cohesion
         graph.nodes[node]["adhesion"] = adhesion

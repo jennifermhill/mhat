@@ -1,6 +1,6 @@
 """Generate and submit a coordinate-wise parameter sweep to LSF.
 
-A sweep is described by a single spec TOML (see ``configs/sweeps/``). The spec
+A sweep is described by a single spec TOML (see ``scratch_configs/sweeps/``). The spec
 holds one ``[base]`` tracking config, one ``[eval]`` stub, optional
 ``[conditions.<name>]`` tables, and a list of ``[[runs]]``, each naming a
 ``label``, the ``condition`` it belongs to, and a small ``[runs.overrides]``
@@ -24,7 +24,11 @@ node-local scratch, so the compute nodes can read it.
 Usage, from the repo root on the cluster::
 
     conda run -n mhat-cluster python scripts/04_tracking/launch_sweep.py \\
-        configs/sweeps/mda231_01cells_stageA.toml [--dry-run] [--only LABEL ...]
+        scratch_configs/sweeps/mda231_01cells_stageA.toml [--dry-run] [--only LABEL ...] \
+        [--dep "ended(<job>) && ended(<job>)"]
+
+``--dep`` makes every tracking job wait on an LSF dependency expression, which is
+how a sweep chains onto segmentation jobs submitted just before it.
 
 Read back the results with ``scripts/05_evaluation/collect_sweep.py``.
 """
@@ -111,13 +115,16 @@ def validate_spec(spec, allow_protected=False):
     # Omitting `matcher` silently falls back to PointMatcher and produces wrong
     # (lower) CTC numbers with no error -- see the phantom-regression note in
     # CLAUDE.md. Require it explicitly.
-    if "matcher" not in eval_stub:
+    # The linajea metric does its own edge-level Hungarian matching and never
+    # touches a traccuracy matcher, so a linajea-only eval needs no `matcher`.
+    linajea_only = eval_stub.get("metrics") == ["linajea"]
+    if "matcher" not in eval_stub and not linajea_only:
         raise SystemExit("[eval] must set `matcher` explicitly (e.g. matcher = \"ctc\")")
-    if eval_stub["matcher"] == "ctc":
+    if eval_stub.get("matcher") == "ctc":
         for key in ("match_threshold", "threshold"):
             if key in eval_stub:
                 raise SystemExit(f"[eval] must not set {key!r} with the ctc matcher")
-    elif eval_stub["matcher"] == "point" and not (
+    elif eval_stub.get("matcher") == "point" and not (
         "match_threshold" in eval_stub or "threshold" in eval_stub
     ):
         raise SystemExit("[eval] matcher = \"point\" requires match_threshold")
@@ -274,6 +281,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="write configs and print bsub commands, do not submit")
     parser.add_argument("--only", nargs="+", default=None, help="subset of run labels to submit")
     parser.add_argument("--allow-protected", action="store_true", help="permit overriding structural keys")
+    parser.add_argument(
+        "--dep", default=None,
+        help="LSF dependency expression every tracking job waits on, e.g. "
+        "'ended(123) && ended(456)' to gate a sweep on segmentation jobs",
+    )
     args = parser.parse_args()
 
     spec = toml.load(args.spec)
@@ -314,7 +326,7 @@ def main():
             track_slots, track_walltime, queue,
             str(log_dir / f"track_{label}"),
             TRACK_INNER.format(threads=track_slots, env=env, cfg=record["track_config"]),
-            dry_run=args.dry_run,
+            dep_job=args.dep, raw_dep=True, dry_run=args.dry_run,
         )
         eval_job = bsub(
             f"{spec['sweep_id']}_evl_{label}",

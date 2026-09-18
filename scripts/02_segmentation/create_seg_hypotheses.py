@@ -13,7 +13,11 @@ from scipy.ndimage import label
 from skimage.segmentation import watershed
 from skimage.filters import gaussian
 
-from mhat.segmentation.agglomerate import agglomerate_frame
+from mhat.segmentation.agglomerate import (
+    WATERZ_CONVENTION,
+    agglomerate_frame,
+    check_waterz_neighborhood,
+)
 from mhat.segmentation.threshold_labeling import threshold_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
@@ -176,10 +180,9 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
 def get_segmentation(output_root, thresholds, outfile, waterz_params, neighborhood=None):
     """Agglomerate the fragments frame by frame and record the merge history.
 
-    ``neighborhood`` is only needed for 2D data, where the frame has to be
-    padded to the single-slice volume waterz insists on and each affinity
-    channel therefore has to be put in the slot for its own axis. It falls back
-    to the neighborhood recorded on the affinities array by
+    The affinities are handed to waterz as stored, so ``neighborhood`` must be
+    waterz's own channel order (``agglomerate_frame`` checks it). It falls
+    back to the neighborhood recorded on the affinities array by
     ``generate_fluorescent_affinities``.
     """
     affinities = output_root["affinities"][:].astype(np.float32)
@@ -197,6 +200,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params, neighborho
         chunks=seg_chunks(spatial_shape), dtype=np.uint32, overwrite=True
     )
     output_root['segmentations'].attrs["axes"] = axes
+    output_root['segmentations'].attrs["waterz_convention"] = WATERZ_CONVENTION
 
     # Process each timepoint and channel separately
     all_merge_history = []
@@ -260,10 +264,17 @@ if __name__ == "__main__":
     print(f"Loading data from {data_dir}")
     assert data_dir.is_dir()
 
+    # Fail on a pre-2026-09-17 (x-first) neighborhood before any work is done.
+    ndim = zarr.open(data_dir, "r").ndim - 2  # raw is (t, c, *spatial)
+    check_waterz_neighborhood(config["affinity_params"]["neighborhood"], ndim)
+
     exp_uid = config.get("exp_uid")
     if not exp_uid:
         exp_uid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         config["exp_uid"] = exp_uid
+    # Segmentations from before 2026-09-17 fed waterz the affinity channels in
+    # the wrong order and one voxel off; this key marks a run as post-fix.
+    config["waterz_convention"] = WATERZ_CONVENTION
 
     output_dir = output_base_dir / experiment / dataset / exp_uid
     output_dir.mkdir(parents=True, exist_ok=True)

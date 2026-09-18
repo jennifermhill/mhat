@@ -13,9 +13,9 @@ numbers rather than an error if it is reversed:
     neighborhood has to mean what a per-pixel definition says it means;
   * the CTC evaluation boundary compares a (T, Y, X) prediction against 2D
     ground truth and derives the geff axes from the prediction;
-  * waterz is strictly 3D, and its channel order (z, y, x) is the reverse of
-    the neighborhood order the configs use, so the padding that lifts a 2D
-    frame into a single slice has to route each channel to the right slot.
+  * waterz is strictly 3D, so the padding that lifts a 2D frame into a single
+    slice has to put the (y, x) channels in waterz's y and x slots and leave
+    the z slot alone.
 """
 
 from __future__ import annotations
@@ -39,13 +39,15 @@ from mhat.segmentation.affinities import (
 )
 from mhat.segmentation.agglomerate import (
     WATERZ_AXIS_CHANNEL,
+    WATERZ_NEIGHBORHOOD,
     agglomerate_frame,
     pad_2d_for_waterz,
 )
 from mhat.tracking.utils import flow_to_position_order
 
-# The 2D neighborhood a 2D seg config ships: channel 0 steps in x, channel 1 in y.
-NHOOD_2D = [[0, 1], [1, 0]]
+# The 2D neighborhood a 2D seg config ships: channel 0 steps in y, channel 1 in
+# x, waterz's order.
+NHOOD_2D = WATERZ_NEIGHBORHOOD[2]
 
 # Distinct values throughout so a swapped pair cannot coincidentally pass.
 VX, VY, VZ = 2.0, 3.0, 5.0
@@ -69,7 +71,11 @@ def test_flow_to_position_order(vec, scale, offset, expected):
 
 
 def _brute_force(frame, nhood, fn):
-    """Reference implementation: visit every pixel and its offset partner."""
+    """Reference implementation: visit every pixel and its offset partner.
+
+    The value is written at the *partner*, which is where waterz reads the
+    edge between a voxel and the previous one along the offset's axis.
+    """
     nhood = np.asarray(nhood)
     out = np.zeros((len(nhood), *frame.shape), dtype=np.float64)
     for e, offset in enumerate(nhood):
@@ -79,7 +85,7 @@ def _brute_force(frame, nhood, fn):
                 p < 0 or p >= s for p, s in zip(partner, frame.shape, strict=True)
             ):
                 continue
-            out[(e, *index)] = fn(frame[index], frame[partner])
+            out[(e, *partner)] = fn(frame[index], frame[partner])
     return out
 
 
@@ -182,37 +188,47 @@ def test_ctc_2d_evaluation_boundary(tmp_path):
     assert compute_ctc_seg(seg_dir, pred_seg_path) == pytest.approx(0.5)
 
 
-def test_waterz_2d_padding_and_squeeze():
-    """A 2D frame goes into waterz on the right channels and comes back 2D.
-
-    waterz reads channel 0 as z, 1 as y, 2 as x (see the note in
-    agglomerate.py), the reverse of the config's neighborhood order, so a naive
-    "prepend a dummy slice" would put the x affinities in the z slot -- where,
-    with a single slice, they would be ignored entirely.
-    """
-    pytest.importorskip(
-        "waterz",
-        reason="waterz not installed — it is the optional [waterz] extra (Linux only)",
-    )
-    height, width = 16, 16
+def _four_fragments_2d(height=16, width=16):
     affs = np.empty((2, height, width), dtype=np.float32)
-    affs[0] = 0.25  # the x-offset channel
-    affs[1] = 0.75  # the y-offset channel
+    affs[0] = 0.75  # the y channel
+    affs[1] = 0.25  # the x channel
     fragments = np.zeros((height, width), dtype=np.uint32)
     fragments[:8, :8] = 1
     fragments[:8, 8:] = 2
     fragments[8:, :8] = 3
     fragments[8:, 8:] = 4
+    return affs, fragments
 
-    affs_3d, fragments_3d = pad_2d_for_waterz(affs, fragments, NHOOD_2D)
+
+def test_waterz_2d_padding():
+    """A 2D frame is lifted to one slice with (y, x) in waterz's y and x slots.
+
+    waterz reads channel 0 as z, 1 as y, 2 as x (see the note in
+    agglomerate.py), so a naive "append a dummy channel" would put the y
+    affinities in the z slot -- where, with a single slice, they would be
+    ignored entirely.
+    """
+    height, width = 16, 16
+    affs, fragments = _four_fragments_2d(height, width)
+
+    affs_3d, fragments_3d = pad_2d_for_waterz(affs, fragments)
     assert affs_3d.shape == (3, 1, height, width)
     assert fragments_3d.shape == (1, height, width)
-    assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["x"], 0] == 0.25)
+    assert fragments_3d.dtype == np.uint64
     assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["y"], 0] == 0.75)
+    assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["x"], 0] == 0.25)
     # With one slice nothing has a z neighbour, so the axial channel stays at
     # the minimum affinity rather than encouraging anything.
     assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["z"]] == 0.0)
 
+
+def test_waterz_2d_squeeze():
+    """The dummy slice never leaks out of ``agglomerate_frame``."""
+    pytest.importorskip(
+        "waterz",
+        reason="waterz not installed — it is the optional [waterz] extra (Linux only)",
+    )
+    affs, fragments = _four_fragments_2d()
     segmentation, merge_history = agglomerate_frame(
         affs=affs, fragments=fragments, thresholds=[0.5], neighborhood=NHOOD_2D
     )

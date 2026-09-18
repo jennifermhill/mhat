@@ -97,3 +97,34 @@ Verdict: falsified — neutral-to-slightly-harmful (-0.008 TE vs B1R5). Matches 
 - Retry B2R2 (drift_weight=150) with longer walltime (24h+), or accept drift_weight=100 as saturating
 - B2R1's seg config + add curvature (only untested edge attribute on this dataset)
 - size_threshold below 0 not possible; consider per-fragment filtering by another attribute
+
+## waterz-convention check on 02_nuclei_denoised_train (2026-09-17, cluster, direct on node)
+
+Does the waterz channel-order + one-voxel-shift fix (CLAUDE.md "2D Support > Known hazards" item 1;
+MDA231 refit 2026-09-15) change NC281-sparse-label? Arms built from the train seg `2026-07-02_10-32-29`
+exactly as for MDA231 (`configs/experiments/waterz_shift_nc281/` in the data tree; control merge
+history byte-identical to the reference; shift arm 192/196 merge pairs shared, Spearman 0.71, cost
+shift -0.030, final components identical 20/20). Current-best `s0_dw100_cw500` params unchanged.
+
+### WSN-R0-ctrl: control arm `otsu0702_chanorder_xzy`, params = s0_dw100_cw500
+exp_uid: wsn_ctrl_R0
+Hypothesis: "Cluster stack (mhat-cluster, Gurobi 13.0.3) reproduces the published Windows result"
+TE: 0.8093, TF_mean: 0.8319, Node_Recall: 0.9534, Edge_Recall: 0.9035, Purity: 0.9137
+Verdict: supported — identical to s0_dw100_cw500 in every metric and count (fp 73, fn 128, fn_edges 249)
+
+### WSN-R0-shift: fixed arm `otsu0702_chanorder_zyx_shift`, params = s0_dw100_cw500
+exp_uid: wsn_shift_R0
+Hypothesis: "As on MDA231, the fix moves cohesion/adhesion scores and shifts the metrics under untuned weights"
+TE: 0.8093, TF_mean: 0.8319, Node_Recall: 0.9530, Edge_Recall: 0.9031, Purity: 0.9133
+Verdict: falsified — one node and one edge differ (fn 129, fn_edges 250); TE/TF unchanged, sel 0.8615 -> 0.8613.
+Cohesion/adhesion are near-inert here (cost std ~30-50 vs drift ~800), and the fix touches only those
+two attributes, so there is nothing for a refit to recover. Not worth a refit unless cohesion/adhesion
+are first made active.
+
+### WSN1: paired cohesion/adhesion/drift due-diligence sweep on both waterz arms (2026-09-17, 30 runs, direct on node)
+exp_uids: wsn1_<cond>_<ctrl|shift> (sweep dir `configs/experiments/waterz_shift_nc281/sweep1/` in the data tree, results_with_baseline.csv)
+Hypothesis: "If the fixed cohesion/adhesion scores carry signal, some stronger node weight will separate the fixed arm from the control"
+Grid: cohesion_w −2000/−5000/−10000/+2000, adhesion_w −250/−500/−750/−1000/−2000/−4000 (constants hold the cost mean fixed), drift_w 50/200/300 at c −2000, drift_c −1000/−4000 at w 100.
+Best fixed arm: adh_m500_shift TE 0.8109, TF 0.8332, Purity 0.9124, sel 0.8616 (vs control baseline 0.8093 / 0.8319 / 0.9137 / 0.8615); adh −250 = baseline, adh −750 worse on both arms.
+Negative cohesion saturates at −2000 (identical solutions through −10000, sel −0.0008); adhesion monotonically harmful past −500; drift bracketed at 100/−2000.
+Verdict: falsified — the fixed arm never separates from the control by more than one node/one edge except in conditions that damage both arms. Current best stays s0_dw100_cw500; no refit warranted on this dataset.

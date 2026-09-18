@@ -81,7 +81,7 @@ numbers exactly: **3,955 divisions, 231,752 nodes, 222,949 edges, 8,803 starts,
 
 ## Batch 1 (2026-08-27) — graph structure
 
-Sweep `dro1`, spec `configs/sweeps/dro_01nuclei_batch1.toml`, submitted with
+Sweep `dro1`, spec `scratch_configs/sweeps/dro_01nuclei_batch1.toml`, submitted with
 `--allow-protected` (`max_children` and `divisions` are both on `PROTECTED_KEYS`).
 Each run builds and caches its own graph, then solves at baseline costs, so every run
 is both a data point and a reusable cache for the Phase 2 cost sweeps.
@@ -231,7 +231,7 @@ which nodes were selected.
 
 ## Batch 2 (2026-08-28) — cost sweeps on the cached mc=8 graph
 
-Sweep `dro2`, spec `configs/sweeps/dro_01nuclei_batch2.toml`. `max_children = 8` and
+Sweep `dro2`, spec `scratch_configs/sweeps/dro_01nuclei_batch2.toml`. `max_children = 8` and
 `divisions = false` sit in `[base]`, so all 7 runs hit the one cached graph
 (`5bcbe28db3b19a19.pkl`) and no run varies a protected key. Tracking walltime dropped
 24:00 -> 4:00 since the ~9.5 h build is skipped.
@@ -414,7 +414,7 @@ is already tested and already the winner. **Do not extend this axis.**
 
 ## Batch 5 (2026-09-08) — node/edge cost rebalance
 
-Sweep `dro5_costbal`, spec `configs/sweeps/dro_01nuclei_batch5_costbal.toml`, on the
+Sweep `dro5_costbal`, spec `scratch_configs/sweeps/dro_01nuclei_batch5_costbal.toml`, on the
 cached mc=8 nodiv graph (`5bcbe28db3b19a19.pkl`). Launched from a separate session
 while the agent session owned batches 3-4; hence the distinct `sweep_id` and spec
 name. Track jobs 154088595-154088617 (odd), evals 154088596-154088618 (even).
@@ -596,3 +596,170 @@ Batch 5 was run from a separate session while LSF job 153758047 (the agent sessi
 that owned batches 0-4) was idle; that job was killed 2026-09-09 after its results
 were collected and merged here. Its raw terminal log is retained at
 `logs/dro_opt/agent_153758047.out`.
+
+---
+
+## 03_nuclei_div — segmentation series under the linajea metric (2026-09-11 to 2026-09-16)
+
+### Setup
+
+**Dataset**: Fluo-N3DL-DRO / `03_nuclei_div`, the t 261-310 crop of the Amat 120828
+movie (rebased to frames 0-49, full volume, no spatial crop), chosen because the CTC
+`01`/`02` windows contain zero divisions while this crop has 120. Data
+`data/Fluo-N3DL-DRO/03_nuclei_div.zarr`; flow `2026-09-10_16-36-58` (shared by every
+run below).
+
+**GT**: linajea figshare GT converted by `scripts/05_evaluation/linajea_to_geff.py`,
+split into `gt_side_1` (64 divisions, tuning side) and `gt_side_2` (56 divisions,
+held out) under `experiments/tracking/Fluo-N3DL-DRO/03_nuclei_div/`. **Tune on side 1
+only.** The runs below did not tune on either side.
+
+**Eval**: `metrics = ["linajea"]`, `linajea_gt = ["gt_side_1", "gt_side_2"]`,
+`linajea_match_threshold = 6.09` (um; = 15 linajea world units), `linajea_sparse =
+true`, diagnostics disabled. No traccuracy matcher is involved.
+
+**Metric semantics.** `src/mhat/evaluation/linajea_metrics.py`, validated to 0.5%
+against Malin-Mayor et al. 2023. Edge-level Hungarian matching; every count is
+divided by `gt_edges` (5751 side 1, 5488 side 2); **`sum = FN + IS + FP-D + FN-D`,
+lower is better**; FP edges are excluded, which is what makes the metric usable on
+sparse GT. A predicted division is judged only when anchored to annotated GT, so
+`rec_divisions` (total predicted divisions) is a diagnostic, not a penalty. Division
+recall = `tp_divisions / gt_divisions`.
+
+**Baselines on this crop** (`linajea_baselines_t261-310.json`, sum / division recall):
+
+| method | side 1 | side 2 |
+|---|---|---|
+| linajea | 0.0570, 16/64 | 0.0833, 10/56 |
+| TGMM | 0.2420, 6/64 | 0.3198, 2/56 |
+
+The crop is harder than the full movie (linajea 0.046 / 0.054 there).
+
+**Tracking config for every run** = `dro1_g_mc5_div` from 01_nuclei, unchanged:
+`drift 350/-2000`, `cohesion -500/450`, `adhesion -100/50`, `appear = disappear =
+50`, `division_weight = 0`, `max_children = 5`, `divisions = true`, `merges = false`,
+`max_edge_distance = 15`, `size_threshold = 20`, all other costs 0. So the series is a
+**one-variable comparison on the segmentation**; nothing about the ILP has been
+tuned for divisions yet.
+
+Not submitted through `launch_sweep.py` — hand-written configs in
+`scripts/_scratch/dro_03div_full/` (cp3/cp4) and equivalent per-run configs for the
+first two; logs under `logs/dro_03div/`, `logs/dro_03div_aniso5fs1/`,
+`logs/dro_03div_full/`. `logs/dro_03div_aniso5fs1/` also holds a set of diagnostic
+jobs on the `aniso5_fs1` result (candidate recall, detectability, nucleus size,
+off-axis; 2026-09-14) whose conclusions are **not** written up here.
+
+### Runs
+
+All cellpose 3D, `merge_thresholds = [1.0]`, `smoothing = [1,1,1]`, 3D affinities.
+Seg jobs on `gpu_a100`, 12 slots, one GPU, ~8.3-8.5 h and ~113 GB each.
+
+| exp_uid | seg (`seg_result`) | cellpose deltas | seg job | trk job (eval job) | graph cache | build+solve | peak mem |
+|---|---|---|---|---|---|---|---|
+| `dro03div_mc5_div` | `2026-09-10_16-35-38` | isotropic, `cellprob 0` | not traced (`2026-09-10_16-10-39` sibling dir is an earlier attempt) | 154271867 | `4443c39e549434e4` (1.11 GB) | 4.0 h / 16 slots | 57 GB |
+| `dro03div_aniso5fs1_mc5_div` | `aniso5_fs1` | `anisotropy 5`, `flow3D_smooth 1`, `cellprob 0` | 154271931 | 154273254 (154273255) | `1980a812b9cc15dd` (0.97 GB) | 3.0 h / 8 slots | 45 GB |
+| `dro03div_cp3_mc5_div` | `aniso5fs1_cp3` | + `cellprob -3` | 154286573 | 154286574 (154286575) | `c5e96237cd6fdf75` (1.84 GB) | 21.3 h / 12 slots | 94 GB |
+| `dro03div_cp4_mc5_div` | `aniso5fs1_cp4` | + `cellprob -4` | 154286576 | 154286577 (154286578) | `de2afc7416e3f85e` (2.20 GB) | 28.4 h / 12 slots | 116 GB |
+
+The Gurobi solve itself is 15-55 min in every case (925 / 1014 / 3204 / 2597 s, one
+node, root LP); the rest is the candidate-graph build, which grows with object count.
+`seg_result` is in the cache key, so every run was a cache MISS.
+
+#### Results (linajea, both sides; `sum` is the number to compare)
+
+| run | side | sum | FN edges | IS | FP-D | FN-D | div recall | matched / GT edges | pred divisions |
+|---|---|---|---|---|---|---|---|---|---|
+| `dro03div_mc5_div` | 1 | 0.7460 | 0.7181 (4130) | 39 | 57 | 64 | 0/64 | 1621 / 5751 | 14240 |
+| | 2 | 0.8161 | 0.7815 (4289) | 66 | 69 | 55 | 1/56 | 1199 / 5488 | |
+| `dro03div_aniso5fs1_mc5_div` | 1 | 0.6743 | 0.6575 (3781) | 21 | 13 | 63 | 1/64 | 1970 / 5751 | 8039 |
+| | 2 | 0.7001 | 0.6835 (3751) | 13 | 24 | 54 | 2/56 | 1737 / 5488 | |
+| `dro03div_cp3_mc5_div` | 1 | 0.3669 | 0.3398 (1954) | 51 | 53 | 52 | 12/64 | 3797 / 5751 | 11545 |
+| | 2 | 0.3427 | 0.3087 (1694) | 63 | 72 | 52 | 4/56 | 3794 / 5488 | |
+| **`dro03div_cp4_mc5_div`** | 1 | **0.2841** | 0.2500 (1438) | 70 | 78 | 48 | **16/64** | 4313 / 5751 | 13069 |
+| | 2 | **0.2684** | 0.2278 (1250) | 84 | 91 | 48 | 8/56 | 4238 / 5488 | |
+| *linajea* | 1 | *0.0570* | *0.0261 (150)* | *117* | *13* | *48* | *16/64* | *5601 / 5751* | *1028* |
+| | 2 | *0.0833* | *0.0547 (300)* | *101* | *10* | *46* | *10/56* | *5188 / 5488* | *777* |
+| *TGMM* | 1 | *0.2420* | *0.2198 (1264)* | *40* | *30* | *58* | *6/64* | *4487 / 5751* | *3096* |
+| | 2 | *0.3198* | *0.3016 (1655)* | *25* | *21* | *54* | *2/56* | *3833 / 5488* | |
+
+FN-D breakdown (side 1 / side 2) as `no_connection + one_unconnected_child`:
+`mc5_div` 56+7 / 53+2; `aniso5fs1` 58+5 / 49+5; `cp3` 33+19 / 28+24; `cp4` 25+23 / 19+29.
+`unconnected_parent` is 0-1 everywhere.
+
+### S1: isotropic cellpose, cellprob 0 (`dro03div_mc5_div`, 2026-09-11)
+exp_uid: `dro03div_mc5_div`
+Hypothesis: "The 01_nuclei best config transfers; the crop's error is dominated by
+division handling, since `division_weight = 0` was never tested against real divisions."
+sum: 0.7460 / 0.8161, FN edges 71.8% / 78.2%, IS 39 / 66, div recall 0/64 / 1/56
+Verdict: **falsified — the error is upstream of tracking.** Seven of ten GT edges are
+missed outright and only 28% / 22% of GT edges are matched at all; division handling
+is invisible behind that. 14,240 predicted divisions against 120 in GT, none of them
+on annotated lineages. Worse than TGMM by 3x on the sum.
+
+### S2: anisotropy 5, flow3D_smooth 1 (`dro03div_aniso5fs1_mc5_div`, 2026-09-11)
+exp_uid: `dro03div_aniso5fs1_mc5_div`
+Hypothesis: "Telling cellpose the true z anisotropy (5x) and smoothing the 3D flows
+recovers objects the isotropic model splits or drops, and FN edges fall with them."
+sum: 0.6743 / 0.7001, FN edges 65.7% / 68.3%, IS 21 / 13, div recall 1/64 / 2/56
+Verdict: **supported but small.** -0.07 / -0.12 on the sum, all of it FN edges; IS and
+FP-D both roughly halve (cleaner objects, fewer spurious branches: predicted divisions
+14,240 -> 8,039). Still two thirds of GT edges missed, so detection, not linking, is
+the bottleneck. The diagnostic jobs on this result (2026-09-14,
+`logs/dro_03div_aniso5fs1/`) motivated the cellprob step below.
+
+### S3: cellprob_threshold -3 (`dro03div_cp3_mc5_div`, 2026-09-15)
+exp_uid: `dro03div_cp3_mc5_div`
+Hypothesis: "The missed GT nuclei are dim and fall below cellpose's default mask
+threshold; lowering `cellprob_threshold` recovers them and FN edges drop sharply."
+sum: 0.3669 / 0.3427, FN edges 34.0% / 30.9%, IS 51 / 63, div recall 12/64 / 4/56
+Verdict: **supported — the largest single step in the DRO campaign.** Sum halves on
+both sides; matched GT edges go 1970 -> 3797 (side 1). Division recall appears for the
+first time (12/64) *without any division cost*, and the FN-D failure mode shifts: at
+cp 0 nearly every missed division had no connected child at all, now 19 of 52 have one
+child linked and the other not. Cost: IS and FP-D climb back (more objects, more
+branching), but both stay ~0.01 normalized.
+
+### S4: cellprob_threshold -4 (`dro03div_cp4_mc5_div`, 2026-09-16) — **current best**
+exp_uid: `dro03div_cp4_mc5_div`
+Hypothesis: "Still monotonic: one more unit recovers more dim nuclei than it adds
+false objects."
+sum: 0.2841 / 0.2684, FN edges 25.0% / 22.8%, IS 70 / 84, div recall 16/64 / 8/56
+Verdict: **supported, and the optimum is not bracketed.** -0.08 / -0.07 on the sum;
+FN edges are still 88% of the remaining error. Side-1 division recall (16/64) now
+equals linajea's on this crop, side 2 (8/56) is two short, all with
+`division_weight = 0`. Now at TGMM level on side 1 and better than TGMM on side 2,
+still 4-5x linajea. IS (70/84) is under linajea's own (117/101), so identity switches
+are not yet the cost of going lower; FP-D (78/91) is where MHAT is worst relative to
+linajea (13/10) and is the first thing to watch as the threshold drops further.
+
+### Series summary
+
+- **`cellprob_threshold` is the lever.** 0 -> -3 -> -4 gives sum 0.674 -> 0.367 ->
+  0.284 (side 1) and 0.700 -> 0.343 -> 0.268 (side 2), monotonic, driven by FN edges.
+  The last step was still the size of the TGMM-linajea gap, so **-5 and -6 must be run
+  before anything else**; MDA231's best sits at -6 for the same reason.
+- **Anisotropy / flow smoothing alone was worth 0.07-0.12**; the threshold did the rest.
+- **The failure mode has moved from detection toward linking.** At cp 0, ~90% of
+  missed divisions had no child connected; at cp -4 it is about half, and IS / FP-D
+  are rising. Once the threshold is bracketed, `division_weight` (never tuned against
+  real divisions — see the 01_nuclei caveat) and the drift / appear terms become live
+  again on this dataset, on side 1 only.
+- **Both sides move together** (side 2 is now slightly *better* than side 1), so the
+  series is not overfitting the tuning side.
+- Nothing here changes the 01_nuclei conclusions: this crop has divisions, the CTC
+  window does not, and TE was never computed for these runs.
+
+### Next: sweep `dro03div`, cellprob -5 / -6 (written 2026-09-18, not yet submitted)
+
+Spec `scratch_configs/sweeps/dro_03div_cp56.toml`; seg configs and the submit script in
+`scratch_configs/experiments/dro_03div_cp56/` (`submit.sh` submits the two GPU seg jobs, then
+`launch_sweep.py --dep "ended(seg5) && ended(seg6)"`). Runs `cp5_mc5_div` /
+`cp6_mc5_div` -> exp_uids `dro03div_cp5_mc5_div` / `dro03div_cp6_mc5_div`, segs
+`aniso5fs1_cp5` / `aniso5fs1_cp6`, tracking and eval identical to S4. Tracking sized
+at 16 slots / 48 h (cp4 took 28 h and 116 GB on 12).
+
+Hypothesis: "sum keeps falling to at least -5; the curve flattens or turns by -6 as
+FP-D and IS overtake the FN-edge gain, bracketing the optimum at -4 / -5 / -6."
+
+`launch_sweep.py` was changed for this sweep: a linajea-only `[eval]` no longer
+requires `matcher`, and `--dep` gates every tracking job on an LSF dependency.

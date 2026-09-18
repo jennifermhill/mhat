@@ -51,6 +51,19 @@ TE=0.769, TF=0.779, NodeR=0.932, EdgeR=0.880. Same config as above with `drift_w
 | B2R4 | + `area_weight=2500, area_constant=-1500` | 0.931 | 0.876 | — | 0.779 | 0.787 | 0.920 | harmful (-0.018 TE vs B1R5) |
 | B2R5 | + `intensity_weight=12, intensity_constant=-800` | 0.932 | 0.883 | — | 0.789 | 0.801 | 0.935 | neutral / slightly worse |
 
+## waterz-convention fix: no effect on this dataset (2026-09-17)
+
+On 02_nuclei_denoised_train, the corrected waterz affinity convention (z,y,x channel order + one-voxel
+shift; arms in `configs/experiments/waterz_shift_nc281/`) changes the current-best result by one node
+and one edge (TE 0.8093 both, purity 0.9137 -> 0.9133). Merge topology identical on all 20 frames;
+only cohesion/adhesion scores move, and those costs are near-inert at the operating point. The cluster
+control run `wsn_ctrl_R0` reproduces the published `s0_dw100_cw500` exactly. A paired 30-run
+due-diligence sweep (WSN1: cohesion −2000…−10000 and +2000, adhesion −250…−4000, drift w 50…300 and
+c −1000/−4000, identical configs on both arms) found no operating point where the fixed arm separates
+from the control: best fixed-arm run sel 0.8616 vs 0.8615. Negative cohesion saturates at −2000,
+adhesion is bracketed at the baseline −100, drift at 100/−2000. See the log entries
+"waterz-convention check" and "WSN1".
+
 ## Established Principles
 
 - **size_threshold=0 + drift_weight=100 stacks** — recall gain from threshold combines with edge-selection improvement from drift, net +0.030 TE / +0.034 TF over B1R5 with only -0.018 purity. Confirmed in B2R1.

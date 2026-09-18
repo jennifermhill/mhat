@@ -210,7 +210,28 @@ Cohesion/adhesion calculation fixed (commit 4eae562). New segmentation (seg_resu
 - **area_weight=1730 remains optimal.** 1000 too low, 2500 too high.
 - **appear/disappear insensitive in [200, 300].** Consistent with all prior findings.
 
-### Post-Fix Current Best Config (with intensity, 2026-04-15)
+### Current Best (2026-07-29 figopt re-optimization on seg `seg_cp_20260720_fs1_cpm6`; header added 2026-09-15)
+
+Best overall: `fs1cpm6v2_baseline` (01_cells, TRAIN) — TRA=0.9122, DET=0.9165, LNK=0.8812, fp=149, fn=12, ns=7, fn_edges=38, SEG=0.7067.
+Held-out 02_cells, same params run once: TRA=0.9393, DET=0.9422, LNK=0.9173.
+Config: `configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml` — INT-B1R1 params with
+`drift_constant = -4000` and `adhesion_weight = -500`. Per-condition table and method:
+`mda231_ablation_optimization_log.md`, "Final results". The block below is the previous best on the
+old seg `2026-04-03_11-09-49`, kept for history; `scripts/04_tracking/MDA231_baseline.toml` still
+reproduces it.
+
+**waterz-convention refit (2026-09-15, sweeps wsr0–wsr3/wsrfinal):** on the corrected-and-shifted affinity arm
+`fs1cpm6_chanorder_zyx_shift` (same fragments, waterz fed z,y,x order + one-voxel shift; merge tree topology identical,
+scores compressed) the published params give TRA 0.9029 (untuned transfer). Refit winner `wsrfinal_shift_final`:
+**TRA 0.9131 / DET 0.9170 / LNK 0.8842, fp 147, fn 12, ns 7, fn_edges 37, SEG 0.7067** — above the swapped-convention
+best on all three. Params = baseline with `cohesion_weight 1580`, `adhesion_weight -2000`, `adhesion_constant 500`,
+`area_weight 2500`, `appear = disappear 400` (spec: `configs/experiments/waterz_shift_refit/stage_final.toml` in the
+data tree). Held-out 02_cells, run once: TRA 0.9424 / DET 0.9482 / LNK 0.8996 (vs 0.9393 / 0.9422 / 0.9173; ns 7 -> 14).
+Findings: adhesion is the lever on the corrected scores (monotonic to -2000, collapses by -4000); cohesion weight is
+nearly inert once adhesion is strong; every edge cost is bracketed at its published value; curvature still hurts.
+Whether to fix the waterz conventions in code remains Jennifer's call (both fixes change every 3D number).
+
+### Previous Best on old seg 2026-04-03_11-09-49 (with intensity, 2026-04-15)
 
 Best overall: INT-B1R1 (exp_uid: 2026-04-15_09-42-38; rerun on 2026-05-01 saved at exp_uid: 2026-05-01_17-12-10)
 - TRA=0.881, DET=0.886, LNK=0.845, fp=101, fn=28, ns=7

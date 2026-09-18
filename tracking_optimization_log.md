@@ -1170,3 +1170,143 @@ Verdict: falsified — worst result, TRA -0.023, LNK -0.021, fp +23
 ### Conclusion
 
 Curvature with neutral cost_mean monotonically degrades MDA231 metrics for any weight that produces nontrivial cost_std. Confirms the older "curvature hurts DET when cohesion is active" finding holds post-flow-fix. Remaining direction: slightly-encouraging constant (`constant = -weight × mean - X` for some X) — untested.
+
+## waterz-convention refit on seg_cp_20260720_fs1_cpm6 (2026-09-15, cluster)
+
+Plan: `waterz_shift_refit_plan.md`. Arms built from the current-best seg by permuting the stored
+affinity channels to waterz's (z, y, x) order and rolling each channel +1 voxel along its own axis
+(`fs1cpm6_chanorder_zyx_shift`); control `fs1cpm6_chanorder_xzy` is a byte-identical rebuild
+(merge_history.csv cmp OK). Shift vs control merge history: 117/130 pairs shared, rank Spearman
+0.666, shared-pair cost shift -0.0125 (compressed spread), threshold-1.0 components identical 12/12.
+Worktree e9094b6, env mhat-cluster, Gurobi 13.0.3. Artifacts:
+`/groups/sgro/sgrolab/jennifer/mhat/configs/experiments/waterz_shift_refit/` (NOTES.md has the
+stats tables). Sweeps `wsr0` (anchor), `wsr1` (cohesion/adhesion), `wsr2` (edges), `wsr3` (joint).
+
+### WSR-B0R0: control arm, published fs1cpm6v2_baseline params
+exp_uid: wsr0_ctrl_R0
+Hypothesis: "The rebuilt control arm reproduces TRA 0.9122 / DET 0.9165 / LNK 0.8812 exactly"
+TRA: 0.9122, DET: 0.9165, LNK: 0.8812, fp: 149, fn: 12, fn_edges: 38
+Verdict: supported — identical to the published run (AOGM 363.0, SEG 0.7067); comparisons below are clean
+
+### WSR-B0R1: shift arm, same params (untuned transfer)
+exp_uid: wsr0_shift_R0
+Hypothesis: "Corrected affinities under the swapped-convention weights lose ~0.5 pp TRA as on the old seg"
+TRA: 0.9029, DET: 0.9063, LNK: 0.8781, fp: 156, fn: 15, fn_edges: 39
+Verdict: supported (larger) — -0.93 pp TRA, and unlike the old seg the loss is in nodes (fp +7, fn +3), edges only +1; SEG 0.6916
+
+### WSR-B1 (sweep wsr1): cohesion / adhesion on the shift arm, base cw 1580 (rescaled by cost-std ratio) / aw -500
+Hypothesis: "Rescaling cohesion by the cost-std ratio (2000 -> 1580) recovers most of the -0.93 pp; adhesion barely moves (its std was unchanged)"
+| run | change | TRA | DET | LNK | fp | fn | ns | fn_edges |
+|---|---|---|---|---|---|---|---|---|
+| wsr1_coh_R0 | cw 1580, aw -500 (rescaled point) | 0.9041 | 0.9069 | 0.8842 | 159 | 15 | 6 | 37 |
+| wsr1_coh_R1 | cw 790 | 0.9087 | 0.9121 | 0.8842 | 160 | 13 | 6 | 37 |
+| wsr1_coh_R2 | cw 1185 | 0.9087 | 0.9121 | 0.8842 | 160 | 13 | 6 | 37 |
+| wsr1_coh_R3 | cw 2370 | 0.9041 | 0.9077 | 0.8781 | 151 | 15 | 7 | 39 |
+| wsr1_coh_R4 | cw 3160 | 0.9056 | 0.9093 | 0.8781 | 145 | 15 | 7 | 39 |
+| wsr1_adh_R1 | aw -250 | 0.9046 | 0.9074 | 0.8842 | 157 | 15 | 6 | 37 |
+| wsr1_adh_R2 | aw -1000 | 0.9090 | 0.9124 | 0.8842 | 159 | 13 | 6 | 37 |
+| wsr1_adh_R3 | aw -1500 | 0.9092 | 0.9126 | 0.8842 | 158 | 13 | 6 | 37 |
+| wsr1_adh_R4 | aw -2000 | **0.9107** | 0.9143 | 0.8842 | 162 | 12 | 6 | 37 |
+| wsr1_cc_R1 | cc -500 | 0.9087 | 0.9121 | 0.8842 | 160 | 13 | 6 | 37 |
+| wsr1_cc_R2 | cc +500 | 0.9054 | 0.9082 | 0.8842 | 154 | 15 | 6 | 37 |
+| wsr1_ac_R1 | ac +500 | 0.9054 | 0.9082 | 0.8842 | 154 | 15 | 6 | 37 |
+Verdict: falsified — the rescaled point (0.9041) is no better than the untuned transfer (0.9029); the
+signal is in adhesion, monotonic to the -2000 edge (fn 15 -> 12), and cohesion prefers *weaker* (790/1185
+> 1580 > 2370). cohesion_constant is NOT inert on this seg (-500 helps, +500 hurts). Any cw <= 1580 or
+aw <= -1000 already fixes the edge loss (fn_edges 39 -> 37, ns 7 -> 6); the node loss (fn) is what remains.
+Edges: aw -2000, cw 790 (low), cc -500 -> extension wsr1b.
+
+### WSR-B1b (sweep wsr1b): extend the Stage-1 edges, base cw 1580 / aw -500
+Hypothesis: "Adhesion keeps improving past -2000; cohesion below 790 is flat; cc -1000 continues the -500 gain"
+| run | change | TRA | DET | LNK | fp | fn | ns | fn_edges |
+|---|---|---|---|---|---|---|---|---|
+| wsr1b_adh_R5 | aw -3000 | 0.9116 | 0.9187 | 0.8600 | 146 | 9 | 12 | 45 |
+| wsr1b_adh_R6 | aw -4000 | 0.8818 | 0.8973 | 0.7684 | 139 | 9 | 29 | 76 |
+| wsr1b_adh_R7 | aw -6000 | 0.8522 | 0.8788 | 0.6566 | 126 | 9 | 45 | 113 |
+| wsr1b_coh_R5 | cw 400 | 0.9085 | 0.9118 | 0.8842 | 161 | 13 | 6 | 37 |
+| wsr1b_coh_R6 | cw 200 | 0.9104 | 0.9140 | 0.8842 | 163 | 12 | 6 | 37 |
+| wsr1b_cc_R3 | cc -1000 | 0.9083 | 0.9115 | 0.8842 | 162 | 13 | 6 | 37 |
+| wsr1b_ac_R2 | ac -500 | 0.9087 | 0.9121 | 0.8842 | 160 | 13 | 6 | 37 |
+| wsr1b_combo_R1 | cw 790, aw -2000 | 0.9104 | 0.9140 | 0.8842 | 163 | 12 | 6 | 37 |
+| wsr1b_combo_R2 | cw 790, aw -3000 | 0.9073 | 0.9121 | 0.8721 | 160 | 12 | 8 | 41 |
+| wsr1b_combo_R3 | cc -500, aw -2000 | 0.9109 | 0.9146 | 0.8842 | 161 | 12 | 6 | 37 |
+| wsr1b_combo_R4 | cw 790, cc -500, aw -2000 | 0.9104 | 0.9140 | 0.8842 | 163 | 12 | 6 | 37 |
+| wsr1b_combo_R5 | aw -2000, ac +500 | **0.9118** | 0.9159 | 0.8812 | 151 | 12 | 7 | 38 |
+Verdict: partly supported — adhesion is bracketed: -3000 gives the best DET (0.9187, fn 9) but ns 12 / fn_edges 45
+drag LNK to 0.860, and -4000/-6000 collapse (ns 29/45); the TRA optimum is at -2000…-3000. Cohesion weight is
+irrelevant once adhesion is strong (790 vs 1580 at aw -2000: 0.9104 vs 0.9107; cw 200…1580 all within 0.005) and
+cc -1000 does not continue the -500 gain. **Stage-1 winner: cw 1580, cc 0, aw -2000, ac +500 -> TRA 0.9118 /
+DET 0.9159 / LNK 0.8812, fp 151, fn 12, ns 7, fn_edges 38** (control: 0.9122 / 0.9165 / 0.8812, fp 149). Open
+edge: adhesion_constant upward -> folded into wsr2 (adh_R8/R9), plus aw -2500 (adh_R10/R11).
+
+### WSR-B2 (sweep wsr2): edge costs on the shift arm, base = Stage-1 winner (cw 1580, aw -2000, ac +500; TRA 0.9118)
+Hypothesis: "The remaining node loss (fp 151 vs 149) and the one extra FN edge respond to drift_constant or area, as the old-seg experiment lost edges"
+| run | change | TRA | DET | LNK | fp | fn | ns | fn_edges |
+|---|---|---|---|---|---|---|---|---|
+| wsr2_drift_R1 | drift_c -2000 | 0.8864 | 0.8984 | 0.7986 | 130 | 12 | 24 | 66 |
+| wsr2_drift_R2 | drift_c -3000 | 0.9049 | 0.9126 | 0.8479 | 138 | 11 | 14 | 49 |
+| wsr2_drift_R3 | drift_c -5000 | 0.9092 | 0.9126 | 0.8842 | 158 | 13 | 6 | 37 |
+| wsr2_drift_R4 | drift_c -6000 | 0.9085 | 0.9118 | 0.8842 | 161 | 13 | 6 | 37 |
+| wsr2_drift_R5 | drift_w 30 | 0.9103 | 0.9135 | 0.8872 | 155 | 13 | 6 | 36 |
+| wsr2_drift_R6 | drift_w 100 | 0.9098 | 0.9146 | 0.8751 | 151 | 12 | 8 | 40 |
+| wsr2_area_R1 | area_w 1000 | 0.9097 | 0.9132 | 0.8842 | 156 | 13 | 6 | 37 |
+| wsr2_area_R2 | area_w 2500 | **0.9124** | 0.9162 | 0.8842 | 150 | 12 | 7 | 37 |
+| wsr2_area_R3 | area_c -1000 | 0.9103 | 0.9151 | 0.8751 | 149 | 12 | 8 | 40 |
+| wsr2_area_R4 | area_c -2500 | 0.9092 | 0.9126 | 0.8842 | 158 | 13 | 6 | 37 |
+| wsr2_int_R1 | int_w 2 | 0.9095 | 0.9129 | 0.8842 | 157 | 13 | 6 | 37 |
+| wsr2_int_R2 | int_w 8 | 0.9079 | 0.9140 | 0.8630 | 143 | 11 | 12 | 44 |
+| wsr2_int_R3 | int_c -500 | 0.9103 | 0.9151 | 0.8751 | 149 | 12 | 8 | 40 |
+| wsr2_int_R4 | int_c -2000 | 0.9092 | 0.9126 | 0.8842 | 158 | 13 | 6 | 37 |
+| wsr2_app_R1 | appear = disappear 100 | 0.9118 | 0.9159 | 0.8812 | 151 | 12 | 7 | 38 |
+| wsr2_app_R2 | appear = disappear 400 | 0.9122 | 0.9165 | 0.8812 | 149 | 12 | 7 | 38 |
+| wsr2_adh_R8 | ac +1000 | 0.9122 | 0.9165 | 0.8812 | 149 | 12 | 7 | 38 |
+| wsr2_adh_R9 | ac +1500 | 0.9079 | 0.9124 | 0.8751 | 149 | 13 | 8 | 40 |
+| wsr2_adh_R10 | aw -2500 | 0.9091 | 0.9146 | 0.8691 | 156 | 11 | 9 | 42 |
+| wsr2_adh_R11 | aw -2500, ac 0 | 0.9091 | 0.9146 | 0.8691 | 156 | 11 | 9 | 42 |
+Verdict: falsified — every edge cost is bracketed at its published value (drift_c -4000, drift_w 57, area_c -1500,
+int_w 4, int_c -1000; drift_c toward zero is the one catastrophic direction, ns 24 at -2000). The only gains are
+< 0.001: area_w 2500 (0.9124, fn_edges 37, at the range edge), and ac +1000 or appear/disappear 400, which each
+land exactly on the control's counts (149/12/7/38, TRA 0.9122). adhesion_weight is bracketed at -2000 (-2500 costs
+LNK). -> Stage 3 joint point: cw 1580, aw -2000, ac 1000, area_w 2500, appear = disappear 400.
+
+### WSR-B3 (sweep wsr3): joint refinement on the shift arm
+Hypothesis: "The three sub-0.001 Stage-2 gains (area_w 2500, ac +1000, appear/disappear 400) are additive"
+| run | params (on cw 1580, aw -2000, ac +500) | TRA | DET | LNK | fp | fn | ns | fn_edges |
+|---|---|---|---|---|---|---|---|---|
+| wsr3_joint_R0 | area_w 2500, ac 1000, app 400 | 0.9095 | 0.9137 | 0.8781 | 144 | 13 | 8 | 39 |
+| wsr3_joint_area_R1 | joint + area_w 3500 | 0.9096 | 0.9159 | 0.8630 | 136 | 11 | 12 | 44 |
+| wsr3_joint_area_R2 | joint + area_w 5000 | 0.9006 | 0.9082 | 0.8449 | 134 | 13 | 14 | 50 |
+| wsr3_joint_app_R1 | joint + app 600 | 0.9095 | 0.9137 | 0.8781 | 144 | 13 | 8 | 39 |
+| wsr3_joint_adh_R1 | joint + aw -1500 | 0.9085 | 0.9126 | 0.8781 | 148 | 13 | 8 | 39 |
+| wsr3_joint_adh_R2 | joint + aw -2500 | 0.9115 | 0.9181 | 0.8630 | 138 | 10 | 12 | 44 |
+| wsr3_joint_drift_R1 | joint + drift_c -3000 | 0.9062 | 0.9137 | 0.8510 | 134 | 11 | 14 | 48 |
+| wsr3_joint_drift_R2 | joint + drift_c -5000 | 0.9121 | 0.9159 | 0.8842 | 151 | 12 | 7 | 37 |
+| wsr3_pair_area_ac | area_w 2500, ac 1000 | 0.9083 | 0.9124 | 0.8781 | 149 | 13 | 8 | 39 |
+| wsr3_pair_area_app | area_w 2500, app 400 | **0.9131** | **0.9170** | **0.8842** | 147 | 12 | 7 | 37 |
+| wsr3_joint_curv | joint + curv_w 10 / curv_c -500 | 0.9079 | 0.9124 | 0.8751 | 149 | 13 | 8 | 40 |
+Verdict: falsified for additivity — ac +1000 interacts badly with the other two (joint_R0 0.9095 < any pair), but
+area_w 2500 + appear/disappear 400 on ac +500 is the winner: **TRA 0.9131 / DET 0.9170 / LNK 0.8842, fp 147, fn 12,
+ns 7, fn_edges 37**, above the swapped-convention control (0.9122 / 0.9165 / 0.8812) on all three. Curvature
+probe hurts as before. Gain over the previous best point is 0.0007 < 0.001 -> stop (figopt rule). The one untested
+refinement is a re-bracket of area_w (2000/3000) and appear (300/600) at exactly this point.
+**Refit winner (shift arm): drift 57 / -4000, area 2500 / -1500, intensity 4 / -1000, cohesion 1580 / 0,
+adhesion -2000 / +500, appear = disappear 400, curvature 0.**
+
+### WSR-final: refit winner under a clean uid (01_cells, train)
+exp_uid: wsrfinal_shift_final
+Hypothesis: "Reproduces wsr3_pair_area_app from the graph cache"
+TRA: 0.9131, DET: 0.9170, LNK: 0.8842, fp: 147, fn: 12, fn_edges: 37
+Verdict: supported — identical (AOGM 359.5, ns 7, SEG 0.7067). Corrected-convention refit beats the swapped-convention
+control (0.9122 / 0.9165 / 0.8812) by +0.09 / +0.05 / +0.30 pp; the untuned transfer was 0.9029.
+
+### WSR-final02: held-out 02_cells, refit winner verbatim, run once
+exp_uid: wsrfinal02_shift_final02 (seg arm 02_cells/fs1cpm6_chanorder_zyx_shift, flow 2026-05-29_10-59-37, ctc_gt 02_GT)
+Hypothesis: "Transfers at least as well as the swapped-convention params (0.9393 / 0.9422 / 0.9173)"
+TRA: 0.9424, DET: 0.9482, LNK: 0.8996, fp: 153, fn: 8, fn_edges: 49
+Verdict: supported on TRA/DET, not LNK — +0.31 / +0.60 / -1.77 pp; fp 183 -> 153, fn 12 -> 8, but ns 7 -> 14 and
+fn_edges 41 -> 49 (the stronger adhesion over-merges on the held-out set). SEG 0.7082 -> 0.7111. Not tuned further.
+
+Runs: worktree e9094b6, env mhat-cluster, Gurobi 13.0.3, graph-cache keys 01_cells control bb1e714f2340846a /
+shift 21dcd9f32056677c, 02_cells shift d72dc9ca111f6b89. Sweeps wsr0/wsr1/wsr1b/wsr2/wsr3/wsrfinal (01_cells) and
+wsrfinal02 (02_cells); 59 tracking runs total. Specs and notes in
+/groups/sgro/sgrolab/jennifer/mhat/configs/experiments/waterz_shift_refit/.

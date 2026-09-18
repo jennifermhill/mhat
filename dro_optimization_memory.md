@@ -13,7 +13,7 @@ divisions**, while the data itself does contain divisions.
 - **Division target ≈30 total.** Not zero: real divisions must survive for future GT.
   Baseline (`division_weight = 0.0`) produced ~3,955.
 
-## Current Best
+## Current Best — 01_nuclei (TE / TF)
 
 **`dro1_g_mc8_nodiv` (batch 1, 2026-08-28) — TE=0.7211, TF=0.7211, fn_nodes=179,
 fn_edges=982, SEG=0.7178, LNK=0.8936, 0 divisions** (+0.0860 TE over baseline).
@@ -47,6 +47,38 @@ appear_constant = 50.0 ; disappear_constant = 50.0
 max_children = 3 ; max_edge_distance = 15 ; size_threshold = 20
 merges = false ; divisions = true
 ```
+
+## Current Best — 03_nuclei_div (linajea metric, updated 2026-09-18)
+
+Separate dataset, separate metric, separate best. `03_nuclei_div` is the t 261-310
+crop with 120 real divisions; it is scored with the **linajea sum of errors per GT
+edge** (`FN + IS + FP-D + FN-D`, **lower is better**, FP edges excluded) on
+`gt_side_1` (tuning) and `gt_side_2` (held out). TE/TF were never computed here and
+the 01_nuclei numbers above do not transfer. Full run table and per-run entries in
+`dro_optimization_log.md`, section "03_nuclei_div".
+
+**`dro03div_cp4_mc5_div` (2026-09-16) — sum 0.2841 (side 1) / 0.2684 (side 2);
+FN edges 25.0% / 22.8%, IS 70 / 84, FP-D 78 / 91, division recall 16/64 / 8/56.**
+Seg `aniso5fs1_cp4` (cellpose 3D, `anisotropy = 5`, `flow3D_smooth = 1`,
+`cellprob_threshold = -4`), flow `2026-09-10_16-36-58`, graph cache
+`de2afc7416e3f85e`. Tracking config = the 01_nuclei `dro1_g_mc5_div` params
+**unchanged** (block below with `max_children = 5`, `divisions = true`,
+`division_weight = 0`): nothing in the ILP has been tuned for this dataset yet.
+
+Reference points on the same crop: linajea 0.0570 / 0.0833 (16/64, 10/56 divisions);
+TGMM 0.2420 / 0.3198. So the best is at TGMM level, 4-5x linajea, and already matches
+linajea's side-1 division recall with no division cost.
+
+**Not a bracketed optimum.** The whole gain came from lowering `cellprob_threshold`
+(0 -> -3 -> -4: 0.674 -> 0.367 -> 0.284 on side 1), and the last step was still large.
+Sweep `dro03div` (`scratch_configs/sweeps/dro_03div_cp56.toml`, cp -5 / -6) is written and
+not yet submitted; **until it has run, do not tune ILP costs on this dataset** — the
+remaining error is 88% FN edges, i.e. upstream of the solver. Watch FP-D as the
+threshold drops: it is the one component where MHAT is already well above linajea
+(78 vs 13 on side 1).
+
+Prior on this dataset: `dro03div_mc5_div` (isotropic cellpose, cp 0, 2026-09-11),
+sum 0.7460 / 0.8161, 0/64 divisions recovered.
 
 ## Results Comparison Table
 

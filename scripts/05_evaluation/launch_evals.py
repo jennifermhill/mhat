@@ -46,7 +46,7 @@ here, but it means the old numbers only survive wherever they were written down.
 Usage, from the repo root on the cluster::
 
     conda run -n mhat-cluster python scripts/05_evaluation/launch_evals.py \\
-        configs/sweeps/nk_cells_reeval_corrgt.toml [--dry-run] [--only UID ...]
+        scratch_configs/sweeps/nk_cells_reeval_corrgt.toml [--dry-run] [--only UID ...]
 
 Read back the results with ``scripts/05_evaluation/collect_sweep.py``.
 """

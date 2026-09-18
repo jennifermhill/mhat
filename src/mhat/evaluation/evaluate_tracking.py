@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+import dask.array as da
 import geff
 import numpy as np
 import tifffile
@@ -12,6 +13,8 @@ import traccuracy.matchers as matchers
 import traccuracy.metrics as metrics
 
 from funtracks.import_export import import_from_geff
+
+from mhat.utils import spatial_axis_names
 
 metrics_dict = {
     "basic": metrics.BasicMetrics,
@@ -30,35 +33,114 @@ matchers_dict = {
     "ctc": matchers.CTCMatcher,
 }
 
-def remap_seg_to_track_ids(geff_path, graph, segmentation):
-    """Remap segmentation labels to match the graph's track_id attributes.
+def build_node_id_lut(graph):
+    """Lookup table from segmentation label (= graph node id) to ``track_id``.
 
-    import_from_geff renumbers track_id, so seg labels no longer match.
-    This reads the raw geff to find which node property corresponds to the
-    seg labels (via related_objects.node_prop), then remaps per frame.
+    Segmentations in this pipeline are labelled by graph node id -- both
+    ``pred_seg.zarr`` from run_tracking and ``correct_seg.zarr`` from
+    from_ctc_to_geff -- which is the invariant funtracks relies on as well
+    (``Tracks.get_pixels`` does ``segmentation[time] == node``).
+    ``import_from_geff`` renumbers ``track_id``, so labels still need mapping
+    before traccuracy, which matches on ``track_id``, sees them.
+
+    Node ids are unique per node, so one table covers the whole movie rather
+    than one per frame. It is indexed by label, so it is sized by the largest
+    node id: under a megabyte even for a 230k-node graph. Labels with no node
+    map to 0 and stay background.
     """
-    (raw_graph, metadata) = geff.read(geff_path)
+    max_node = max(graph.nodes(), default=0)
+    max_track_id = max(
+        (int(data["track_id"]) for _, data in graph.nodes(data=True)), default=0
+    )
+    dtype = np.promote_types(np.min_scalar_type(max_track_id), np.uint16)
+    lut = np.zeros(int(max_node) + 1, dtype=dtype)
+    for node, data in graph.nodes(data=True):
+        lut[int(node)] = int(data["track_id"])
+    return lut
 
-    # Determine which raw geff property maps to seg labels
-    label_prop = "track_id"
-    if metadata.related_objects:
-        for ro in metadata.related_objects:
-            if ro.type != "labels":
-                continue
-            prop = ro.node_prop or ro.label_prop
-            if prop:
-                label_prop = prop
-                break
 
-    remapped = np.zeros_like(segmentation)
-    for node, raw_data in raw_graph.nodes(data=True):
-        orig_label = raw_data.get(label_prop, node)
-        new_track_id = graph.nodes[node]["track_id"]
-        t = graph.nodes[node]["time"]
-        mask = segmentation[t] == orig_label
-        if mask.any():
-            remapped[t][mask] = new_track_id
+def _apply_lut(block, lut, seg_path):
+    """Map one block of labels through ``lut``, refusing out-of-range labels."""
+    if block.size:
+        highest = int(block.max())
+        if highest >= lut.size:
+            raise ValueError(
+                f"Segmentation at {seg_path} holds label {highest}, which is not "
+                f"a graph node id (largest is {lut.size - 1}). The segmentation "
+                f"and its tracks store are out of step -- regenerate them."
+            )
+    return lut[block]
+
+
+def remap_seg_to_track_ids(graph, seg_path):
+    """Relabel a node-id-labelled segmentation to the graph's ``track_id``s.
+
+    Reads the zarr a frame at a time and maps each through
+    :func:`build_node_id_lut`, so peak memory is the returned array rather than
+    the input plus a copy of it, and the cost is one pass per frame instead of
+    one full-volume comparison per node.
+
+    We load the segmentation here rather than letting ``import_from_geff`` do
+    it, because funtracks validates the store by scaling every coordinate by
+    its axis scale -- including ``time``, which is a frame index, not a physical
+    coordinate. On a dataset with a real frame interval (DRO: 30 s/frame) it
+    reads frame ``int(t / 30)`` and rejects a perfectly good segmentation. Note
+    that ``t`` below is used directly as an index, never scaled.
+
+    Returns an in-memory array; use :func:`remap_seg_to_track_ids_lazy` when the
+    whole volume does not need to be resident (a full-resolution label volume is
+    ~10 GB on a dataset the size of Fluo-N3DL-DRO).
+    """
+    lut = build_node_id_lut(graph)
+    segmentation = zarr.open(str(seg_path), mode="r")
+    remapped = np.zeros(segmentation.shape, dtype=lut.dtype)
+    checked = False
+    for t in range(segmentation.shape[0]):
+        frame = np.asarray(segmentation[t])
+        if not checked:
+            nodes_here = [n for n, d in graph.nodes(data=True) if int(d["time"]) == t]
+            if nodes_here:
+                _check_labelled_by_node_id(frame, nodes_here, seg_path, t)
+                checked = True
+        remapped[t] = _apply_lut(frame, lut, seg_path)
     return remapped
+
+
+def remap_seg_to_track_ids_lazy(graph, seg_path):
+    """``remap_seg_to_track_ids`` as a lazy dask array, for viewing.
+
+    The mapping is elementwise, so it applies per chunk and nothing beyond the
+    chunks actually touched is ever read: pulling one z-slice of a 10 GB volume
+    costs a few MB. Use this wherever the segmentation is displayed rather than
+    measured -- napari pulls only the slice on screen.
+
+    Unlike the eager version this cannot check the node-id convention up front,
+    since that would mean reading a frame; a mislabelled store shows up as
+    background instead of raising.
+    """
+    lut = build_node_id_lut(graph)
+    return da.from_zarr(seg_path).map_blocks(
+        _apply_lut, lut=lut, seg_path=seg_path, dtype=lut.dtype
+    )
+
+
+def _check_labelled_by_node_id(frame, nodes, seg_path, t, sample=5):
+    """Fail loudly if a segmentation frame is not labelled by graph node id.
+
+    Every node in a frame came from an object in that frame, so under the
+    convention its node id must appear as a label. A store written before the
+    convention is labelled by track_id instead, where the node ids are absent --
+    which would otherwise map every object to background in silence.
+    """
+    missing = [n for n in nodes[:sample] if not np.any(frame == n)]
+    if missing:
+        raise ValueError(
+            f"Segmentation at {seg_path} is not labelled by graph node id: "
+            f"node ids {missing} have no pixels in frame {t}. Stores written "
+            f"before this convention labelled the segmentation by track_id -- "
+            f"delete the tracks store and its segmentation and let them be "
+            f"regenerated."
+        )
 
 
 def _slice_seg_jaccard(ref, pred):
@@ -141,6 +223,55 @@ def compute_ctc_seg(seg_gt_dir, pred_seg_path):
     return total_jaccard / total_objs
 
 
+def read_name_map_and_scale(tracks_path: Path):
+    """The funtracks ``node_name_map`` and axis scales for one geff store.
+
+    funtracks derives dimensionality from the *caller's* map, never from the
+    file: ``import_export/geff/_import.py`` counts how many of z/y/x appear in
+    the map and sets ``ndims = that + 1``. So a hardcoded 3D map handed an
+    honest 2D geff fails *silently* -- the rename loop is guarded by
+    ``if source_key in node_props``, so the absent z is skipped without
+    complaint while ``ndims`` stays 4, disagreeing with the length-3 scale
+    derived from the same file's axes and surfacing far from the cause.
+
+    The composite ``"pos"`` form funtracks also accepts is ndim-generic by
+    construction, so building it from the store's own space axes keeps the map,
+    the scale and the file in step whatever the rank.
+
+    Note there is deliberately no ``"seg_id"`` entry. funtracks' docstring
+    shows one, but adding it would make funtracks load the label array and
+    attach a seg_id, which cuts against the design here: this module passes
+    ``segmentation_path=None`` and does its own ``remap_seg_to_track_ids``, to
+    dodge the funtracks bug that scales the *time* index by its axis scale (see
+    the note in ``remap_seg_to_track_ids``). The label<->node-id convention
+    stays owned by ``build_node_id_lut`` / ``remap_seg_to_track_ids``.
+
+    Returns:
+        (node_name_map, scale), where scale has one entry per axis in the file.
+    """
+    metadata = geff.GeffMetadata.read(tracks_path)
+    axes = metadata.axes
+    if axes is None:
+        # No axes metadata at all: fall back to unit-scale 3D, which is what
+        # every store predating this metadata was.
+        return (
+            {"time": "time", "pos": ["z", "y", "x"]},
+            [1.0, 1.0, 1.0, 1.0],
+        )
+
+    node_name_map = {"time": "time", "pos": spatial_axis_names(axes)}
+    # One entry per axis, not "per axis that happens to carry a scale" -- the
+    # old comprehension silently shortened the list when one axis lacked a
+    # scale, which then misaligned every position it was applied to.
+    scale = [1.0 if a.scale is None else a.scale for a in axes]
+    assert len(scale) == len(node_name_map["pos"]) + 1, (
+        f"{tracks_path} has {len(axes)} axes but "
+        f"{len(node_name_map['pos'])} of them are spatial: "
+        f"{[a.name for a in axes]}"
+    )
+    return node_name_map, scale
+
+
 def evaluate_tracking(
     config, gt_data_dir: Path, pred_data_dir: Path
 ):
@@ -155,36 +286,50 @@ def evaluate_tracking(
         results (dict): Dictionary of metric results.
     """
 
-    # Use import_from_geff to get graph and segmentation in correct format
-    node_name_map = {
-        "time": "time",
-        "x": "x", 
-        "y": "y",
-        "z": "z",
-        "id": "track_id",    # track_id stays constant across frames
-    }
+    # Each store's name map is built from its own metadata, so a GT/pred axis
+    # divergence fails loudly here rather than silently mis-mapping one of them
+    # against the other's axes.
+    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
+    pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
+    gt_name_map, gt_own_scale = read_name_map_and_scale(gt_tracks_path)
+    pred_name_map, scale = read_name_map_and_scale(pred_tracks_path)
+    if gt_name_map["pos"] != pred_name_map["pos"]:
+        raise ValueError(
+            f"Ground truth and prediction disagree about their spatial axes: "
+            f"{gt_name_map['pos']} vs {pred_name_map['pos']}. Matching them "
+            f"would compare different coordinates against each other."
+        )
 
-    # Read scale from metadata
-    (_, metadata) = geff.read(pred_data_dir / "pred_tracks.zarr")
-    axes = metadata.axes
-    if axes is None:
-        scale = [1.0, 1.0, 1.0, 1.0]  # Default to isotropic scaling if no axes info
-    else:
-        scale = [a.scale for a in axes if a.scale is not None]  # Extract scale values
+    # The *prediction's* scale is applied to both stores. That is not an
+    # oversight and must not be "fixed" to use each store's own scale: some
+    # ground truths were written in raw pixel coordinates and rely on the
+    # caller to scale them (primary_nk_cells/01_cells declares unit scale while
+    # its predictions are in micrometers). Using each store's own scale there
+    # would put ground truth in pixels and predictions in micrometers and
+    # quietly wreck every metric. Anything else is reported, not acted on --
+    # those stores can be the only copy of their annotations.
+    if gt_own_scale != scale:
+        print(
+            f"Note: {gt_tracks_path} declares scale {gt_own_scale} but the "
+            f"prediction declares {scale}. Using the prediction's for both, "
+            f"which is what every result on disk was computed with. If the "
+            f"ground truth's own scale is the correct one, repair the store "
+            f"in place -- do not delete it."
+        )
 
     gt_seg_path = gt_data_dir / "correct_seg.zarr"
     gt_seg_path = gt_seg_path if gt_seg_path.exists() else None
+    # Segmentations are loaded by remap_seg_to_track_ids, not funtracks -- see
+    # the note there about funtracks scaling the time index.
     gt_tracks = import_from_geff(
-        gt_data_dir / "correct_tracks.zarr",
-        node_name_map=node_name_map,
-        segmentation_path=gt_seg_path,
+        gt_tracks_path,
+        node_name_map=gt_name_map,
+        segmentation_path=None,
         scale=scale,
     )
 
-    if gt_tracks.segmentation is not None:
-        gt_seg = remap_seg_to_track_ids(
-            gt_data_dir / "correct_tracks.zarr", gt_tracks.graph, gt_tracks.segmentation
-        )
+    if gt_seg_path is not None:
+        gt_seg = remap_seg_to_track_ids(gt_tracks.graph, gt_seg_path)
     else:
         gt_seg = None
 
@@ -199,16 +344,14 @@ def evaluate_tracking(
     pred_seg_path = pred_data_dir / "pred_seg.zarr"
     pred_seg_path = pred_seg_path if pred_seg_path.exists() else None
     pred_tracks = import_from_geff(
-        pred_data_dir / "pred_tracks.zarr",
-        node_name_map=node_name_map,
-        segmentation_path=pred_seg_path,
+        pred_tracks_path,
+        node_name_map=pred_name_map,
+        segmentation_path=None,
         scale=scale,
     )
 
-    if pred_tracks.segmentation is not None:
-        pred_seg = remap_seg_to_track_ids(
-            pred_data_dir / "pred_tracks.zarr", pred_tracks.graph, pred_tracks.segmentation
-        )
+    if pred_seg_path is not None:
+        pred_seg = remap_seg_to_track_ids(pred_tracks.graph, pred_seg_path)
     else:
         pred_seg = None
 

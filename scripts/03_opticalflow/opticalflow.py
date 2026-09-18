@@ -26,17 +26,28 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
     zarr_img = da.from_zarr(zarr_path)
     print(f"Zarr image shape: {zarr_img.shape}")
 
-    T, C, Z, Y, X = zarr_img.shape
+    # Raw is (t, c, *spatial): (t, c, z, y, x) for a 3D movie, (t, c, y, x) for
+    # a 2D one. Everything below is written as (t, *spatial, components).
+    T = zarr_img.shape[0]
+    spatial_shape = zarr_img.shape[2:]
+    ndim = len(spatial_shape)
     zarr_img = zarr_img[:, 0, ...]  # remove channel dimension
+
+    # One chunk per displayed plane: 1 along every axis before the last two.
+    plane_chunks = (1,) * (ndim - 1) + spatial_shape[-2:]
 
     output_zarr = zarr.open(output_dir / 'flow.zarr', 'w')
 
     if do_3d:
-        output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 3), chunks=(1, 1, Y, X, 3), dtype=np.float32)
-        output_zarr.create_dataset('confidence', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
+        assert ndim == 3, (
+            f"3D optical flow needs a 3D movie, but {zarr_path} is {ndim}D. "
+            "Set do_3d = false for 2D data; 2D flow is all it has."
+        )
+        output_zarr.create_dataset('flow_raw', shape=(T, *spatial_shape, 3), chunks=(*plane_chunks, 3), dtype=np.float32)
+        output_zarr.create_dataset('confidence', shape=(T, *spatial_shape), chunks=plane_chunks, dtype=np.float32)
         flow_function = compute_farneback_flow_3d
     else:
-        output_zarr.create_dataset('flow_raw', shape=(T, Z, Y, X, 2), chunks=(1, 1, Y, X, 2), dtype=np.float32)
+        output_zarr.create_dataset('flow_raw', shape=(T, *spatial_shape, 2), chunks=(*plane_chunks, 2), dtype=np.float32)
         flow_function = compute_farneback_flow_2d
 
     output_zarr['flow_raw'].attrs["axes"] = axes
@@ -50,7 +61,7 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
     generate_flow_frames(flow_zarr=output_zarr, color_wheel=True)
 
     if do_3d:
-        output_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.float32)
+        output_zarr.create_dataset('flow_frames_Z', shape=(T, *spatial_shape), chunks=plane_chunks, dtype=np.float32)
         output_zarr['flow_frames_Z'][:] = flow[..., 2]
 
 

@@ -11,6 +11,61 @@ from scipy import linalg
 import skimage
 
 from mhat.tracking.edge_pairs import CurvatureCost
+from mhat.utils import position_names
+
+
+def node_position(data: Mapping) -> np.ndarray:
+    """A node's position, in array-axis order ((z, y, x) or (y, x)).
+
+    ``centroid`` is the canonical position. The per-axis ``z``/``y``/``x``
+    scalars are derived from it and exist only for serialization (geff, the
+    tracks CSV, the napari viewer), so nothing in the cost path reads them --
+    which is what makes every cost here work unchanged on 2D data.
+    """
+    return np.asarray(data["centroid"], dtype=float)
+
+
+def set_position_attrs(data: dict, centroid, names: list[str] | None = None) -> None:
+    """Write ``centroid`` and the per-axis scalars derived from it.
+
+    ``names`` defaults to the names for this centroid's rank, so a 2D node gets
+    ``y`` and ``x`` and no phantom ``z``. Pass it explicitly only when the
+    names must come from a dataset's own axes metadata rather than its rank.
+    """
+    centroid = tuple(float(c) for c in centroid)
+    data["centroid"] = centroid
+    if names is None:
+        names = position_names(len(centroid))
+    for name, value in zip(names, centroid, strict=True):
+        data[name] = value
+
+
+def flow_to_position_order(vec, scale_spatial, offset: int = 0) -> tuple[float, ...]:
+    """Reorder and scale a flow vector into position-axis order.
+
+    Flow is stored x-first -- ``farneback.py`` stacks ``(vx, vy, vz)`` and
+    OpenCV's 2D output is ``(vx, vy)`` -- while positions are z-first, so the
+    channels reverse. Pixel units are converted to world units here too, so the
+    result is directly comparable to the voxel-scaled centroids.
+
+    ``offset`` is how many *leading* position axes this flow does not cover,
+    and it is the trap worth naming: a 2-channel ``flow_2d`` gets combined
+    against a 3-component position on 3D data, where its reversed channels
+    ``(vy, vx)`` belong on y and x, so ``offset=1``. A plain
+    ``zip(centroid, vec[::-1])`` would put the y flow on the z axis.
+
+    Returns ``len(vec)`` components, to be placed at ``position[offset:]``.
+    Element types are preserved through the multiply (the components arrive as
+    float32 means of a float32 flow array), so the result is bit-identical to
+    doing it by hand.
+    """
+    components = list(vec)[::-1]
+    scales = list(scale_spatial)[offset:]
+    assert len(components) == len(scales), (
+        f"flow has {len(components)} channels but only {len(scales)} position "
+        f"axes are left after offset={offset}"
+    )
+    return tuple(float(c * s) for c, s in zip(components, scales))
 
 
 def nodes_from_segmentation(
@@ -23,13 +78,17 @@ def nodes_from_segmentation(
     z_flow_min_pass_pixels: int = 10,
     size_threshold: int | None = None,
     tp: int = 0,
-    scale: list[float] = [1.0, 1.0, 1.0, 1.0]
+    scale: list[float] | None = None,
 ) -> nx.DiGraph:
     """Extract candidate nodes from a segmentation.
 
+    Works on 2D and 3D frames alike: the rank comes from ``segmentation.ndim``,
+    and positions are written as a ``centroid`` of that length plus the
+    matching per-axis scalars.
+
     Args:
-        segmentation (np.ndarray): A numpy array with integer labels and dimensions
-            (z, y, x).
+        segmentation (np.ndarray): A numpy array with integer labels and
+            dimensions (z, y, x) for 3D data or (y, x) for 2D.
 
         flow_3d (np.ndarray | None, optional): A numpy array with 3D flow vectors
             for each pixel in the segmentation. Defaults to None.
@@ -58,12 +117,24 @@ def nodes_from_segmentation(
 
         tp (int, optional): The timepoint to assign to the nodes. Defaults to 0.
 
-        scale (list[float], optional): The scaling factors for each axis of
-            the fragments array. Defaults to [1.0, 1.0, 1.0, 1.0].
+        scale (list[float], optional): The scaling factors for the time axis
+            and each spatial axis of the fragments array, so it is one longer
+            than the frame's rank. Defaults to unit scale.
 
     Returns:
         nx.DiGraph: A candidate graph with only nodes.
     """
+    ndim = segmentation.ndim
+    if scale is None:
+        scale = [1.0] * (ndim + 1)
+    # The scale[1:] zip below silently truncates a too-long list rather than
+    # raising, which would scale y by the z factor on 2D data and stay silent.
+    assert len(scale) == ndim + 1, (
+        f"scale has {len(scale)} entries but a {ndim}D frame needs "
+        f"{ndim + 1} (time plus one per spatial axis): {scale}"
+    )
+    scale_spatial = list(scale[1:])
+
     cand_graph = nx.DiGraph()
     # for t in range(len(segmentation)):
     #     seg_frame = segmentation[t]
@@ -75,53 +146,65 @@ def nodes_from_segmentation(
         # Read only this label's bounding box, not the whole frame
         sl = regionprop.slice
         region = regionprop.image
-        centroid = (float(regionprop.centroid[0] * scale[1]),
-                    float(regionprop.centroid[1] * scale[2]),
-                    float(regionprop.centroid[2] * scale[3]))
+        centroid = tuple(
+            float(c * s)
+            for c, s in zip(regionprop.centroid, scale_spatial, strict=True)
+        )
         region_raw = raw_img[sl][region]
         intensity = np.mean(region_raw)
         z_flow_reliable = True
-        if flow_3d is not None:
-            # Optical flow is stored in pixel units; scale to world units to match
-            # the voxel-scaled centroids above so drift_dist computations are consistent.
-            # Z component of flow can be filtered by confidence: only in-region pixels
-            # whose |confidence| exceeds z_flow_conf_threshold contribute to the average.
-            vz_pixels = flow_3d[sl][region][:, 2]
-            if confidence_3d is not None and z_flow_conf_threshold is not None:
-                conf_pixels = np.abs(confidence_3d[sl][region])
-                conf_mask = conf_pixels > z_flow_conf_threshold
-                n_passing = int(np.sum(conf_mask))
-                if n_passing >= z_flow_min_pass_pixels:
-                    flow_z = float(np.mean(vz_pixels[conf_mask]) * scale[1])
+        # In-plane motion is taken from the 2D flow when there is one: it is
+        # computed per slice at full resolution, so it resolves in-plane motion
+        # better than the 3D field. Optical flow is stored in pixel units and
+        # x-first; flow_to_position_order converts both.
+        in_plane_source = flow_2d if flow_2d is not None else flow_3d
+        if in_plane_source is not None:
+            in_plane_pixels = in_plane_source[sl][region]
+            in_plane = flow_to_position_order(
+                (np.mean(in_plane_pixels[:, 0]), np.mean(in_plane_pixels[:, 1])),
+                scale_spatial,
+                offset=ndim - 2,
+            )
+            if ndim == 2:
+                flow = in_plane
+            elif flow_3d is None:
+                # 2D flow only, on 3D data: there is no axial estimate at all,
+                # so say so rather than pretending Z motion is zero.
+                # run_tracking asserts a 3D flow directory for 3D data, so this
+                # does not arise there.
+                flow = (0.0,) + in_plane
+                z_flow_reliable = False
+            else:
+                # The axial component exists only in the 3D field, and is the
+                # only one the confidence filter applies to: only in-region
+                # pixels whose |confidence| exceeds z_flow_conf_threshold
+                # contribute to the average.
+                vz_pixels = flow_3d[sl][region][:, 2]
+                if confidence_3d is not None and z_flow_conf_threshold is not None:
+                    conf_pixels = np.abs(confidence_3d[sl][region])
+                    conf_mask = conf_pixels > z_flow_conf_threshold
+                    n_passing = int(np.sum(conf_mask))
+                    if n_passing >= z_flow_min_pass_pixels:
+                        flow_z = float(np.mean(vz_pixels[conf_mask]) * scale[1])
+                    else:
+                        # Too few high-confidence pixels — mark Z unreliable.
+                        # Store 0 as a placeholder; add_flow_dist_attr will skip Z for this node.
+                        flow_z = 0.0
+                        z_flow_reliable = False
                 else:
-                    # Too few high-confidence pixels — mark Z unreliable.
-                    # Store 0 as a placeholder; add_flow_dist_attr will skip Z for this node.
-                    flow_z = 0.0
-                    z_flow_reliable = False
-            else:
-                flow_z = float(np.mean(vz_pixels) * scale[1])
-            if flow_2d is not None:
-                flow = (flow_z,
-                        float(np.mean(flow_2d[sl][region][:, 1]) * scale[2]),
-                        float(np.mean(flow_2d[sl][region][:, 0]) * scale[3]))
-            else:
-                flow = (flow_z,
-                        float(np.mean(flow_3d[sl][region][:, 1]) * scale[2]),
-                        float(np.mean(flow_3d[sl][region][:, 0]) * scale[3]))
+                    flow_z = float(np.mean(vz_pixels) * scale[1])
+                flow = (flow_z,) + in_plane
         else:
             flow = 0
         attrs = {
             "time": int(tp),
-            "x": centroid[2],
-            "y": centroid[1],
-            "z": centroid[0],
-            "centroid": centroid,
             "label": node_id,
             "area": regionprop.area,
             "intensity": intensity,
             "flow": flow,
             "z_flow_reliable": z_flow_reliable,
         }
+        set_position_attrs(attrs, centroid)
         cand_graph.add_node(node_id, **attrs)
 
     return cand_graph
@@ -148,9 +231,10 @@ def _compute_node_frame_dict(cand_graph: nx.DiGraph) -> dict[int, list[Any]]:
 def create_kdtree(
     cand_graph: nx.DiGraph, node_ids: Iterable[Any]
 ) -> scipy.spatial.KDTree:
-    positions = [
-        [cand_graph.nodes[node]["x"], cand_graph.nodes[node]["y"], cand_graph.nodes[node]["z"]] for node in node_ids
-    ]
+    # Positions are taken in array-axis order rather than the old [x, y, z].
+    # That is a consistent permutation, so every distance is unchanged; it just
+    # no longer assumes a z exists.
+    positions = [node_position(cand_graph.nodes[node]) for node in node_ids]
     return scipy.spatial.KDTree(positions)
 
 
@@ -302,78 +386,90 @@ def add_appear_ignore_attr(cand_graph):
             cand_graph.nodes[node_id]["ignore_appear"] = True
 
 
+def _endpoint_position(cand_graph, nodes) -> np.ndarray:
+    """Mean position of a hyperedge endpoint's nodes.
+
+    A hyperedge endpoint is a tuple of nodes rather than a single node, so it is
+    represented by their mean position -- matching what CurvatureCost does in
+    edge_pairs.get_edge_offset.
+    """
+    return np.mean([node_position(cand_graph.nodes[n]) for n in nodes], axis=0)
+
+
+def _edge_positions(cand_graph, edge) -> tuple[np.ndarray, np.ndarray]:
+    """The (source, target) positions of an edge, hyperedge or not."""
+    if cand_graph.is_hyperedge(edge):
+        # us is always length 1 now: only division hyperedges remain.
+        us, vs = edge
+        return _endpoint_position(cand_graph, us), _endpoint_position(cand_graph, vs)
+    u, v = edge
+    return node_position(cand_graph.nodes[u]), node_position(cand_graph.nodes[v])
+
+
 def add_disappear(cand_graph, img_shape):
+    """Mark nodes that may leave the field of view without paying a cost.
+
+    ``img_shape`` is (t, *spatial) in world units, so it zips straight against
+    a node's centroid whatever its rank.
+    """
+    n_frames = img_shape[0]
     for node_id, attrs in cand_graph.nodes(data=True):
         if "time" not in attrs:
             continue  # skip hypernodes
-        T, Z, Y, X = img_shape
-        if attrs.get("time") == T - 1 or attrs.get("z") > Z or attrs.get("y") > Y or attrs.get("x") > X:
+        out_of_bounds = any(
+            pos > extent
+            for pos, extent in zip(attrs["centroid"], img_shape[1:], strict=True)
+        )
+        if attrs.get("time") == n_frames - 1 or out_of_bounds:
             cand_graph.nodes[node_id]["ignore_disappear"] = True
 
 
-def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=[0, 0, 0]):
-    if isinstance(drift, (int, float)):
-        drift = [drift, drift, drift]
-    for edge in cand_graph.edges:
-        # TODO: fix to include y and z pos
-        if cand_graph.is_hyperedge(edge):
-            # us is always length 1 now: only division hyperedges remain.
-            us, vs = edge
-            pos_u = np.array([
-                (sum(cand_graph.nodes[n]["z"] for n in us)) / len(us),
-                (sum(cand_graph.nodes[n]["y"] for n in us)) / len(us),
-                (sum(cand_graph.nodes[n]["x"] for n in us)) / len(us)
-            ])
-            pos_v = np.array([
-                (sum(cand_graph.nodes[n]["z"] for n in vs)) / len(vs),
-                (sum(cand_graph.nodes[n]["y"] for n in vs)) / len(vs),
-                (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
-            ])
-        else:
-            u, v = edge
-            node_u = cand_graph.nodes[u]
-            node_v = cand_graph.nodes[v]
-            pos_u = np.array([node_u["z"], node_u["y"], node_u["x"]])
-            pos_v = np.array([node_v["z"], node_v["y"], node_v["x"]])
+def add_drift_dist_attr(cand_graph: motile.TrackGraph, drift=0):
+    """Distance between linked detections after applying a constant drift.
 
+    ``drift`` may be a scalar (applied to every axis) or one value per spatial
+    axis; either way it is broadcast to the position's rank rather than being
+    written out as a fixed-length list.
+    """
+    drift = np.asarray(drift, dtype=float)
+    checked = False
+    for edge in cand_graph.edges:
+        pos_u, pos_v = _edge_positions(cand_graph, edge)
+        if not checked:
+            assert drift.ndim == 0 or drift.shape == pos_u.shape, (
+                f"drift_distance has {drift.shape[0]} components but this data "
+                f"is {pos_u.shape[0]}D -- give one value per spatial axis, or a "
+                f"single number for all of them"
+            )
+            checked = True
         # Add drift to pos_u and compute distance
-        drift_dist = linalg.norm(pos_u + drift - pos_v)
+        drift_dist = linalg.norm(pos_u + np.broadcast_to(drift, pos_u.shape) - pos_v)
         cand_graph.edges[edge]["drift_dist"] = drift_dist
 
 def add_flow_dist_attr(cand_graph: motile.TrackGraph):
     # TODO: combine with drift distance function above and default to drift distance if no flow
     for edge in cand_graph.edges:
+        pos_u, pos_v = _edge_positions(cand_graph, edge)
         if cand_graph.is_hyperedge(edge):
             # us is always length 1 now: only division hyperedges remain.
-            us, vs = edge
+            us, _vs = edge
             flow_u = np.mean([cand_graph.nodes[n]["flow"] for n in us], axis=0)
-            pos_u = np.array([
-                (sum(cand_graph.nodes[n]["z"] for n in us)) / len(us),
-                (sum(cand_graph.nodes[n]["y"] for n in us)) / len(us),
-                (sum(cand_graph.nodes[n]["x"] for n in us)) / len(us)
-            ])
-            pos_v = np.array([
-                (sum(cand_graph.nodes[n]["z"] for n in vs)) / len(vs),
-                (sum(cand_graph.nodes[n]["y"] for n in vs)) / len(vs),
-                (sum(cand_graph.nodes[n]["x"] for n in vs)) / len(vs)
-            ])
             # Source is reliable only if all source nodes are reliable.
             z_reliable = all(
                 cand_graph.nodes[n].get("z_flow_reliable", True) for n in us
             )
         else:
-            u, v = edge
+            u, _v = edge
             node_u = cand_graph.nodes[u]
-            node_v = cand_graph.nodes[v]
             flow_u = node_u["flow"]
-            pos_u = np.array([node_u["z"], node_u["y"], node_u["x"]])
-            pos_v = np.array([node_v["z"], node_v["y"], node_v["x"]])
             z_reliable = node_u.get("z_flow_reliable", True)
 
         # Apply flow to pos_u and compute distance. When Z flow is unreliable
         # for this source, drop the Z component from both position and flow so
         # drift_dist reflects XY motion only (not penalizing the edge for Z
-        # prediction error we can't estimate).
+        # prediction error we can't estimate). On 2D data there is no Z to be
+        # unreliable about, so z_flow_reliable is always True and this branch
+        # is unreachable.
         predicted = pos_u + np.array(flow_u)
         if z_reliable:
             flow_dist = linalg.norm(predicted - pos_v)

@@ -17,6 +17,12 @@ import geff
 from geff.core_io import write_arrays
 from geff_spec import Axis, GeffMetadata, RelatedObject
 
+from mhat.utils import seg_chunks
+
+# Node ids run to one per object per frame, which outgrows the uint16 the CTC
+# marker tifs use; uint32 also matches the dtype run_tracking writes.
+SEG_DTYPE = np.uint32
+
 
 def from_ctc_to_geff(
     ctc_path: Path,
@@ -29,8 +35,16 @@ def from_ctc_to_geff(
 ) -> None:
     """
     Convert a CTC file to a GEFF file.
-    Adapted from geff but modified to save with zarr extension,  use "time" as frame key,
+    Adapted from geff but modified to save with zarr extension, use "time" as frame key,
     and track_id as the track node property.
+
+    The exported segmentation is labelled by **graph node id**, matching
+    ``pred_seg.zarr`` from ``run_tracking.py``. That is the invariant funtracks
+    relies on throughout (``Tracks.get_pixels`` resolves a node's pixels with
+    ``segmentation[time] == node``), so ground truth and predictions load and
+    remap through exactly the same path. The CTC tracklet id is kept separately
+    as the ``track_id`` node property, and ``label`` mirrors the node id so
+    ``related_objects`` has a property to point at.
 
     Args:
         ctc_path: The path to the CTC file.
@@ -70,6 +84,7 @@ def from_ctc_to_geff(
     edges = []
     node_props: dict[str, list[int | float]] = {
         "id": [],
+        "label": [],
         "track_id": [],
         "time": [],
         "x": [],
@@ -86,10 +101,14 @@ def from_ctc_to_geff(
     for t, filepath in enumerate(sorted_files):
         frame = tifffile.imread(filepath)
 
-        if segmentation_store is not None and segm_array is None:
-            if frame.ndim == 3:
-                node_props["z"] = []
+        # A 3D frame needs somewhere to put its z centroids. This is keyed off
+        # the frame's rank alone: it used to sit inside the segmentation-store
+        # branch below, so converting 3D markers without exporting a
+        # segmentation raised a KeyError from the centroid loop.
+        if t == 0 and frame.ndim == 3:
+            node_props["z"] = []
 
+        if segmentation_store is not None and segm_array is None:
             # created in first iteration
             if tczyx:
                 n_1_padding = (1,) * (5 - frame.ndim - 1)  # forcing data to be (T, C, Z, Y, X)
@@ -105,19 +124,25 @@ def from_ctc_to_geff(
                 segm_array = zarr.open_array(
                     segmentation_store,
                     shape=(len(sorted_files), *n_1_padding, *frame.shape),
-                    chunks=(1, *n_1_padding, *frame.shape),
-                    dtype=frame.dtype,
+                    chunks=seg_chunks((*n_1_padding, *frame.shape)),
+                    dtype=SEG_DTYPE,
                     mode="w" if overwrite else "w-",
                     zarr_format=zarr_format,
                 )
 
-        if segm_array is not None:
-            segm_array[t] = frame[expand_dims]
+        # Maps this frame's CTC tracklet ids onto the node ids assigned below.
+        # Entries left at 0 stay background.
+        frame_lut = (
+            np.zeros(int(frame.max()) + 1, dtype=SEG_DTYPE)
+            if segm_array is not None
+            else None
+        )
 
         for obj in regionprops(frame):
             tracklet_id = obj.label # Real seg_ids and tracklet_ids from man_track.txt
             node_props["id"].append(node_id)
-            node_props["track_id"].append(tracklet_id) # TODO: Switch to ID and call ID something else?
+            node_props["label"].append(node_id)
+            node_props["track_id"].append(tracklet_id)
             node_props["time"].append(t)
             # using y,x for 2d and z,y,x for 3d
             for c, v in zip(("x", "y", "z"), obj.centroid[::-1], strict=False):
@@ -127,7 +152,12 @@ def from_ctc_to_geff(
                 tracks[tracklet_id] = []
 
             tracks[tracklet_id].append(node_id)
+            if frame_lut is not None:
+                frame_lut[tracklet_id] = node_id
             node_id += 1
+
+        if segm_array is not None:
+            segm_array[t] = frame_lut[frame][expand_dims]
 
     if len(node_props["id"]) == 0:
         raise ValueError(f"No nodes found in the CTC directory {ctc_path}")
@@ -193,7 +223,7 @@ def from_ctc_to_geff(
 
         if seg_path is not None:
             rel_path = os.path.relpath(seg_path, geff_path)
-            rel_objs = [RelatedObject(type="labels", path=rel_path, node_prop="track_id")]
+            rel_objs = [RelatedObject(type="labels", path=rel_path, node_prop="label")]
     write_arrays(
         geff_store=geff_path,
         node_ids=node_ids,

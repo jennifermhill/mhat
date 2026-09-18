@@ -24,4 +24,5 @@ do_3D = true
 
 [affinity_params]
 smoothing = [1, 1, 1]
-neighborhood = [[0,0,1], [0,1,0], [1,0,0]]
+# waterz channel order: one step along z, then y, then x (checked at run time; step size is free).
+neighborhood = [[1,0,0], [0,1,0], [0,0,1]]

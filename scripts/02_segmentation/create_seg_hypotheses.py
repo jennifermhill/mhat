@@ -4,7 +4,6 @@ from pathlib import Path
 
 import numpy as np
 import toml
-import waterz # type: ignore
 import zarr
 import torch
 import datetime
@@ -14,10 +13,15 @@ from scipy.ndimage import label
 from skimage.segmentation import watershed
 from skimage.filters import gaussian
 
+from mhat.segmentation.agglomerate import (
+    WATERZ_CONVENTION,
+    agglomerate_frame,
+    check_waterz_neighborhood,
+)
 from mhat.segmentation.threshold_labeling import threshold_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
-from mhat.utils import get_axes_metadata
+from mhat.utils import get_axes_metadata, seg_chunks
 
 def generate_fragments(data_zarr: Path, output_root, config):
     zarr_root = zarr.open(data_zarr, "r+")
@@ -25,10 +29,15 @@ def generate_fragments(data_zarr: Path, output_root, config):
 
     raw_data = zarr_root
 
-    T, C, Z, Y, X = raw_data.shape
+    # Raw is (t, c, *spatial) -- (t, c, z, y, x) for a 3D movie, (t, c, y, x)
+    # for a 2D one. The channel axis is selected off when each frame is read,
+    # so everything written below is (t, *spatial).
+    T = raw_data.shape[0]
+    spatial_shape = raw_data.shape[2:]
 
     output_root.create_dataset(
-        "fragments", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint32, overwrite=True
+        "fragments", shape=(T, *spatial_shape), chunks=seg_chunks(spatial_shape),
+        dtype=np.uint32, overwrite=True
     )
     output_root['fragments'].attrs["axes"] = axes
 
@@ -74,21 +83,42 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
 
     raw_data = zarr_root
 
-    T, C, Z, Y, X = raw_data.shape
+    T = raw_data.shape[0]
+    spatial_shape = raw_data.shape[2:]
+    ndim = len(spatial_shape)
 
     neighborhood = config["neighborhood"]
+    # One affinity channel per neighborhood offset, rather than a literal 3, so
+    # a 2D dataset's two-offset neighborhood produces two channels.
+    n_edges = len(neighborhood)
+    assert all(len(offset) == ndim for offset in neighborhood), (
+        f"every neighborhood offset must have {ndim} components for this "
+        f"{ndim}D dataset: {neighborhood}"
+    )
 
+    affinity_shape = (T, n_edges, *spatial_shape)
     output_root.create_dataset(
-        "affinities", shape=(T, 3, Z, Y, X), chunks=(1, 1, 1, Y, X), dtype=np.float32, overwrite=True
+        "affinities", shape=affinity_shape,
+        chunks=seg_chunks((n_edges, *spatial_shape)),
+        dtype=np.float32, overwrite=True
     )
     output_root['affinities'].attrs["axes"] = axes
+    output_root['affinities'].attrs["neighborhood"] = [
+        list(offset) for offset in neighborhood
+    ]
 
-    affinities = np.zeros((T, 3, Z, Y, X), dtype=np.float32)
+    affinities = np.zeros(affinity_shape, dtype=np.float32)
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
         if config["smoothing"] != 0:
-            smoothing_sigma = tuple(config["smoothing"])
+            smoothing_sigma = config["smoothing"]
+            if not np.isscalar(smoothing_sigma):
+                smoothing_sigma = tuple(smoothing_sigma)
+                assert len(smoothing_sigma) == ndim, (
+                    f"smoothing has {len(smoothing_sigma)} sigmas but this "
+                    f"dataset is {ndim}D: {config['smoothing']}"
+                )
             frame = gaussian(frame, sigma=smoothing_sigma) 
         affinities[tp] = compute_fluorescent_affinities(frame, neighborhood)
 
@@ -147,18 +177,30 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
 
 #     return fragments
 
-def get_segmentation(output_root, thresholds, outfile):
+def get_segmentation(output_root, thresholds, outfile, neighborhood=None):
+    """Agglomerate the fragments frame by frame and record the merge history.
+
+    The affinities are handed to waterz as stored, so ``neighborhood`` must be
+    waterz's own channel order (``agglomerate_frame`` checks it). It falls
+    back to the neighborhood recorded on the affinities array by
+    ``generate_fluorescent_affinities``.
+    """
     affinities = output_root["affinities"][:].astype(np.float32)
     fragments = output_root["fragments"][:]
 
     axes = get_axes_metadata(output_root["fragments"])
 
-    T, Z, Y, X = fragments.shape
+    T = fragments.shape[0]
+    spatial_shape = fragments.shape[1:]
+    if neighborhood is None:
+        neighborhood = output_root["affinities"].attrs.get("neighborhood")
 
     output_root.create_dataset(
-        "segmentations", shape=(T, Z, Y, X), chunks=(1, 1, Y, X), dtype=np.uint32, overwrite=True
+        "segmentations", shape=(T, *spatial_shape),
+        chunks=seg_chunks(spatial_shape), dtype=np.uint32, overwrite=True
     )
     output_root['segmentations'].attrs["axes"] = axes
+    output_root['segmentations'].attrs["waterz_convention"] = WATERZ_CONVENTION
 
     # Process each timepoint and channel separately
     all_merge_history = []
@@ -166,21 +208,13 @@ def get_segmentation(output_root, thresholds, outfile):
     for t in range(T):
         print(f"Processing timepoint {t}")
 
-        fragments_3d = fragments[t]  # Shape: (Z, Y, X)
-        affinities_3d = affinities[t]  # Shape: (3, Z, Y, X)
-
-        ws_frags = fragments_3d.astype(np.uint64)
-        ws_affs = affinities_3d.astype(np.float32)
-        
-        generator = waterz.agglomerate(
-            affs=ws_affs,
-            fragments=ws_frags,
+        segmentation, merge_history = agglomerate_frame(
+            affs=affinities[t],
+            fragments=fragments[t],
             thresholds=thresholds,
+            neighborhood=neighborhood,
             # scoring_function="ContactArea<RegionGraphType>",
-            return_merge_history=True,
         )
-
-        segmentation, merge_history = next(generator)
 
         output_root['segmentations'][t] = segmentation
         
@@ -216,9 +250,16 @@ if __name__ == "__main__":
     print(f"Loading data from {data_dir}")
     assert data_dir.is_dir()
 
+    # Fail on a pre-2026-09-17 (x-first) neighborhood before any work is done.
+    ndim = zarr.open(data_dir, "r").ndim - 2  # raw is (t, c, *spatial)
+    check_waterz_neighborhood(config["affinity_params"]["neighborhood"], ndim)
+
     current_datetime = datetime.datetime.now()
     exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
     config["exp_uid"] = exp_uid
+    # Segmentations from before 2026-09-17 fed waterz the affinity channels in
+    # the wrong order and one voxel off; this key marks a run as post-fix.
+    config["waterz_convention"] = WATERZ_CONVENTION
 
     output_dir = output_base_dir / experiment / dataset / exp_uid
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -244,4 +285,7 @@ if __name__ == "__main__":
             writer.writeheader()
     else:
         threshold = config["merge_thresholds"]
-        get_segmentation(output_root, threshold, merge_history_file, config["waterz_params"])
+        get_segmentation(
+            output_root, threshold, merge_history_file, config["waterz_params"],
+            neighborhood=config["affinity_params"]["neighborhood"],
+        )

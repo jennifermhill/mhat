@@ -32,6 +32,12 @@ def load_tracks_from_csv(csv_path: str | Path) -> nx.DiGraph:
 
 
 def save_tracks_to_csv(tracks: nx.DiGraph, csv_path: str | Path) -> None:
+    """Write tracks as the flat time/x/y/z/id/parent_id CSV.
+
+    The column set is fixed so the file stays readable by
+    ``load_tracks_from_csv`` and by anything outside this repo that consumes it;
+    on 2D data the ``z`` column is simply empty rather than absent.
+    """
     with open(csv_path, "w") as f:
         writer = DictWriter(f, fieldnames=["time", "x", "y", "z", "id", "parent_id"])
         writer.writeheader()
@@ -43,7 +49,7 @@ def save_tracks_to_csv(tracks: nx.DiGraph, csv_path: str | Path) -> None:
                     "time": data["time"],
                     "x": data["x"],
                     "y": data["y"],
-                    "z": data["z"],
+                    "z": data.get("z", ""),
                     "id": node,
                     "parent_id": parent_id,
                 }
@@ -57,7 +63,7 @@ def save_tracks_to_csv(tracks: nx.DiGraph, csv_path: str | Path) -> None:
                         "time": data["time"],
                         "x": data["x"],
                         "y": data["y"],
-                        "z": data["z"],
+                        "z": data.get("z", ""),
                         "id": node,
                         "parent_id": parent_id,
                     }

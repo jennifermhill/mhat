@@ -11,7 +11,7 @@ pinned here at the numpy level (no waterz needed, so this runs on Windows).
 The reference is the hand manipulation that was validated on the cluster before
 the fix went into the code: take the old near-voxel, x-first affinities, permute
 the channels to z, y, x, and roll each one +1 voxel along its own axis
-(``configs/experiments/waterz_shift_refit/build_arms.py`` in the data tree, arm
+(``scratch_configs/experiments/waterz_shift_refit/build_arms.py`` in the data tree, arm
 ``chanorder_zyx_shift``). The first plane of each channel is the one place the
 two differ (the arms zeroed it; the new code never writes it, so it is also 0
 before normalization), and waterz never reads it.

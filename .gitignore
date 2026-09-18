@@ -2,7 +2,7 @@
 *.ipynb
 /data
 /experiments
-/configs
+/scratch_configs
 /workshop_paper
 /scripts/*/[a-z]*_config.toml
 /logs

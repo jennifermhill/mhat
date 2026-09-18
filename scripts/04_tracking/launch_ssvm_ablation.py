@@ -7,8 +7,8 @@ For each condition this submits:
      so it fires even if the fit exits 120 in the shutdown phase (a known LSF
      post-completion exit-code quirk; outputs are already written by then).
 
-Fit configs:  configs/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit/<name>.toml
-Eval configs: configs/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit/eval/<name>_eval.toml
+Fit configs:  scratch_configs/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit/<name>.toml
+Eval configs: scratch_configs/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit/eval/<name>_eval.toml
 (both generated for the 13 conditions; see the plan / CLAUDE.md SSVM section.)
 
 Usage (run from the repo root on the cluster):
@@ -26,7 +26,7 @@ import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CONFIG_DIR = "configs/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit"
+CONFIG_DIR = "scratch_configs/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit"
 LOG_DIR = os.path.join(
     REPO, "experiments", "tracking", "Fluo-C3DL-MDA231", "01_cells", "ssvm_fit_logs"
 )

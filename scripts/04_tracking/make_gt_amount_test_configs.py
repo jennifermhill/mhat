@@ -41,7 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEST_DATASET = "02_nuclei_denoised_test"
 DEFAULT_TEMPLATE = (
     REPO_ROOT
-    / "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/ssvm_test_from_train_config.toml"
+    / "scratch_configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/ssvm_test_from_train_config.toml"
 )
 
 WEIGHT_KEYS = tuple(_LEARNED_WEIGHT_TO_TOML.values())

@@ -147,7 +147,7 @@ def main() -> None:
     subdir = config.get("regsweep_subdir", "")
     eval_cfg_dir = (
         Path(__file__).resolve().parents[2]
-        / "configs/tracking" / experiment / dataset / (subdir or "gt_amount") / "eval"
+        / "scratch_configs/tracking" / experiment / dataset / (subdir or "gt_amount") / "eval"
     )
 
     selection_metric = config.get("selection_metric", "target_effectiveness")

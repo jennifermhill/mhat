@@ -3,6 +3,7 @@
 /data
 /experiments
 /workshop_paper
+/scripts/_scratch
 /scripts/*/[a-z]*_config.toml
 /logs
 /ctc
@@ -10,7 +11,7 @@
 # configs/ is version-controlled on this branch (unlike mhat_dicty).
 # Exclude the trackmate figure config — its consumer script isn't on this branch.
 /configs/evaluation/trackmate_vs_mhat.toml
-/configs/sweeps
+/scratch_configs
 
 # Claude files
 /.claude

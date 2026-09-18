@@ -3,25 +3,72 @@ from pathlib import Path
 
 import numpy as np
 
-# waterz reads affinity channel 0 as the z offset, 1 as y and 2 as x. This is
-# not documented by waterz and was established empirically here: split a volume
-# in half along one axis, raise exactly one affinity channel, and the pair
-# merges only when that channel matches the split axis. The result was a clean
-# diagonal over all nine (split axis, channel) combinations.
+# waterz's affinity contract, established empirically (2026-09-15; the sign probe
+# and nine-combination channel diagonal are described in the "2D Support > Known
+# hazards" section of CLAUDE.md): channel 0 is the z edge, 1 is y, 2 is x, and
+# channel d at voxel v is the edge between v and the *previous* voxel along axis
+# d, i.e. (v - e_d, v).
 #
-# Note this is NOT the order the 3D configs in this repo use: they ship
-# ``neighborhood = [[0,0,1], [0,1,0], [1,0,0]]``, whose (dz, dy, dx) offsets put
-# the *x* affinity in channel 0 and z in channel 2 -- so on 3D data waterz has
-# been receiving z and x swapped. Fixing that would change every 3D
-# segmentation ever produced here, so it is deliberately left alone; see the
-# "2D Support" section of CLAUDE.md. It matters below only because the 2D path
-# is new and has no results to preserve, so it maps its channels correctly.
+# Since 2026-09-17 the repo computes affinities directly in that layout:
+# ``compute_fluorescent_affinities`` writes the edge (v - offset, v) at v, and
+# the seg configs list the neighborhood offsets in z, y, x order, which
+# :func:`check_waterz_neighborhood` enforces. A 3D frame is therefore handed to
+# waterz exactly as stored, and a 2D frame only needs the dummy slice from
+# :func:`pad_2d_for_waterz`. Before that date the affinities were written at the
+# near voxel and the configs listed x first, so every earlier 3D segmentation
+# fed waterz z and x swapped and every face one voxel off. Those segmentations
+# are not reproducible with this code. From the fix onward every segmentation
+# carries ``waterz_convention`` in its config.toml and zarr attrs; a
+# segmentation without it is from before.
 
 # waterz's affinity channel for each spatial axis.
 WATERZ_AXIS_CHANNEL = {"z": 0, "y": 1, "x": 2}
 
+# The default neighborhood per rank: a +1 step along z, y, x (y, x in 2D), in
+# waterz's channel order. Larger steps are allowed; the order is not.
+WATERZ_NEIGHBORHOOD = {
+    3: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    2: [[1, 0], [0, 1]],
+}
 
-def pad_2d_for_waterz(affs: np.ndarray, fragments: np.ndarray, neighborhood):
+# Recorded on every segmentation this module produces, so pre- and post-fix
+# runs can be told apart on disk.
+WATERZ_CONVENTION = (
+    "affinities stored in waterz layout: z,y,x channels, edge (v - e, v) at v "
+    "(fixed 2026-09-17)"
+)
+
+
+def check_waterz_neighborhood(neighborhood, ndim):
+    """Refuse a neighborhood whose channels are not in waterz's axis order.
+
+    The affinities are handed to waterz as stored, so the config's offset
+    order *is* waterz's channel order: channel c must step along axis c (z,
+    y, x; y, x in 2D) and nothing else. The step size is free -- a larger
+    offset compares intensities further apart -- but it must be positive, so
+    that the value lands at the voxel waterz reads it from (see
+    ``_offset_slices`` in ``affinities.py``). Configs from before 2026-09-17
+    list x first; that order would silently swap z and x again, hence a hard
+    check rather than a warning.
+    """
+    axis_names = ("z", "y", "x")[3 - ndim :]
+    assert ndim in (2, 3), f"expected a 2D or 3D frame, got ndim={ndim}"
+    got = [[int(d) for d in offset] for offset in neighborhood]
+    assert len(got) == ndim and all(len(offset) == ndim for offset in got), (
+        f"a {ndim}D neighborhood needs {ndim} offsets of {ndim} components, one "
+        f"per axis; got {got}"
+    )
+    for channel, offset in enumerate(got):
+        stepped = [axis for axis, d in enumerate(offset) if d != 0]
+        assert stepped == [channel] and offset[channel] > 0, (
+            f"affinity channel {channel} must be a positive step along "
+            f"{axis_names[channel]} only (waterz's z,y,x channel order, e.g. "
+            f"{WATERZ_NEIGHBORHOOD[ndim]}); got {offset}. Configs from before "
+            "2026-09-17 list x first and must be reordered."
+        )
+
+
+def pad_2d_for_waterz(affs: np.ndarray, fragments: np.ndarray):
     """Lift a 2D frame into the single-slice volume waterz requires.
 
     ``waterz.agglomerate``'s C++ contract is strictly 3D: (3, depth, height,
@@ -32,17 +79,13 @@ def pad_2d_for_waterz(affs: np.ndarray, fragments: np.ndarray, neighborhood):
     needs no adjustment at all, because it is label-based and labels do not
     know what rank they came from.
 
-    Each 2D affinity channel is placed in the waterz slot for the axis its
-    offset steps along, so the caller's neighborhood ordering does not matter.
-    The axial channel is left at 0.0: with a single slice no voxel has a z
-    neighbour, so waterz never reads it, and 0.0 is the minimum affinity after
-    the inversion in create_seg_hypotheses in any case.
+    The two 2D channels (y, x) go into waterz's y and x slots. The z slot is
+    left at 0.0: with a single slice no voxel has a z neighbour, so waterz
+    never reads it.
 
     Args:
-        affs: (n_edges, height, width) affinities.
+        affs: (2, height, width) affinities in waterz layout, channel 0 = y.
         fragments: (height, width) fragment labels.
-        neighborhood: The (dy, dx) offset of each affinity channel, as passed
-            to ``compute_fluorescent_affinities``.
 
     Returns:
         ((3, 1, height, width) float32 affinities, (1, height, width) uint64
@@ -50,42 +93,30 @@ def pad_2d_for_waterz(affs: np.ndarray, fragments: np.ndarray, neighborhood):
     """
     assert fragments.ndim == 2, f"expected a 2D frame, got {fragments.shape}"
     n_edges, height, width = affs.shape
-    neighborhood = np.asarray(neighborhood)
-    assert neighborhood.shape == (n_edges, 2), (
-        f"neighborhood {neighborhood.shape} does not describe {n_edges} 2D "
-        "affinity channels"
-    )
+    assert n_edges == 2, f"expected the (y, x) affinity channels, got {affs.shape}"
     assert fragments.shape == (height, width), (
         f"affinities {affs.shape} and fragments {fragments.shape} disagree"
     )
 
     affs_3d = np.zeros((3, 1, height, width), dtype=np.float32)
-    for edge, offset in enumerate(neighborhood):
-        stepped = np.flatnonzero(offset)
-        assert len(stepped) == 1, (
-            "waterz has one affinity channel per axis, so every neighborhood "
-            f"offset must step along exactly one axis; got {offset.tolist()}"
-        )
-        axis_name = ("y", "x")[int(stepped[0])]
-        affs_3d[WATERZ_AXIS_CHANNEL[axis_name], 0] = affs[edge]
-
+    affs_3d[WATERZ_AXIS_CHANNEL["y"] :, 0] = affs
     fragments_3d = fragments[np.newaxis].astype(np.uint64)
     return affs_3d, fragments_3d
 
 
-def agglomerate_frame(affs, fragments, thresholds, neighborhood=None, **kwargs):
+def agglomerate_frame(affs, fragments, thresholds, neighborhood, **kwargs):
     """``waterz.agglomerate`` on one frame, of either rank.
 
-    3D frames are passed straight through, byte for byte as before. 2D frames
-    are padded with :func:`pad_2d_for_waterz`, agglomerated, and squeezed back
-    to 2D, so the caller only ever sees its own rank.
+    3D frames are passed straight through. 2D frames are padded with
+    :func:`pad_2d_for_waterz`, agglomerated, and squeezed back to 2D, so the
+    caller only ever sees its own rank.
 
     Args:
-        affs: (n_edges, *frame_shape) float32 affinities.
+        affs: (n_edges, *frame_shape) float32 affinities in waterz layout.
         fragments: (*frame_shape) fragment labels.
         thresholds: Merge thresholds, passed through to waterz.
-        neighborhood: Required for 2D frames -- it says which axis each
-            affinity channel belongs to. Ignored for 3D.
+        neighborhood: The offset of each affinity channel, checked against
+            :data:`WATERZ_NEIGHBORHOOD` for this rank.
         **kwargs: Passed through to ``waterz.agglomerate``.
 
     Returns:
@@ -95,30 +126,25 @@ def agglomerate_frame(affs, fragments, thresholds, neighborhood=None, **kwargs):
     import waterz  # type: ignore  # optional [waterz] extra, Linux only
 
     ndim = fragments.ndim
+    check_waterz_neighborhood(neighborhood, ndim)
     if ndim == 3:
-        segmentation, merge_history = next(waterz.agglomerate(
-            affs=affs.astype(np.float32),
-            fragments=fragments.astype(np.uint64),
+        affs_wz = affs.astype(np.float32)
+        fragments_wz = fragments.astype(np.uint64)
+    else:
+        affs_wz, fragments_wz = pad_2d_for_waterz(affs, fragments)
+
+    segmentation, merge_history = next(
+        waterz.agglomerate(
+            affs=affs_wz,
+            fragments=fragments_wz,
             thresholds=thresholds,
             return_merge_history=True,
             **kwargs,
-        ))
-        return segmentation, merge_history
-
-    assert ndim == 2, f"expected a 2D or 3D frame, got {fragments.shape}"
-    assert neighborhood is not None, (
-        "2D agglomeration needs the neighborhood to know which axis each "
-        "affinity channel belongs to"
+        )
     )
-    affs_3d, fragments_3d = pad_2d_for_waterz(affs, fragments, neighborhood)
-    segmentation, merge_history = next(waterz.agglomerate(
-        affs=affs_3d,
-        fragments=fragments_3d,
-        thresholds=thresholds,
-        return_merge_history=True,
-        **kwargs,
-    ))
-    return segmentation[0], merge_history
+    if ndim == 2:
+        segmentation = segmentation[0]
+    return segmentation, merge_history
 
 
 def agglomerate(fragments: np.ndarray, merge_history: Path, threshold: float):

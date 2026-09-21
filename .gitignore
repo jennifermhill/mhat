@@ -11,6 +11,7 @@
 # Claude files
 /.claude
 CLAUDE.md
+tests/TESTING_POLICY.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

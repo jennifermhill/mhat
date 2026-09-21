@@ -177,13 +177,15 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
 
 #     return fragments
 
-def get_segmentation(output_root, thresholds, outfile, neighborhood=None):
+def get_segmentation(output_root, thresholds, outfile, neighborhood=None, waterz_params=None):
     """Agglomerate the fragments frame by frame and record the merge history.
 
     The affinities are handed to waterz as stored, so ``neighborhood`` must be
     waterz's own channel order (``agglomerate_frame`` checks it). It falls
     back to the neighborhood recorded on the affinities array by
-    ``generate_fluorescent_affinities``.
+    ``generate_fluorescent_affinities``. ``waterz_params`` (the config's
+    ``[waterz_params]`` table, e.g. ``scoring_function``) is passed through to
+    ``waterz.agglomerate`` unchanged.
     """
     affinities = output_root["affinities"][:].astype(np.float32)
     fragments = output_root["fragments"][:]
@@ -194,6 +196,7 @@ def get_segmentation(output_root, thresholds, outfile, neighborhood=None):
     spatial_shape = fragments.shape[1:]
     if neighborhood is None:
         neighborhood = output_root["affinities"].attrs.get("neighborhood")
+    waterz_params = dict(waterz_params or {})
 
     output_root.create_dataset(
         "segmentations", shape=(T, *spatial_shape),
@@ -213,7 +216,8 @@ def get_segmentation(output_root, thresholds, outfile, neighborhood=None):
             fragments=fragments[t],
             thresholds=thresholds,
             neighborhood=neighborhood,
-            # scoring_function="ContactArea<RegionGraphType>",
+            # e.g. scoring_function="ContactArea<RegionGraphType>"
+            **waterz_params,
         )
 
         output_root['segmentations'][t] = segmentation
@@ -286,6 +290,7 @@ if __name__ == "__main__":
     else:
         threshold = config["merge_thresholds"]
         get_segmentation(
-            output_root, threshold, merge_history_file, config["waterz_params"],
+            output_root, threshold, merge_history_file,
             neighborhood=config["affinity_params"]["neighborhood"],
+            waterz_params=config.get("waterz_params", {}),
         )

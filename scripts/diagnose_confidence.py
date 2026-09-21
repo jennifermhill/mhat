@@ -7,6 +7,8 @@ import argparse
 import numpy as np
 import zarr
 
+from mhat.opticalflow.utils import open_flow_raw
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -18,7 +20,9 @@ def main():
 
     z = zarr.open(args.flow_3d, mode="r")
     conf = z["confidence"][:]
-    flow = z["flow_raw"][:]
+    # open_flow_raw normalizes to axis order (vz, vy, vx) regardless of
+    # whether this store is native or legacy x-first on disk.
+    flow = np.asarray(open_flow_raw(z)[:])
     print(f"confidence shape: {conf.shape}, dtype: {conf.dtype}")
     print(f"flow_raw shape: {flow.shape}, dtype: {flow.dtype}")
 
@@ -54,9 +58,9 @@ def main():
     print("Flow magnitudes by confidence quantile (pixel units, unscaled)")
     print("=" * 80)
     if flow.shape[-1] >= 3:
-        vx = flow[..., 0]
+        vz = flow[..., 0]
         vy = flow[..., 1]
-        vz = flow[..., 2]
+        vx = flow[..., 2]
         # Ensure shape matches conf
         if conf.shape == vz.shape:
             quantile_edges = np.quantile(conf, [0, 0.2, 0.4, 0.6, 0.8, 1.0])

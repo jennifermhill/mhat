@@ -16,19 +16,23 @@ import zarr
 from numpy import linalg
 
 from mhat.evaluation._report import Report
-
-FLOW_GROUP = "flow_raw"
+from mhat.opticalflow.utils import open_flow_raw
 
 
 def _open_flow(flow_dir):
-    """Open ``flow.zarr/flow_raw`` under a flow result dir, or None."""
+    """Open ``flow.zarr/flow_raw`` under a flow result dir, or None.
+
+    Routed through ``open_flow_raw`` (not a raw zarr index) so a legacy
+    x-first store comes back reversed into axis order like every other
+    reader -- otherwise ``_component_sources`` below would read it backwards.
+    """
     if flow_dir is None:
         return None
     path = Path(flow_dir) / "flow.zarr"
     if not path.exists():
         return None
     try:
-        return zarr.open(str(path), mode="r")[FLOW_GROUP]
+        return open_flow_raw(zarr.open(str(path), mode="r"))
     except (KeyError, FileNotFoundError, ValueError):
         return None
 
@@ -75,14 +79,18 @@ def _flow_frames(variant, t):
 def _component_sources(f3, f2, ndim):
     """Per-axis (array, trailing index) pairs, mirroring nodes_from_segmentation.
 
-    Flow arrays store their vector components in (x, y, z) order in the trailing
-    axis. In 3D the Z component comes from the 3D field and X/Y from the 2D field
-    when it exists (Farneback), otherwise everything comes from one field (LK).
+    Flow arrays come from ``open_flow_raw``, so components are always in axis
+    order -- ``(vz, vy, vx)`` for 3D, ``(vy, vx)`` for 2D -- regardless of
+    whether the store on disk is native or legacy x-first. In 3D the Z
+    component comes from the 3D field and Y/X from the 2D field when it exists
+    (Farneback), otherwise everything comes from one field (LK); the in-plane
+    pair is always the last two components of the source array, so this works
+    whether that array has 2 or 3 components.
     """
     src = f2 if f2 is not None else f3
     if ndim == 3:
-        return [(f3, 2), (src, 1), (src, 0)]
-    return [(src, 1), (src, 0)]
+        return [(f3, 0), (src, -2), (src, -1)]
+    return [(src, -2), (src, -1)]
 
 
 def _point_flow(variant, t, indices, scale_spatial):

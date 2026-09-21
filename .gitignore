@@ -16,6 +16,10 @@
 /configs/evaluation/ssvm_vs_handtuned.toml
 /configs/evaluation/ssvm_vs_handtuned_test.toml
 /scratch_configs
+# agent <-> sweep_watcher exchange dir (requests/, status/, archive/)
+/sweep_queue
+/scripts/cluster_watcher
+/scripts/04_tracking/sweep_request.py
 
 # Claude files
 /.claude

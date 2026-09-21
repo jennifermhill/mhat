@@ -2,3 +2,7 @@
 # platform check out its native EOL. Prevents phantom whole-file diffs
 # when the same working tree is shared across Windows and macOS/Linux.
 * text=auto
+
+# Shell scripts run on the Linux cluster straight from this shared working tree,
+# and bash chokes on CRLF; keep them LF on every platform.
+*.sh text eol=lf

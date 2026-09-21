@@ -30,6 +30,11 @@ Usage, from the repo root on the cluster::
 ``--dep`` makes every tracking job wait on an LSF dependency expression, which is
 how a sweep chains onto segmentation jobs submitted just before it.
 
+``--sandbox WRAPPER`` runs every job's command inside a bwrap sandbox on the
+compute node via ``scripts/cluster_watcher/job_sandbox.sh``; the sweep watcher
+(``scripts/cluster_watcher/sweep_watcher.py``) calls :func:`launch` with the same
+option when it submits on behalf of a sandboxed Claude agent.
+
 Read back the results with ``scripts/05_evaluation/collect_sweep.py``.
 """
 
@@ -38,6 +43,7 @@ from __future__ import annotations
 import argparse
 import copy
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -168,8 +174,8 @@ def validate_spec(spec, allow_protected=False):
         check_keys(run.get("overrides", {}), f"run {run['label']!r}")
 
 
-def config_path_for_cmd(path):
-    """Path to hand the inner command, which runs with ``cwd=REPO``.
+def config_path_for_cmd(path, repo=REPO):
+    """Path to hand the inner command, which runs with ``cwd=repo``.
 
     Sweep artifacts live under ``output_base_dir``, which is only inside the repo
     when the checkout and the data tree are the same directory. In a worktree
@@ -177,12 +183,12 @@ def config_path_for_cmd(path):
     absolute path rather than failing.
     """
     try:
-        return str(path.relative_to(REPO))
+        return str(path.relative_to(repo))
     except ValueError:
         return str(path)
 
 
-def build_configs(spec, sweep_dir):
+def build_configs(spec, sweep_dir, repo=REPO):
     """Write per-run tracking and eval configs; return the run records."""
     base = spec["base"]
     eval_stub = spec["eval"]
@@ -228,8 +234,8 @@ def build_configs(spec, sweep_dir):
                 # effective values rather than on which keys happened to be
                 # written as run-level overrides.
                 "effective": {k: v for k, v in track_config.items() if k != "exp_uid"},
-                "track_config": config_path_for_cmd(track_path),
-                "eval_config": config_path_for_cmd(eval_path),
+                "track_config": config_path_for_cmd(track_path, repo),
+                "eval_config": config_path_for_cmd(eval_path, repo),
             }
         )
     return records
@@ -238,6 +244,7 @@ def build_configs(spec, sweep_dir):
 def bsub(
     job_name, slots, walltime, queue, log_stem, inner,
     dep_job=None, dry_run=False, gpu=None, raw_dep=False,
+    repo=REPO, wrap=None,
 ):
     """Submit one job; return its id (None on a dry run).
 
@@ -245,7 +252,15 @@ def bsub(
     need one. ``raw_dep`` treats ``dep_job`` as a complete LSF dependency
     expression instead of a single job id, which is how a job waits on a whole
     fan-out ("ended(1) && ended(2) && ...").
+
+    ``repo`` is the directory the job starts in (LSF keeps the submission cwd),
+    which the inner commands rely on for their relative script paths. ``wrap`` is
+    an optional sandbox wrapper script: the inner command is handed to it as one
+    quoted argument, so ``bash <wrap> '<inner>'`` is what LSF runs, and the
+    wrapper is what confines the job (see ``scripts/cluster_watcher/job_sandbox.sh``).
     """
+    if wrap:
+        inner = f"bash {shlex.quote(str(wrap))} {shlex.quote(inner)}"
     cmd = [
         "bsub",
         "-J", job_name,
@@ -266,7 +281,7 @@ def bsub(
         print("  " + " ".join(f'"{c}"' if " " in c else c for c in cmd))
         return None
 
-    out = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
+    out = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
     sys.stdout.write(out.stdout)
     sys.stderr.write(out.stderr)
     match = JOB_ID_RE.search(out.stdout)
@@ -275,21 +290,29 @@ def bsub(
     return match.group(1)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("spec", help="path to the sweep spec TOML")
-    parser.add_argument("--dry-run", action="store_true", help="write configs and print bsub commands, do not submit")
-    parser.add_argument("--only", nargs="+", default=None, help="subset of run labels to submit")
-    parser.add_argument("--allow-protected", action="store_true", help="permit overriding structural keys")
-    parser.add_argument(
-        "--dep", default=None,
-        help="LSF dependency expression every tracking job waits on, e.g. "
-        "'ended(123) && ended(456)' to gate a sweep on segmentation jobs",
+def sweep_dir_for(spec):
+    """Where a spec's configs, logs and manifest land (no side effects)."""
+    return (
+        Path(spec["base"]["output_base_dir"]) / "tracking" / spec["experiment"]
+        / spec["dataset"] / "sweeps" / spec["sweep_id"]
     )
-    args = parser.parse_args()
 
-    spec = toml.load(args.spec)
-    validate_spec(spec, allow_protected=args.allow_protected)
+
+def launch(
+    spec_path, *, only=None, allow_protected=False, dep=None, dry_run=False,
+    repo=REPO, wrap=None,
+):
+    """Validate a spec, write its configs, submit its jobs, write its manifest.
+
+    This is ``main()`` without the argument parsing, so the sweep watcher can
+    call it after applying its own policy checks. Returns a dict with
+    ``sweep_id``, ``sweep_dir``, ``manifest`` (``None`` on a dry run) and
+    ``records`` (the submitted runs, each carrying ``track_job_id`` /
+    ``eval_job_id``). Validation failures raise ``SystemExit`` with the reason,
+    exactly as the command line does.
+    """
+    spec = toml.load(spec_path)
+    validate_spec(spec, allow_protected=allow_protected)
 
     lsf = spec.get("lsf", {})
     env = lsf.get("env", "mhat-cluster")
@@ -299,25 +322,22 @@ def main():
     eval_slots = lsf.get("eval_slots", 1)
     eval_walltime = lsf.get("eval_walltime", "0:30")
 
-    output_base_dir = Path(spec["base"]["output_base_dir"])
-    sweep_dir = (
-        output_base_dir / "tracking" / spec["experiment"] / spec["dataset"]
-        / "sweeps" / spec["sweep_id"]
-    )
+    sweep_dir = sweep_dir_for(spec)
     log_dir = sweep_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    records = build_configs(spec, sweep_dir)
+    records = build_configs(spec, sweep_dir, repo)
     print(f"Wrote {len(records)} track + eval configs to {sweep_dir}")
 
     selected = records
-    if args.only:
+    if only:
         known = {record["label"] for record in records}
-        unknown = [label for label in args.only if label not in known]
+        unknown = [label for label in only if label not in known]
         if unknown:
             raise SystemExit(f"unknown run labels: {unknown}")
-        selected = [record for record in records if record["label"] in args.only]
+        selected = [record for record in records if record["label"] in only]
 
+    manifest_path = None
     for record in selected:
         label = record["label"]
         print(f"[{label}] {record['condition']} {record['overrides']}")
@@ -326,19 +346,19 @@ def main():
             track_slots, track_walltime, queue,
             str(log_dir / f"track_{label}"),
             TRACK_INNER.format(threads=track_slots, env=env, cfg=record["track_config"]),
-            dep_job=args.dep, raw_dep=True, dry_run=args.dry_run,
+            dep_job=dep, raw_dep=True, dry_run=dry_run, repo=repo, wrap=wrap,
         )
         eval_job = bsub(
             f"{spec['sweep_id']}_evl_{label}",
             eval_slots, eval_walltime, queue,
             str(log_dir / f"eval_{label}"),
             EVAL_INNER.format(threads=eval_slots, env=env, cfg=record["eval_config"]),
-            dep_job=track_job, dry_run=args.dry_run,
+            dep_job=track_job, dry_run=dry_run, repo=repo, wrap=wrap,
         )
         record["track_job_id"] = track_job or ""
         record["eval_job_id"] = eval_job or ""
 
-    if not args.dry_run:
+    if not dry_run:
         manifest_path = sweep_dir / "manifest.toml"
         # Preserve job ids from earlier partial submissions (repeated --only).
         if manifest_path.is_file():
@@ -361,7 +381,7 @@ def main():
             "sweep_id": spec["sweep_id"],
             "experiment": spec["experiment"],
             "dataset": spec["dataset"],
-            "spec": str(Path(args.spec).resolve()),
+            "spec": str(Path(spec_path).resolve()),
             "queue": queue,
             "track_slots": track_slots,
             "track_walltime": track_walltime,
@@ -376,6 +396,37 @@ def main():
         print(f"Manifest: {manifest_path}")
     else:
         print(f"\n(dry run) {len(selected)} runs; no jobs submitted, no manifest written.")
+
+    return {
+        "sweep_id": spec["sweep_id"],
+        "sweep_dir": sweep_dir,
+        "manifest": manifest_path,
+        "records": selected,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("spec", help="path to the sweep spec TOML")
+    parser.add_argument("--dry-run", action="store_true", help="write configs and print bsub commands, do not submit")
+    parser.add_argument("--only", nargs="+", default=None, help="subset of run labels to submit")
+    parser.add_argument("--allow-protected", action="store_true", help="permit overriding structural keys")
+    parser.add_argument(
+        "--dep", default=None,
+        help="LSF dependency expression every tracking job waits on, e.g. "
+        "'ended(123) && ended(456)' to gate a sweep on segmentation jobs",
+    )
+    parser.add_argument(
+        "--sandbox", default=None, metavar="WRAPPER",
+        help="run every job inside this bwrap wrapper script on the compute node "
+        "(scripts/cluster_watcher/job_sandbox.sh)",
+    )
+    args = parser.parse_args()
+
+    launch(
+        args.spec, only=args.only, allow_protected=args.allow_protected,
+        dep=args.dep, dry_run=args.dry_run, wrap=args.sandbox,
+    )
 
 
 if __name__ == "__main__":

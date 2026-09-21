@@ -6,6 +6,7 @@ import napari
 import zarr
 import dask.array as da
 
+from mhat.opticalflow.utils import open_flow_raw
 from mhat.utils import get_axes_metadata
 
 def main(config, compute: bool = False, scale_factor: float = 1.0):
@@ -76,10 +77,10 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
         path_to_flow_frames_3d_Z = path_to_3d / "flow_frames_Z"
         if not path_to_flow_frames_3d_Z.exists():
             print(f"Flow frames Z path does not exist. Creating at: {path_to_flow_frames_3d_Z}")
-            flow_raw = da.from_zarr(path_to_3d / "flow_raw")
+            flow_raw = open_flow_raw(flow_zarr, dask=True)  # (vz, vy, vx), legacy stores included
             T, Z, Y, X, _ = flow_raw.shape
             flow_zarr.create_dataset('flow_frames_Z', shape=(T, Z, Y, X), chunks=(1, Z, Y, X), dtype=np.float32)
-            flow_zarr['flow_frames_Z'][:] = flow_raw[..., 2]
+            flow_zarr['flow_frames_Z'][:] = flow_raw[..., 0]  # vz is component 0
         flow_frames_3d_Z = da.from_zarr(path_to_flow_frames_3d_Z)
 
         if compute:

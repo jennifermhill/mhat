@@ -40,29 +40,29 @@ def set_position_attrs(data: dict, centroid, names: list[str] | None = None) -> 
         data[name] = value
 
 
-def flow_to_position_order(vec, scale_spatial, offset: int = 0) -> tuple[float, ...]:
-    """Reorder and scale a flow vector into position-axis order.
+def flow_pixels_to_world(vec, scale_spatial, offset: int = 0) -> tuple[float, ...]:
+    """Scale a flow vector from pixel units into world units.
 
-    Flow is stored x-first -- ``farneback.py`` stacks ``(vx, vy, vz)`` and
-    OpenCV's 2D output is ``(vx, vy)`` -- while positions are z-first, so the
-    channels reverse. Pixel units are converted to world units here too, so the
-    result is directly comparable to the voxel-scaled centroids.
+    Flow components are stored in axis order -- ``(vz, vy, vx)`` for 3D flow,
+    ``(vy, vx)`` for 2D (``mhat.opticalflow.utils.FLOW_CHANNEL_ORDER``) -- the
+    same order as positions and ``scale_spatial``, so this is a component-wise
+    multiply. (Until 2026-09-21 flow was stored x-first and this function also
+    reversed it; ``open_flow_raw`` now hands legacy stores over already
+    reversed.)
 
-    ``offset`` is how many *leading* position axes this flow does not cover,
-    and it is the trap worth naming: a 2-channel ``flow_2d`` gets combined
-    against a 3-component position on 3D data, where its reversed channels
-    ``(vy, vx)`` belong on y and x, so ``offset=1``. A plain
-    ``zip(centroid, vec[::-1])`` would put the y flow on the z axis.
+    ``offset`` is how many *leading* position axes this flow does not cover: a
+    2-component ``flow_2d`` combined against a 3-component position on 3D data
+    belongs on y and x, so ``offset=1`` and the z scale is skipped.
 
     Returns ``len(vec)`` components, to be placed at ``position[offset:]``.
     Element types are preserved through the multiply (the components arrive as
     float32 means of a float32 flow array), so the result is bit-identical to
     doing it by hand.
     """
-    components = list(vec)[::-1]
+    components = list(vec)
     scales = list(scale_spatial)[offset:]
     assert len(components) == len(scales), (
-        f"flow has {len(components)} channels but only {len(scales)} position "
+        f"flow has {len(components)} components but only {len(scales)} position "
         f"axes are left after offset={offset}"
     )
     return tuple(float(c * s) for c, s in zip(components, scales))
@@ -155,13 +155,14 @@ def nodes_from_segmentation(
         z_flow_reliable = True
         # In-plane motion is taken from the 2D flow when there is one: it is
         # computed per slice at full resolution, so it resolves in-plane motion
-        # better than the 3D field. Optical flow is stored in pixel units and
-        # x-first; flow_to_position_order converts both.
+        # better than the 3D field. Flow components are stored in pixel units
+        # and in axis order -- (vz, vy, vx) or (vy, vx) -- so the in-plane pair
+        # is the last two either way; flow_pixels_to_world scales them.
         in_plane_source = flow_2d if flow_2d is not None else flow_3d
         if in_plane_source is not None:
             in_plane_pixels = in_plane_source[sl][region]
-            in_plane = flow_to_position_order(
-                (np.mean(in_plane_pixels[:, 0]), np.mean(in_plane_pixels[:, 1])),
+            in_plane = flow_pixels_to_world(
+                (np.mean(in_plane_pixels[:, -2]), np.mean(in_plane_pixels[:, -1])),
                 scale_spatial,
                 offset=ndim - 2,
             )
@@ -179,7 +180,7 @@ def nodes_from_segmentation(
                 # only one the confidence filter applies to: only in-region
                 # pixels whose |confidence| exceeds z_flow_conf_threshold
                 # contribute to the average.
-                vz_pixels = flow_3d[sl][region][:, 2]
+                vz_pixels = flow_3d[sl][region][:, 0]
                 if confidence_3d is not None and z_flow_conf_threshold is not None:
                     conf_pixels = np.abs(confidence_3d[sl][region])
                     conf_mask = conf_pixels > z_flow_conf_threshold

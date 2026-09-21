@@ -1,5 +1,15 @@
 """Write a node-id-labeled twin of a CTC-derived ground truth.
 
+SUPERSEDED FOR NEW CONVERSIONS (2026-09-18)
+-------------------------------------------
+Since the mhat_dicty merge, ``from_ctc_to_geff`` itself labels ``correct_seg.zarr``
+by geff node id (with a ``label`` node property and ``related_objects.node_prop =
+"label"``), and ``evaluate_tracking.remap_seg_to_track_ids`` *requires* that
+convention. A GT converted by the current code therefore needs no twin: point
+``gt_data_dir`` at it directly. This script remains for GT stores converted before
+that change, which are still track-id-labelled on disk; on an already node-id-
+labelled source it is a no-op copy (detected below, not assumed).
+
 WHY THIS EXISTS
 ---------------
 The GT-amount materializers assume `correct_seg.zarr` is labeled with geff **node
@@ -106,15 +116,23 @@ def main() -> None:
     label_prop = "track_id"
     if metadata.related_objects:
         for ro in metadata.related_objects:
-            if ro.type == "labels" and ro.label_prop:
-                label_prop = ro.label_prop
+            # geff-spec 1.2.1 renamed label_prop -> node_prop; the current
+            # from_ctc_to_geff writes node_prop="label". Honour either, or the
+            # ids-as-labels default when the named property is absent.
+            prop = getattr(ro, "node_prop", None) or ro.label_prop
+            if ro.type == "labels" and prop:
+                label_prop = prop
                 break
-    print(f"Source label_prop = {label_prop!r}")
-    if label_prop == "seg_id":
-        print("Source is already node-id labeled; the twin is a straight copy of the label space.")
+    print(f"Source label property = {label_prop!r}")
 
     times = np.asarray(node_props["time"]).astype(np.int64)
-    labels = np.asarray(node_props[label_prop]).astype(np.int64)
+    if label_prop in node_props:
+        labels = np.asarray(node_props[label_prop]).astype(np.int64)
+    else:
+        # No such property: geff's convention is that the labels are the node ids.
+        labels = node_ids.astype(np.int64)
+    if np.array_equal(labels, node_ids.astype(np.int64)):
+        print("Source is already node-id labeled; the twin is a straight copy of the label space.")
 
     # One object per (frame, label) is what makes the relabeling well defined.
     pairs = list(zip(times.tolist(), labels.tolist()))

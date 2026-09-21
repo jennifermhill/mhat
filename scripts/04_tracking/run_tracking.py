@@ -16,6 +16,7 @@ import geff
 import networkx as nx
 
 from mhat.evaluation.eval_io import check_video_dir
+from mhat.opticalflow.utils import open_flow_raw
 from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
 from mhat.tracking.utils import report_graph_statistics
 from mhat.tracking.tracks_io import save_tracks_to_csv
@@ -117,7 +118,6 @@ def build_candidate_graph(config, raw_dir, seg_dir, flow_dirs):
     merge_history_csv_path = seg_dir / "merge_history.csv"
 
     seg_group = "fragments"
-    flow_group = "flow_raw"
 
     max_edge_distance = config["max_edge_distance"]
     max_timepoints = config.get("max_timepoints", None)
@@ -135,15 +135,16 @@ def build_candidate_graph(config, raw_dir, seg_dir, flow_dirs):
     if n_frames < n_total_frames:
         print(f"Truncating to first {n_frames} timepoints (of {n_total_frames})")
     if flow_2d_zarr_path is not None:
-        flow_2d_zarr_root = zarr.open(flow_2d_zarr_path)
-        flow_2d_zarr = flow_2d_zarr_root[flow_group]
+        # Components come back in axis order, (vy, vx); legacy x-first stores
+        # are reversed on read (see mhat.opticalflow.utils).
+        flow_2d_zarr = open_flow_raw(zarr.open(flow_2d_zarr_path))
         flow_2d_shape = flow_2d_zarr.shape
     else:
         flow_2d_zarr = None
         flow_2d_shape = None
     if flow_3d_zarr_path is not None:
         flow_3d_zarr_root = zarr.open(flow_3d_zarr_path)
-        flow_3d_zarr = flow_3d_zarr_root[flow_group]
+        flow_3d_zarr = open_flow_raw(flow_3d_zarr_root)  # (vz, vy, vx)
         flow_3d_shape = flow_3d_zarr.shape
         # Try to load the per-pixel confidence array from the same zarr (optional).
         if "confidence" in flow_3d_zarr_root:

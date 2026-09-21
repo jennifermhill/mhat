@@ -61,6 +61,8 @@ import networkx as nx
 import numpy as np
 import zarr
 
+from mhat.utils import position_names
+
 
 def subset_dirname(n_tracks: int, seed: int) -> str:
     """Directory name for a materialized GT subset."""
@@ -305,6 +307,30 @@ def _hash_node_ids(gt_tracks_path: Path) -> str:
     return hashlib.md5(np.ascontiguousarray(ids)).hexdigest()
 
 
+def source_axis_kwargs(gt_tracks_path: Path, scale) -> dict:
+    """``axis_names`` / ``axis_types`` / ``axis_scales`` for a reduced copy of a GT.
+
+    A masked or cropped GT is a subgraph of the source store, so it must declare
+    the source's axes -- ``["time", "z", "y", "x"]`` for a 3D dataset,
+    ``["time", "y", "x"]`` for a 2D one -- not a 3D literal. A store written
+    without axes metadata (none this pipeline produces any more) falls back to
+    names by rank, taken from the length of ``scale``.
+    """
+    scale = [float(s) for s in scale]
+    axes = geff.GeffMetadata.read(gt_tracks_path).axes
+    if axes:
+        names = [a.name for a in axes]
+        types = [a.type or ("time" if i == 0 else "space") for i, a in enumerate(axes)]
+    else:
+        names = ["time"] + position_names(len(scale) - 1)
+        types = ["time"] + ["space"] * (len(scale) - 1)
+    assert len(names) == len(scale), (
+        f"{gt_tracks_path} declares {len(names)} axes {names} but the scale has "
+        f"{len(scale)} entries: {scale}"
+    )
+    return {"axis_names": names, "axis_types": types, "axis_scales": scale}
+
+
 def materialize_masked_gt(
     gt_data_dir: Path,
     out_dir: Path,
@@ -370,11 +396,9 @@ def materialize_masked_gt(
     geff.write(
         masked,
         out_dir / "correct_tracks.zarr",
-        axis_names=["time", "z", "y", "x"],
-        axis_types=["time", "space", "space", "space"],
-        axis_scales=list(scale),
         metadata=metadata,
         overwrite=True,
+        **source_axis_kwargs(gt_tracks_path, scale),
     )
 
     # Zero every voxel whose node id was dropped, via a lookup table.

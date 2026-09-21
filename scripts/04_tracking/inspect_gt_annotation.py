@@ -24,35 +24,12 @@ import numpy as np
 import toml
 import zarr
 
-from funtracks.import_export import import_from_geff
-from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids
 from mhat.tracking.gt_annotation import (
     assign_gt_labels,
     build_node_to_fragments,
     compute_gt_overlaps,
 )
-from mhat.tracking.pipeline import build_track_graph
-
-
-def load_gt(gt_data_dir, scale):
-    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
-    gt_seg_path = gt_data_dir / "correct_seg.zarr"
-    if not gt_tracks_path.is_dir():
-        raise FileNotFoundError(
-            f"GT tracks not found at {gt_tracks_path}. Run evaluate_tracks.py "
-            "once on a prior tracking result to trigger CTC→geff conversion."
-        )
-    name_map = {"time": "time", "x": "x", "y": "y", "z": "z", "id": "track_id"}
-    gt_tracks = import_from_geff(
-        gt_tracks_path,
-        name_map,
-        segmentation_path=gt_seg_path if gt_seg_path.is_dir() else None,
-        scale=scale,
-    )
-    if gt_tracks.segmentation is None:
-        raise RuntimeError("GT segmentation not found.")
-    gt_seg = remap_seg_to_track_ids(gt_tracks_path, gt_tracks.graph, gt_tracks.segmentation)
-    return gt_tracks.graph, gt_seg
+from mhat.tracking.pipeline import build_track_graph, load_gt, resolve_input_dirs
 
 
 def build_matched_cand_seg(track_graph, fragments, merge_history, nodes=None):
@@ -96,49 +73,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    raw_base_dir = Path(config["raw_base_dir"])
-    input_base_dir = Path(config["input_base_dir"])
-    experiment = config["experiment"]
-    dataset = config["dataset"]
-
-    raw_dir = raw_base_dir / experiment / f"{dataset}.zarr"
-    seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
-    gt_data_dir = input_base_dir / "tracking" / experiment / dataset
-
-    flow_result = config.get("flow_result", None)
-    if flow_result is not None:
-        if config["use_lk"]:
-            flow_dir_3d = (
-                input_base_dir
-                / "opticalflow"
-                / experiment
-                / dataset
-                / "opticalflow_lucaskanade"
-                / flow_result
-            )
-            flow_dir_2d = None
-        else:
-            flow_dir_2d = (
-                input_base_dir
-                / "opticalflow"
-                / experiment
-                / dataset
-                / "opticalflow_2d"
-                / flow_result
-            )
-            flow_dir_3d = (
-                input_base_dir
-                / "opticalflow"
-                / experiment
-                / dataset
-                / "opticalflow_3d"
-                / flow_result
-            )
-            if not flow_dir_2d.is_dir():
-                flow_dir_2d = None
-        flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
-    else:
-        flow_dirs = {"2d": None, "3d": None}
+    # Same directory resolution as fit_weights_ssvm.py, including the
+    # rank-dependent flow policy (2D data needs only a 2D flow) and the
+    # `gt_data_dir` override. The old Lucas-Kanade branch (`use_lk`) is gone:
+    # the fit never supported it and LK flow is dead code.
+    raw_dir, seg_dir, flow_dirs, gt_data_dir = resolve_input_dirs(config)
 
     track_graph, fragments, merge_history, _exclusion_sets, scale, _axes = build_track_graph(
         config, raw_dir, seg_dir, flow_dirs

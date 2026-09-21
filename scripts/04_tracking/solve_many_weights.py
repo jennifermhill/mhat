@@ -22,15 +22,14 @@ import glob
 import traceback
 from pathlib import Path
 
-import geff
-import numpy as np
 import toml
-import zarr
 
-from mhat.tracking import utils
-from mhat.tracking.pipeline import build_track_graph, resolve_input_dirs
+from mhat.tracking.pipeline import (
+    build_track_graph,
+    resolve_input_dirs,
+    write_tracking_outputs,
+)
 from mhat.tracking.solve_with_motile import solve_with_motile
-from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 
 def _graph_key(config) -> tuple:
@@ -92,14 +91,6 @@ def main() -> None:
     no_merges = len(merge_history) == 0
     print(f"  {len(track_graph.nodes)} nodes, {len(track_graph.edges)} edges")
 
-    # build_track_graph returns fragments as a lazy zarr. Collect the leaf ids one
-    # frame at a time, once — they are the same for every config below.
-    frag_ids = set()
-    for t in range(fragments.shape[0]):
-        frag_ids.update(int(v) for v in np.unique(fragments[t]))
-    frag_ids.discard(0)
-    max_frag_id = max(frag_ids) if frag_ids else 0
-
     failures = []
     for path, config in configs:
         exp_uid = config.get("exp_uid") or path.stem
@@ -120,39 +111,10 @@ def main() -> None:
                 failures.append((exp_uid, "empty_solution"))
                 continue
 
-            lookup = utils.get_solution_lookup(
-                merge_history, solution_graph, frag_ids, max_frag_id, fragments.dtype
-            )
-            assign_tracklet_ids(solution_graph)
-
-            seg_root = zarr.open(
-                out_dir / "pred_seg.zarr",
-                mode="w",
-                shape=fragments.shape,
-                chunks=(1, 1, 512, 512),
-                dtype=np.uint32,
-            )
-            if axes is not None:
-                seg_root.attrs["axes"] = axes
-            for t in range(fragments.shape[0]):
-                seg_root[t] = lookup[fragments[t]]
-
-            metadata = geff.GeffMetadata(
-                directed=True,
-                related_objects=[
-                    {"type": "labels", "path": "../pred_seg.zarr", "label_prop": "label"}
-                ],
-                node_props_metadata={},
-                edge_props_metadata={},
-            )
-            geff.write(
-                solution_graph,
-                out_dir / "pred_tracks.zarr",
-                axis_names=["time", "z", "y", "x"],
-                axis_types=["time", "space", "space", "space"],
-                axis_scales=scale,
-                metadata=metadata,
-                overwrite=True,
+            # Same writer as run_tracking.py / fit_weights_ssvm.py, so the outputs
+            # are byte-compatible with the per-config path at either rank.
+            write_tracking_outputs(
+                solution_graph, fragments, merge_history, scale, axes, out_dir
             )
             print(
                 f"  {exp_uid}: {solution_graph.number_of_nodes()} nodes, "

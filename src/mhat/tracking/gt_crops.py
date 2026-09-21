@@ -103,8 +103,24 @@ import numpy as np
 import zarr
 from scipy import ndimage as ndi
 
-#: Volume axis order used throughout (fragments / gt_seg are (T, Z, Y, X)).
-AXIS_NAMES = ("t", "z", "y", "x")
+from mhat.tracking.gt_subsets import source_axis_kwargs
+
+#: Spatial axis names in array order; a 2D movie uses the last two.
+SPATIAL_AXIS_NAMES = ("z", "y", "x")
+
+
+def volume_axis_names(n_axes: int) -> tuple[str, ...]:
+    """Axis names of a (T, *spatial) volume: ``(t, z, y, x)`` or ``(t, y, x)``.
+
+    Every box, bounding box and voxel index in this module is expressed in the
+    volume's own axis order, so the rank is taken from the volume's shape and
+    never assumed.
+    """
+    if n_axes not in (3, 4):
+        raise ValueError(
+            f"expected a (T, Y, X) or (T, Z, Y, X) volume, got {n_axes} axes"
+        )
+    return ("t", *SPATIAL_AXIS_NAMES[-(n_axes - 1):])
 
 
 def fraction_token(fraction: float) -> str:
@@ -138,7 +154,7 @@ def crop_dirname(box_or_token, seed: int | None = None) -> str:
 
 @dataclass(frozen=True)
 class CropBox:
-    """A half-open box in (t, z, y, x) pixel coordinates.
+    """A half-open box in (t, z, y, x) -- or (t, y, x) on 2D data -- pixel coordinates.
 
     Sized one of two ways. ``target_gt_nodes is None`` means the box was cut to a
     requested *volume* fraction; otherwise it was grown until it contained roughly
@@ -147,12 +163,17 @@ class CropBox:
 
     fraction: float
     seed: int
-    starts: tuple[int, int, int, int]
-    stops: tuple[int, int, int, int]
-    volume_shape: tuple[int, int, int, int]
+    starts: tuple[int, ...]
+    stops: tuple[int, ...]
+    volume_shape: tuple[int, ...]
     axes: tuple[str, ...]
     target_gt_nodes: int | None = None
     realized_gt_nodes: int | None = None
+
+    @property
+    def axis_names(self) -> tuple[str, ...]:
+        """Names of the volume's axes, in the order `starts`/`stops` use."""
+        return volume_axis_names(len(self.volume_shape))
 
     @property
     def size_token(self) -> str:
@@ -186,7 +207,11 @@ class CropBox:
         )
 
     def contains_point(self, point) -> bool:
-        """Is a (t, z, y, x) pixel coordinate inside this box?"""
+        """Is a pixel coordinate (in the volume's axis order) inside this box?"""
+        assert len(point) == len(self.starts), (
+            f"point {tuple(point)} has {len(point)} coordinates but the box has "
+            f"{len(self.starts)} axes"
+        )
         return all(a <= p < b for p, a, b in zip(point, self.starts, self.stops))
 
     def to_dict(self) -> dict:
@@ -218,7 +243,7 @@ class CropBox:
 
     def describe(self) -> str:
         parts = []
-        for name, a, b in zip(AXIS_NAMES, self.starts, self.stops):
+        for name, a, b in zip(self.axis_names, self.starts, self.stops, strict=True):
             parts.append(f"{name}[{a}:{b}]")
         return " ".join(parts)
 
@@ -242,7 +267,8 @@ def sample_crop_boxes(
     which makes the containment exact rather than almost-exact.
 
     Args:
-        volume_shape: (T, Z, Y, X) of the fragments volume.
+        volume_shape: (T, Z, Y, X) of the fragments volume, or (T, Y, X) for a
+            2D movie.
         fractions: target fractions of the total volume, e.g. [0.5, 0.25, 0.125].
         seed: RNG seed; also stored on each box.
         axes: which axes to shrink. The default ("y", "x") keeps the full time
@@ -254,12 +280,11 @@ def sample_crop_boxes(
         {fraction: CropBox}, one entry per requested fraction.
     """
     volume_shape = tuple(int(v) for v in volume_shape)
-    if len(volume_shape) != 4:
-        raise ValueError(f"expected a 4D (T, Z, Y, X) shape, got {volume_shape}")
+    axis_names = volume_axis_names(len(volume_shape))
     axes = tuple(axes)
-    unknown = [a for a in axes if a not in AXIS_NAMES]
+    unknown = [a for a in axes if a not in axis_names]
     if unknown:
-        raise ValueError(f"unknown crop axes {unknown}; choose from {AXIS_NAMES}")
+        raise ValueError(f"unknown crop axes {unknown}; choose from {axis_names}")
     if not axes:
         raise ValueError("crop_axes is empty; nothing would be cropped")
 
@@ -293,7 +318,8 @@ def _centers_for_seed(volume_shape, axes, seed: int) -> dict[str, float]:
     keeps crop placement independent of where the ground truth happens to be.
     """
     rng = np.random.default_rng(seed)
-    return {a: float(rng.random()) * volume_shape[AXIS_NAMES.index(a)] for a in axes}
+    axis_names = volume_axis_names(len(volume_shape))
+    return {a: float(rng.random()) * volume_shape[axis_names.index(a)] for a in axes}
 
 
 def _box_for_fraction(
@@ -310,7 +336,7 @@ def _box_for_fraction(
     side_power = 1.0 / len(axes)
     side = fraction**side_power
     starts, stops = [], []
-    for i, name in enumerate(AXIS_NAMES):
+    for i, name in enumerate(volume_axis_names(len(volume_shape))):
         extent = volume_shape[i]
         if name not in axes:
             starts.append(0)
@@ -362,13 +388,17 @@ class GtVoxelIndex:
     the unit an annotator actually draws.
     """
 
-    coords: np.ndarray  # (4, n_voxels) int32, rows ordered (t, z, y, x)
+    coords: np.ndarray  # (n_axes, n_voxels) int32, rows in volume axis order
     labels: np.ndarray  # (n_voxels,) int64 track label
     node_key: np.ndarray  # (n_voxels,) int64, unique per (frame, label)
 
     def _mask_in(self, box: CropBox) -> np.ndarray:
+        n_axes = self.coords.shape[0]
+        assert len(box.starts) == n_axes, (
+            f"box has {len(box.starts)} axes but the voxel index has {n_axes}"
+        )
         inside = np.ones(self.labels.shape, dtype=bool)
-        for axis in range(4):
+        for axis in range(n_axes):
             lo, hi = box.starts[axis], box.stops[axis]
             if lo == 0 and hi >= box.volume_shape[axis]:
                 continue  # uncropped axis: skip the comparison entirely
@@ -534,8 +564,11 @@ def compute_node_bboxes(
     fragments: np.ndarray,
     node_to_fragments: dict[int, list[int]],
     frame_key: str = "time",
-) -> dict[int, tuple[tuple[int, int, int, int], tuple[int, int, int, int]]]:
-    """Pixel-space bounding box of every candidate node, as (starts, stops) in (t,z,y,x).
+) -> dict[int, tuple[tuple[int, ...], tuple[int, ...]]]:
+    """Pixel-space bounding box of every candidate node, as (starts, stops).
+
+    Boxes are in the volume's axis order, (t, z, y, x) or (t, y, x), so they
+    compare directly against a `CropBox` drawn on the same volume.
 
     A merge-hypothesis node owns several leaf fragments, so its box is the union of
     theirs. One ``find_objects`` pass per frame gives every fragment's extent at
@@ -558,8 +591,8 @@ def compute_node_bboxes(
         # find_objects wants a signed int type and indexes 1..max_label densely.
         objects = ndi.find_objects(frame.astype(np.int32, copy=False))
         for node in nodes:
-            lo = [None, None, None]
-            hi = [None, None, None]
+            lo = [None] * frame.ndim
+            hi = [None] * frame.ndim
             for frag_id in node_to_fragments.get(node, [int(node)]):
                 frag_id = int(frag_id)
                 if frag_id < 1 or frag_id > len(objects):
@@ -576,8 +609,8 @@ def compute_node_bboxes(
                     "the candidate graph and the segmentation disagree"
                 )
             bboxes[node] = (
-                (t, int(lo[0]), int(lo[1]), int(lo[2])),
-                (t + 1, int(hi[0]), int(hi[1]), int(hi[2])),
+                (t, *(int(v) for v in lo)),
+                (t + 1, *(int(v) for v in hi)),
             )
     return bboxes
 
@@ -603,7 +636,7 @@ def nodes_outside_crop(
             and keeps more candidates, but a border candidate can then overlap a
             GT object lying mostly outside, so use it only with
             ``assert_no_unannotated_overlap`` watching.
-        scale: (t, z, y, x) voxel scale, required for ``membership="centroid"``
+        scale: (t, *spatial) voxel scale, required for ``membership="centroid"``
             because node centroids are in world units and the box is in pixels.
 
     Nothing here consults the ground truth: the decision is the crop box and the
@@ -616,7 +649,11 @@ def nodes_outside_crop(
     if membership == "centroid":
         if scale is None:
             raise ValueError("membership='centroid' needs the voxel scale")
-        zyx_scale = tuple(float(s) for s in list(scale)[1:4])
+        spatial_scale = tuple(float(s) for s in list(scale)[1:])
+        assert len(spatial_scale) == len(box.volume_shape) - 1, (
+            f"scale {list(scale)} has {len(spatial_scale)} spatial entries but the "
+            f"crop volume {box.volume_shape} has {len(box.volume_shape) - 1} spatial axes"
+        )
 
     outside = set()
     for node, data in track_graph.nodes.items():
@@ -636,8 +673,12 @@ def nodes_outside_crop(
             if centroid is None:
                 outside.add(node)
                 continue
-            # `centroid` is in world units; the box is in pixels.
-            pixel = [int(np.floor(float(c) / s)) for c, s in zip(centroid, zyx_scale)]
+            # `centroid` is in world units; the box is in pixels. strict: a
+            # centroid of the wrong rank must fail, not silently truncate.
+            pixel = [
+                int(np.floor(float(c) / s))
+                for c, s in zip(centroid, spatial_scale, strict=True)
+            ]
             if not box.contains_point((int(t), *pixel)):
                 outside.add(node)
     return outside
@@ -664,7 +705,7 @@ def count_gt_nodes_in_crop(gt_index: GtVoxelIndex, box: CropBox) -> int:
 
 
 def _crop_view(volume: np.ndarray, box: CropBox) -> np.ndarray:
-    """Box slice of a (T, Z, Y, X) volume, tolerating a shorter time axis."""
+    """Box slice of a (T, *spatial) volume, tolerating a shorter time axis."""
     t0, t1 = box.starts[0], min(box.stops[0], volume.shape[0])
     if t1 <= t0:
         return volume[0:0]
@@ -764,11 +805,9 @@ def materialize_cropped_gt(
     geff.write(
         masked,
         out_dir / "correct_tracks.zarr",
-        axis_names=["time", "z", "y", "x"],
-        axis_types=["time", "space", "space", "space"],
-        axis_scales=list(scale),
         metadata=metadata,
         overwrite=True,
+        **source_axis_kwargs(gt_tracks_path, scale),
     )
 
     # Keep every retained object whole — zero only the objects that never touch the box.

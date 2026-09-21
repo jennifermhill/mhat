@@ -21,40 +21,49 @@ import traccuracy.matchers as matchers
 import traccuracy.metrics as metrics
 
 from funtracks.import_export import import_from_geff
-from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids, matchers_dict
+from mhat.evaluation.evaluate_tracking import (
+    matchers_dict,
+    read_name_map_and_scale,
+    remap_seg_to_track_ids,
+)
 
-name_map = {"time": "time", "x": "x", "y": "y", "z": "z", "id": "track_id"}
+# Spatial axis names of the prediction geff, set by load_graphs: ["z", "y", "x"]
+# on 3D data, ["y", "x"] on 2D. The raw geff graph carries one scalar per axis.
+POSITION_KEYS: list[str] = ["z", "y", "x"]
+
+
+def _pos(node_data) -> np.ndarray:
+    """A raw-geff node's position in array-axis order, at the data's rank."""
+    return np.array([node_data[k] for k in POSITION_KEYS], dtype=float)
+
+
+def _load_tracking_graph(tracks_path, seg_path, scale):
+    """funtracks graph + node-id->track_id remapped segmentation, as evaluate_tracking does."""
+    name_map, _own_scale = read_name_map_and_scale(tracks_path)
+    tracks = import_from_geff(tracks_path, node_name_map=name_map,
+                              segmentation_path=None, scale=scale)
+    seg = remap_seg_to_track_ids(tracks.graph, seg_path) if seg_path is not None else None
+    return TrackingGraph(graph=tracks.graph, frame_key="time", label_key="track_id",
+                         location_keys="pos", segmentation=seg)
 
 
 def load_graphs(config, gt_data_dir, pred_data_dir):
     """Load GT and pred graphs, run matcher, return matched object and raw pred graph."""
-    (_, metadata) = geff.read(pred_data_dir / "pred_tracks.zarr")
-    axes = metadata.axes
-    scale = [a.scale for a in axes if a.scale is not None] if axes else [1.0, 1.0, 1.0, 1.0]
+    global POSITION_KEYS
+    pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
+    # The prediction's scale is applied to both stores, exactly as in evaluate_tracking.
+    pred_name_map, scale = read_name_map_and_scale(pred_tracks_path)
+    POSITION_KEYS = list(pred_name_map["pos"])
 
     # Load GT
     gt_seg_path = gt_data_dir / "correct_seg.zarr"
     gt_seg_path = gt_seg_path if gt_seg_path.exists() else None
-    gt_tracks = import_from_geff(gt_data_dir / "correct_tracks.zarr", name_map,
-                                  segmentation_path=gt_seg_path, scale=scale)
-    gt_seg = None
-    if gt_tracks.segmentation is not None:
-        gt_seg = remap_seg_to_track_ids(
-            gt_data_dir / "correct_tracks.zarr", gt_tracks.graph, gt_tracks.segmentation)
-    gt_tg = TrackingGraph(graph=gt_tracks.graph, frame_key="time", label_key="track_id",
-                          location_keys="pos", segmentation=gt_seg)
+    gt_tg = _load_tracking_graph(gt_data_dir / "correct_tracks.zarr", gt_seg_path, scale)
 
     # Load pred
     pred_seg_path = pred_data_dir / "pred_seg.zarr"
     pred_seg_path = pred_seg_path if pred_seg_path.exists() else None
-    pred_tracks = import_from_geff(pred_data_dir / "pred_tracks.zarr", name_map,
-                                    segmentation_path=pred_seg_path, scale=scale)
-    pred_seg = None
-    if pred_tracks.segmentation is not None:
-        pred_seg = remap_seg_to_track_ids(
-            pred_data_dir / "pred_tracks.zarr", pred_tracks.graph, pred_tracks.segmentation)
-    pred_tg = TrackingGraph(graph=pred_tracks.graph, frame_key="time", label_key="track_id",
-                            location_keys="pos", segmentation=pred_seg)
+    pred_tg = _load_tracking_graph(pred_tracks_path, pred_seg_path, scale)
 
     # Run matcher
     matcher_name = config.get("matcher", "point")
@@ -160,8 +169,8 @@ def collect_tp_attrs(tp_edges, raw_pred_graph):
         # Compute node distance and flow magnitude from node attrs
         nu = raw_pred_graph.nodes[pred_u]
         nv = raw_pred_graph.nodes[pred_v]
-        pos_u = np.array([nu["z"], nu["y"], nu["x"]])
-        pos_v = np.array([nv["z"], nv["y"], nv["x"]])
+        pos_u = _pos(nu)
+        pos_v = _pos(nv)
         attrs["node_dist"].append(linalg.norm(pos_v - pos_u))
         if "flow" in nu:
             attrs["flow_mag"].append(linalg.norm(nu["flow"]))
@@ -187,9 +196,9 @@ def collect_substitute_attrs(fn_edges, raw_pred_graph, config):
         nu = raw_pred_graph.nodes[pred_u]
         nv = raw_pred_graph.nodes[pred_v]
         # Compute drift_dist for FN edge
-        pos_u = np.array([nu["z"], nu["y"], nu["x"]])
-        pos_v = np.array([nv["z"], nv["y"], nv["x"]])
-        flow_u = np.array(nu.get("flow", [0, 0, 0]))
+        pos_u = _pos(nu)
+        pos_v = _pos(nv)
+        flow_u = np.array(nu.get("flow", np.zeros(len(pos_u))), dtype=float)
         fn_drift = linalg.norm(pos_u + flow_u - pos_v)
         fn_edge_cost = config.get("drift_weight", 0) * fn_drift + config.get("drift_constant", 0)
         fn_costs["edge_cost"].append(fn_edge_cost)
@@ -270,8 +279,8 @@ def _append_edge_attrs(attrs, graph, u, v):
     attrs["area_diff"].append(edata.get("area_diff", np.nan))
     attrs["intensity_diff"].append(edata.get("intensity_diff", np.nan))
 
-    pos_u = np.array([nu["z"], nu["y"], nu["x"]])
-    pos_v = np.array([nv["z"], nv["y"], nv["x"]])
+    pos_u = _pos(nu)
+    pos_v = _pos(nv)
     attrs["node_dist"].append(linalg.norm(pos_v - pos_u))
 
     if "flow" in nu:
@@ -287,8 +296,8 @@ def collect_fn_attrs(fn_edges, raw_pred_graph):
     for _, _, pred_u, pred_v in fn_edges:
         nu = raw_pred_graph.nodes[pred_u]
         nv = raw_pred_graph.nodes[pred_v]
-        pos_u = np.array([nu["z"], nu["y"], nu["x"]])
-        pos_v = np.array([nv["z"], nv["y"], nv["x"]])
+        pos_u = _pos(nu)
+        pos_v = _pos(nv)
 
         attrs["node_dist"].append(linalg.norm(pos_v - pos_u))
 

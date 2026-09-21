@@ -19,22 +19,22 @@ import datetime
 import logging
 from pathlib import Path
 
-import geff
 import motile
 import numpy as np
 import structsvm as ssvm
 import toml
-import zarr
 
-from funtracks.import_export import import_from_geff
-from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids
 from mhat.tracking import utils
 from mhat.tracking.gt_annotation import annotate_gt_on_candidate_graph
-from mhat.tracking.pipeline import build_track_graph, resolve_input_dirs
+from mhat.tracking.pipeline import (  # noqa: F401 -- load_gt is re-exported for the sweep scripts
+    build_track_graph,
+    load_gt,
+    resolve_input_dirs,
+    write_tracking_outputs,
+)
 from mhat.tracking.solve_with_motile import add_costs
 from mhat.tracking.utils import report_graph_statistics
 from motile.variables import EdgeSelected, NodeSelected
-from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 
 class TolerantBundleMethod(ssvm.BundleMethod):
@@ -231,26 +231,9 @@ def configure_logging(output_dir):
     return log_path
 
 
-def load_gt(gt_data_dir, scale):
-    """Load CTC GT (already in geff format) and remap seg labels to track_ids."""
-    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
-    gt_seg_path = gt_data_dir / "correct_seg.zarr"
-    if not gt_tracks_path.is_dir():
-        raise FileNotFoundError(
-            f"GT tracks not found at {gt_tracks_path}. Run evaluate_tracks.py "
-            "once on a prior tracking result to trigger CTC→geff conversion."
-        )
-    name_map = {"time": "time", "x": "x", "y": "y", "z": "z", "id": "track_id"}
-    gt_tracks = import_from_geff(
-        gt_tracks_path,
-        name_map,
-        segmentation_path=gt_seg_path if gt_seg_path.is_dir() else None,
-        scale=scale,
-    )
-    if gt_tracks.segmentation is None:
-        raise RuntimeError("GT segmentation not found; cannot compute IoU matches.")
-    gt_seg = remap_seg_to_track_ids(gt_tracks_path, gt_tracks.graph, gt_tracks.segmentation)
-    return gt_tracks.graph, gt_seg
+# `load_gt` lives in mhat.tracking.pipeline (rank-agnostic: it builds the
+# funtracks name map from the GT store's own axes) and is imported above; the
+# sweep scripts still import it from here.
 
 
 # Map (cost_name, weight_attr_name) tuples in solver.weights to the TOML keys
@@ -476,43 +459,9 @@ def fit_and_solve_on_graph(
         }
 
     print("Saving results...")
-    # build_track_graph returns fragments as a lazy zarr, so collect the leaf ids
-    # one frame at a time instead of materializing the movie.
-    frag_ids = set()
-    for t in range(fragments.shape[0]):
-        frag_ids.update(int(v) for v in np.unique(fragments[t]))
-    frag_ids.discard(0)
-    lookup = utils.get_solution_lookup(
-        merge_history, solution_graph, frag_ids,
-        max(frag_ids) if frag_ids else 0, fragments.dtype,
-    )
-    assign_tracklet_ids(solution_graph)
-
-    output_seg_path = output_dir / "pred_seg.zarr"
-    output_zarr_root = zarr.open(
-        output_seg_path, mode="a", shape=fragments.shape, chunks=(1, 1, 512, 512), dtype=np.uint32
-    )
-    if axes is not None:
-        output_zarr_root.attrs["axes"] = axes
-    for t in range(fragments.shape[0]):
-        output_zarr_root[t] = lookup[fragments[t]]
-
-    output_filepath_geff = output_dir / "pred_tracks.zarr"
-    metadata = geff.GeffMetadata(
-        directed=True,
-        related_objects=[{"type": "labels", "path": "../pred_seg.zarr", "label_prop": "label"}],
-        node_props_metadata={},
-        edge_props_metadata={},
-    )
-    geff.write(
-        solution_graph,
-        output_filepath_geff,
-        axis_names=["time", "z", "y", "x"],
-        axis_types=["time", "space", "space", "space"],
-        axis_scales=scale,
-        metadata=metadata,
-        overwrite=True,
-    )
+    # Same writer as run_tracking.py: node-id-labelled pred_seg.zarr and a geff
+    # whose axis names come from the data's own metadata (2D or 3D).
+    write_tracking_outputs(solution_graph, fragments, merge_history, scale, axes, output_dir)
 
     return {
         "empty_solution": False,

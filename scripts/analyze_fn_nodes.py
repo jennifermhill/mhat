@@ -10,7 +10,6 @@ Usage: conda run -n mhat-sandbox python scripts/analyze_fn_nodes.py scripts/05_e
 import argparse
 from pathlib import Path
 
-import geff
 import numpy as np
 import toml
 import zarr
@@ -21,40 +20,39 @@ from traccuracy import TrackingGraph, run_metrics
 import traccuracy.matchers as matchers
 
 from funtracks.import_export import import_from_geff
-from mhat.evaluation.evaluate_tracking import remap_seg_to_track_ids, matchers_dict
+from mhat.evaluation.evaluate_tracking import (
+    matchers_dict,
+    read_name_map_and_scale,
+    remap_seg_to_track_ids,
+)
 
-name_map = {"time": "time", "x": "x", "y": "y", "z": "z", "id": "track_id"}
+
+def _load_tracking_graph(tracks_path, seg_path, scale):
+    """funtracks graph + node-id->track_id remapped segmentation, as evaluate_tracking does."""
+    name_map, _own_scale = read_name_map_and_scale(tracks_path)
+    tracks = import_from_geff(tracks_path, node_name_map=name_map,
+                              segmentation_path=None, scale=scale)
+    seg = remap_seg_to_track_ids(tracks.graph, seg_path) if seg_path is not None else None
+    return TrackingGraph(graph=tracks.graph, frame_key="time", label_key="track_id",
+                         location_keys="pos", segmentation=seg)
 
 
 def analyze_fn_nodes(config, gt_data_dir, pred_data_dir):
-    # Load pred metadata for scale
-    (_, metadata) = geff.read(pred_data_dir / "pred_tracks.zarr")
-    axes = metadata.axes
-    scale = [a.scale for a in axes if a.scale is not None] if axes else [1.0, 1.0, 1.0, 1.0]
+    # The prediction's scale is applied to both stores, exactly as in
+    # evaluate_tracking; the name maps come from each store's own axes, so this
+    # works on 2D and 3D data alike.
+    pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
+    _pred_name_map, scale = read_name_map_and_scale(pred_tracks_path)
 
     # Load GT
     gt_seg_path = gt_data_dir / "correct_seg.zarr"
     gt_seg_path = gt_seg_path if gt_seg_path.exists() else None
-    gt_tracks = import_from_geff(gt_data_dir / "correct_tracks.zarr", name_map,
-                                  segmentation_path=gt_seg_path, scale=scale)
-    gt_seg = None
-    if gt_tracks.segmentation is not None:
-        gt_seg = remap_seg_to_track_ids(
-            gt_data_dir / "correct_tracks.zarr", gt_tracks.graph, gt_tracks.segmentation)
-    gt_tg = TrackingGraph(graph=gt_tracks.graph, frame_key="time", label_key="track_id",
-                          location_keys="pos", segmentation=gt_seg)
+    gt_tg = _load_tracking_graph(gt_data_dir / "correct_tracks.zarr", gt_seg_path, scale)
 
     # Load pred (solution)
     pred_seg_path = pred_data_dir / "pred_seg.zarr"
     pred_seg_path = pred_seg_path if pred_seg_path.exists() else None
-    pred_tracks = import_from_geff(pred_data_dir / "pred_tracks.zarr", name_map,
-                                    segmentation_path=pred_seg_path, scale=scale)
-    pred_seg = None
-    if pred_tracks.segmentation is not None:
-        pred_seg = remap_seg_to_track_ids(
-            pred_data_dir / "pred_tracks.zarr", pred_tracks.graph, pred_tracks.segmentation)
-    pred_tg = TrackingGraph(graph=pred_tracks.graph, frame_key="time", label_key="track_id",
-                            location_keys="pos", segmentation=pred_seg)
+    pred_tg = _load_tracking_graph(pred_tracks_path, pred_seg_path, scale)
 
     # Run matcher
     matcher_name = config.get("matcher", "ctc")

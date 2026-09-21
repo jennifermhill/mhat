@@ -1,20 +1,64 @@
 """Shared multi-hypothesis candidate graph construction.
 
 Used by both run_tracking.py and the SSVM fit/inspect scripts so they all
-build the candidate graph the same way.
+build the candidate graph the same way. Everything here is rank-agnostic: the
+data's dimensionality is read off the fragments array (``ndim = fragments.ndim
+- 1``) and never assumed, so the same code serves 2D+time and 3D+time movies.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import geff
 import motile
 import networkx as nx
 import numpy as np
 import zarr
 
+from funtracks.import_export import import_from_geff
+from mhat.evaluation.evaluate_tracking import (
+    read_name_map_and_scale,
+    remap_seg_to_track_ids,
+)
 from mhat.tracking import create_multihypo_graph, utils
-from mhat.utils import get_axes_metadata
+from mhat.utils import get_axes_metadata, seg_chunks
+from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
+
+
+def data_ndim(seg_dir: Path) -> int:
+    """Spatial rank of a segmentation run, from its fragments array (metadata only)."""
+    return zarr.open(seg_dir / "data.zarr", mode="r")["fragments"].ndim - 1
+
+
+def resolve_flow_dirs(config, seg_dir: Path) -> dict:
+    """Which optical-flow directories a run needs, by the data's rank.
+
+    Mirrors run_tracking.py. 3D data must have a 3D flow (nothing else can
+    estimate axial motion); a 2D flow beside it is optional and, when present,
+    supplies the better-resolved in-plane components. 2D data has no 3D flow to
+    look for, so the 2D one is required.
+    """
+    flow_result = config.get("flow_result", None)
+    if flow_result is None:
+        return {"2d": None, "3d": None}
+
+    input_base_dir = Path(config["input_base_dir"])
+    flow_base = input_base_dir / "opticalflow" / config["experiment"] / config["dataset"]
+    flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
+    flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
+    if data_ndim(seg_dir) == 3:
+        assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
+        if not flow_dir_2d.is_dir():
+            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
+            flow_dir_2d = None
+    else:
+        assert flow_dir_2d.is_dir(), (
+            f"2D optical flow data directory {flow_dir_2d} is missing -- "
+            "2D data has no 3D flow to fall back on"
+        )
+        flow_dir_3d = None
+    return {"2d": flow_dir_2d, "3d": flow_dir_3d}
 
 
 def resolve_input_dirs(config) -> tuple[Path, Path, dict, Path]:
@@ -40,18 +84,7 @@ def resolve_input_dirs(config) -> tuple[Path, Path, dict, Path]:
     seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
     assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
 
-    flow_result = config.get("flow_result", None)
-    if flow_result is not None:
-        flow_base = input_base_dir / "opticalflow" / experiment / dataset
-        flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
-        flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
-        if not flow_dir_2d.is_dir():
-            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D only.")
-            flow_dir_2d = None
-        assert flow_dir_3d.is_dir(), f"Optical flow directory {flow_dir_3d} is missing"
-        flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
-    else:
-        flow_dirs = {"2d": None, "3d": None}
+    flow_dirs = resolve_flow_dirs(config, seg_dir)
 
     if config.get("gt_data_dir"):
         gt_data_dir = Path(config["gt_data_dir"])
@@ -117,6 +150,17 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     axes = get_axes_metadata(seg_zarr_root["fragments"])
     scale = [axis["scale"] for axis in axes]
     img_shape = fragments.shape
+    # One source of truth for the rank: the fragments array itself, which the
+    # axes metadata always agrees with. Everything downstream (positions, geff
+    # axis names, the flow gating) follows from it rather than assuming 3D.
+    ndim = fragments.ndim - 1
+    assert len(axes) == ndim + 1, (
+        f"{seg_zarr_path}/fragments is {fragments.ndim}D but its axes metadata "
+        f"names {len(axes)} axes: {[a['name'] for a in axes]}"
+    )
+    assert ndim == 2 or flow_2d is None or flow_3d is not None, (
+        "3D data with a 2D flow but no 3D flow: nothing can estimate axial motion"
+    )
     # Node times are frame indices, not world units, so time stays unscaled here.
     img_shape_scaled = [img_shape[0]] + [
         int(img_shape[i] * scale[i]) for i in range(1, len(img_shape))
@@ -139,6 +183,12 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
 
     z_flow_conf_threshold = config.get("z_flow_conf_threshold", None)
     z_flow_min_pass_pixels = config.get("z_flow_min_pass_pixels", 10)
+    if ndim == 2 and z_flow_conf_threshold is not None:
+        print(
+            "Warning: z_flow_conf_threshold / z_flow_min_pass_pixels filter the "
+            "axial flow component, which 2D data does not have. Ignoring them."
+        )
+        z_flow_conf_threshold = None
 
     all_cand_graph = None
     all_exclusion_sets: list = []
@@ -178,6 +228,9 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
                 z_flow_conf_threshold=z_flow_conf_threshold,
                 z_flow_min_pass_pixels=z_flow_min_pass_pixels,
                 size_threshold=config["size_threshold"],
+                # A frame with no merges cannot read its timepoint off the (empty)
+                # merge-history slice, so say which frame this is.
+                timepoint=t,
                 scale=scale,
             )
         if all_cand_graph is None:
@@ -197,7 +250,10 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     utils.add_disappear(all_cand_graph, img_shape_scaled)
     track_graph = motile.TrackGraph(all_cand_graph, frame_attribute="time")
 
-    if flow_3d is not None:
+    # Either flow is enough to predict motion. On 3D data the assert above
+    # guarantees a 3D flow whenever there is any flow; on 2D data the 2D flow
+    # is the only flow there is.
+    if flow_3d is not None or flow_2d is not None:
         utils.add_flow_dist_attr(track_graph)
     elif "drift_distance" in config:
         utils.add_drift_dist_attr(track_graph, drift=config["drift_distance"])
@@ -208,3 +264,102 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     utils.add_division_attr(track_graph)
 
     return track_graph, fragments, merge_history, all_exclusion_sets, scale, axes
+
+
+def load_gt(gt_data_dir: Path, scale):
+    """Load a geff ground truth and its label volume, remapped to ``track_id``.
+
+    ``scale`` is the *prediction's* scale (the one ``build_track_graph`` read off
+    the segmentation), applied to the GT exactly as ``evaluate_tracking`` does,
+    so the fit and the evaluation see the same GT coordinates. The name map is
+    built from the GT store's own axes, so a 2D geff loads as 2D rather than
+    silently skipping a ``z`` it does not have.
+
+    Returns:
+        (gt_graph, gt_seg): the funtracks graph (``track_id`` renumbered by
+        funtracks) and the ``correct_seg.zarr`` volume relabelled to match it.
+    """
+    gt_data_dir = Path(gt_data_dir)
+    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
+    gt_seg_path = gt_data_dir / "correct_seg.zarr"
+    if not gt_tracks_path.is_dir():
+        raise FileNotFoundError(
+            f"GT tracks not found at {gt_tracks_path}. Run evaluate_tracks.py "
+            "once on a prior tracking result to trigger CTC->geff conversion."
+        )
+    if not gt_seg_path.is_dir():
+        raise RuntimeError(
+            f"GT segmentation not found at {gt_seg_path}; cannot compute IoU matches."
+        )
+    name_map, own_scale = read_name_map_and_scale(gt_tracks_path)
+    assert len(own_scale) == len(scale), (
+        f"{gt_tracks_path} has {len(own_scale)} axes but the prediction has "
+        f"{len(scale)}: the ground truth and the data are not the same rank"
+    )
+    # The label volume is loaded by remap_seg_to_track_ids rather than funtracks,
+    # which would scale the time index by its axis scale (see evaluate_tracking).
+    gt_tracks = import_from_geff(
+        gt_tracks_path, node_name_map=name_map, segmentation_path=None, scale=list(scale)
+    )
+    gt_seg = remap_seg_to_track_ids(gt_tracks.graph, gt_seg_path)
+    return gt_tracks.graph, gt_seg
+
+
+def geff_axis_kwargs(axes) -> dict:
+    """``axis_names`` / ``axis_types`` for ``geff.write`` from zarr axes metadata.
+
+    Names come from the data rather than a 3D literal, so a 2D run writes
+    ``["time", "y", "x"]`` and does not declare a z axis that no node property
+    backs. On every 3D dataset in this repo the metadata already reads exactly
+    time/z/y/x, so the output there is unchanged.
+    """
+    return {
+        "axis_names": [axis["name"] for axis in axes],
+        "axis_types": [
+            axis.get("type", "time" if i == 0 else "space") for i, axis in enumerate(axes)
+        ],
+    }
+
+
+def write_tracking_outputs(solution_graph, fragments, merge_history, scale, axes, output_dir):
+    """Write ``pred_seg.zarr`` and ``pred_tracks.zarr`` the way run_tracking.py does.
+
+    The segmentation is labelled by solution node id (the convention
+    ``evaluate_tracking.remap_seg_to_track_ids`` relies on) and chunked one
+    tile of one slice, whatever the rank. ``fragments`` may be a lazy zarr: it
+    is read one frame at a time. Assigns tracklet ids on ``solution_graph``.
+    """
+    output_dir = Path(output_dir)
+    frag_ids = set()
+    for t in range(fragments.shape[0]):
+        frag_ids.update(int(v) for v in np.unique(fragments[t]))
+    frag_ids.discard(0)
+    lookup = utils.get_solution_lookup(
+        merge_history, solution_graph, frag_ids,
+        max(frag_ids) if frag_ids else 0, fragments.dtype,
+    )
+    assign_tracklet_ids(solution_graph)
+
+    output_seg_path = output_dir / "pred_seg.zarr"
+    output_zarr_root = zarr.open(
+        output_seg_path, mode="w", shape=fragments.shape,
+        chunks=seg_chunks(fragments.shape[1:]), dtype=np.uint32,
+    )
+    output_zarr_root.attrs["axes"] = axes
+    for t in range(fragments.shape[0]):
+        output_zarr_root[t] = lookup[fragments[t]]
+
+    metadata = geff.GeffMetadata(
+        directed=True,
+        related_objects=[{"type": "labels", "path": "../pred_seg.zarr", "label_prop": "label"}],
+        node_props_metadata={},
+        edge_props_metadata={},
+    )
+    geff.write(
+        solution_graph,
+        output_dir / "pred_tracks.zarr",
+        axis_scales=list(scale),
+        metadata=metadata,
+        overwrite=True,
+        **geff_axis_kwargs(axes),
+    )

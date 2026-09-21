@@ -206,7 +206,7 @@ def run_self_test() -> None:
                 t * per_frame + k + 1,
                 time=t,
                 area=10.0 + k,
-                centroid=[float(t), 0.0, float(k), 0.0],
+                centroid=[0.0, float(k), 0.0],
                 cohesion=0.5,
                 adhesion=0.5,
                 num_leaves=1,
@@ -301,6 +301,29 @@ def run_crop_self_test() -> None:
     origins = {sample_crop_boxes(shape, [0.25], seed=s)[0.25].starts for s in range(8)}
     assert len(origins) > 1, "crop placement does not depend on the seed"
 
+    # The same geometry on a 2D movie: boxes are (t, y, x), the time axis is
+    # still untouched, and the seed-0 y/x placement is identical to the 3D case
+    # (the centre draw does not depend on z existing).
+    shape_2d = (20, 512, 512)
+    for seed in range(4):
+        boxes_2d = sample_crop_boxes(shape_2d, fractions, seed=seed, axes=("y", "x"))
+        boxes_3d = sample_crop_boxes(shape, fractions, seed=seed, axes=("y", "x"))
+        for fraction in fractions:
+            box = boxes_2d[fraction]
+            assert len(box.starts) == 3, f"2D crop box has {len(box.starts)} axes"
+            assert box.axis_names == ("t", "y", "x"), box.axis_names
+            assert (box.starts[0], box.stops[0]) == (0, shape_2d[0]), "time axis was cropped"
+            assert box.starts[1:] == boxes_3d[fraction].starts[2:], (
+                f"seed {seed}: 2D crop placed differently from the 3D one"
+            )
+            assert box.describe().startswith("t[0:20] y[")
+    try:
+        sample_crop_boxes((20, 512), fractions, seed=0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a volume without a time axis must be rejected")
+
     # Bounding boxes: a merge node's box is the union of its leaf fragments'.
     fragments = np.zeros((1, 4, 10, 10), dtype=np.int32)
     fragments[0, 1, 2:4, 2:4] = 1
@@ -324,6 +347,31 @@ def run_crop_self_test() -> None:
     )
     outside = nodes_outside_crop(graph, box, bboxes, membership="contained")
     assert outside == {2, 3}, f"expected the border-straddling nodes to be dropped, got {outside}"
+
+    # The same union and containment on 2D frames: boxes drop the z entry and
+    # nothing else changes. The centroid membership rule must take a 2-component
+    # centroid against a (t, y, x) scale.
+    fragments_2d = fragments[:, 1]
+    bboxes_2d = compute_node_bboxes(graph, fragments_2d, {1: [1], 2: [2], 3: [1, 2]})
+    assert bboxes_2d[1] == ((0, 2, 2), (1, 4, 4)), bboxes_2d[1]
+    assert bboxes_2d[3] == ((0, 2, 2), (1, 8, 8)), bboxes_2d[3]
+    box_2d = CropBox(
+        fraction=0.25, seed=0, starts=(0, 0, 0), stops=(1, 5, 5),
+        volume_shape=(1, 10, 10), axes=("y", "x"),
+    )
+    assert nodes_outside_crop(graph, box_2d, bboxes_2d, membership="contained") == {2, 3}
+    for node, centroid in ((1, (3.0, 3.0)), (2, (7.0, 7.0)), (3, (5.0, 5.0))):
+        graph.nodes[node]["centroid"] = centroid
+    assert nodes_outside_crop(
+        graph, box_2d, membership="centroid", scale=[1.0, 1.0, 1.0]
+    ) == {2, 3}
+    # A 2D box must also exclude its own voxels from a 2D GT volume correctly.
+    gt_2d = np.zeros((1, 10, 10), dtype=np.int32)
+    gt_2d[0, 2:4, 2:4] = 7
+    gt_2d[0, 6:8, 6:8] = 9
+    index_2d = build_gt_voxel_index(gt_2d)
+    assert index_2d.labels_in(box_2d) == {7}
+    assert index_2d.count_nodes_in(box_2d) == 1
 
     # --- budget-sized crops --------------------------------------------------
     # A synthetic GT with a deliberately lopsided density: the left half of the

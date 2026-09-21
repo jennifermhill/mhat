@@ -1310,3 +1310,49 @@ Runs: worktree e9094b6, env mhat-cluster, Gurobi 13.0.3, graph-cache keys 01_cel
 shift 21dcd9f32056677c, 02_cells shift d72dc9ca111f6b89. Sweeps wsr0/wsr1/wsr1b/wsr2/wsr3/wsrfinal (01_cells) and
 wsrfinal02 (02_cells); 59 tracking runs total. Specs and notes in
 /groups/sgro/sgrolab/jennifer/mhat/configs/experiments/waterz_shift_refit/.
+
+## waterz fix: regenerated baseline (2026-09-18, cluster, sweep watcher)
+
+The waterz channel-order + one-voxel-shift fix landed in code on 2026-09-17 (`5d94e3b` on `mhat_dicty`,
+merged into `experiments` as `469dee3` on 2026-09-18): affinities are now stored in waterz's layout
+(z, y, x channels, edge (v − e, v) at v) and seg configs must list the neighborhood in z, y, x order.
+Plan: `waterz_fix_regen_plan.md` (worktree root); scaffolding `scratch_configs/experiments/waterz_fix_regen/`
+(data tree). The hand-built arms are superseded by segs produced by the shipped `create_seg_hypotheses.py`:
+fragments copied from the reference seg, affinities recomputed (`overwrite = false` skips cellpose), then
+agglomerated. `verify_seg.py`: fragments identical to the references, `merge_history.csv` and
+`segmentations` byte-identical to the corresponding `*_chanorder_zyx_shift` arm on every dataset.
+
+Folded in from the experiment scaffolding (deleted with the arms in plan step 5):
+
+- Channel-order experiment on the *old* seg `2026-04-03_11-09-49` (2026-09-15, LSF 154298240-45, weights
+  unchanged, `waterz_channel_order/RESULTS.md`): control `chanorder_xzy` 0.8808 / 0.8857 / 0.8449 (fp 101, fn 28,
+  ns 7, fn_edges 50, SEG 0.6171); corrected order only `chanorder_zyx` 0.8686 / 0.8747 / 0.8238 (fp 106, fn 31,
+  ns 8, fn_edges 57, SEG 0.6171); order + shift `chanorder_zyx_shift` 0.8757 / 0.8816 / 0.8328 (fp 101, fn 29,
+  ns 8, fn_edges 54, SEG 0.6228). Scripts: `sign_probe.py` (the shift probe), `build_arms.py`, `diff_merge_histories.py`.
+- Refit arms on `seg_cp_20260720_fs1_cpm6` (`waterz_shift_refit/NOTES.md`): 130 merges on both arms (not 131),
+  shared pairs 117/130, rank Spearman 0.666, shared-pair cost shift −0.0125 (sd 0.052, Pearson 0.587), all-merge
+  cost q50 0.1065 → 0.1020 and q90 0.1911 → 0.1602, threshold-1.0 components identical 12/12. Untuned transfer
+  `wsr0_shift_R0` = 0.9029 / 0.9063 / 0.8781 (fp 156, fn 15, ns 7, fn_edges 39, SEG 0.6916): −0.93 pp TRA, loss in
+  nodes. Attribute stats (ctrl → shift): cohesion 0.922/0.185 → 0.935/0.157 (cost std 481.9 → 610.7), adhesion
+  0.784/0.311 → 0.758/0.338 (cost std 366.6 → 363.7), edge attributes unchanged (3 fewer candidate edges);
+  cohesion_weight rescaled by cost-std ratio 2000 × 481.9/610.7 → 1580 (raw-attribute sd ratio is NOT equivalent
+  because the cost table is scaled by num_leaves). 02_cells arms: control byte-identical to `holdout_fs1_cpm6`,
+  shift 230/258 shared, Spearman 0.781, cost shift −0.0046, components identical 12/12. Graph-cache keys 01_cells
+  ctrl bb1e714f2340846a / shift 21dcd9f32056677c, 02_cells shift d72dc9ca111f6b89.
+
+Runs: worktree `469dee3`, env `mhat-cluster`, Gurobi 13.0.3, submitted via `sweep_request.py` (sweep id `wzfix`,
+one run per spec, specs `scratch_configs/sweeps/wzfix_{mda231_01,mda231_02}.toml`, LSF 154371035-38), graph-cache
+misses (new keys 3c92614450e5be1e for 01_cells). `run_all.sh step3_track` (raw bsub) could not be used from the sandbox.
+
+### WZ-R1: 01_cells, refit params on the regenerated seg `seg_cp_20260720_fs1_cpm6_wzfix`
+exp_uid: wzfix_final
+Hypothesis: "Byte-identical seg ⇒ reproduces wsrfinal_shift_final exactly"
+TRA: 0.9131, DET: 0.9170, LNK: 0.8842, fp: 147, fn: 12, fn_edges: 37
+Verdict: supported — identical (ns 7, fp_edges 2, SEG 0.7067). New current best; supersedes `wsrfinal_shift_final` (arm) as the
+citable exp_uid. Old-convention `fs1cpm6v2_baseline` (0.9122 / 0.9165 / 0.8812) is no longer reproducible with current code.
+
+### WZ-R2: 02_cells held-out, same params, regenerated seg `holdout_fs1_cpm6_wzfix`, run once
+exp_uid: wzfix_final02
+Hypothesis: "Reproduces wsrfinal02_shift_final02 exactly"
+TRA: 0.9424, DET: 0.9482, LNK: 0.8996, fp: 153, fn: 8, fn_edges: 49
+Verdict: supported — identical (ns 14, fp_edges 5, ws_edges 1, SEG 0.7111). Held-out number for the current best.

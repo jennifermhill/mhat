@@ -128,3 +128,35 @@ Grid: cohesion_w −2000/−5000/−10000/+2000, adhesion_w −250/−500/−750
 Best fixed arm: adh_m500_shift TE 0.8109, TF 0.8332, Purity 0.9124, sel 0.8616 (vs control baseline 0.8093 / 0.8319 / 0.9137 / 0.8615); adh −250 = baseline, adh −750 worse on both arms.
 Negative cohesion saturates at −2000 (identical solutions through −10000, sel −0.0008); adhesion monotonically harmful past −500; drift bracketed at 100/−2000.
 Verdict: falsified — the fixed arm never separates from the control by more than one node/one edge except in conditions that damage both arms. Current best stays s0_dw100_cw500; no refit warranted on this dataset.
+
+## waterz fix: regenerated 02_train / 02_test segs (2026-09-18, cluster, sweep watcher)
+
+The fix is in code since `5d94e3b` / merge `469dee3` (see `tracking_optimization_log.md`, "waterz fix: regenerated
+baseline", for the convention and the regeneration recipe). `2026-07-02_10-32-29_wzfix` (train) and
+`2026-07-08_14-40-36_wzfix` (test) were built by the shipped `create_seg_hypotheses.py` from the reference otsu
+fragments; the train seg is byte-identical (merge history and segmentation) to the hand-built arm
+`otsu0702_chanorder_zyx_shift`, the test seg has no arm to compare against. Folded in from
+`waterz_shift_nc281/NOTES.md` (deleted with the arms): both arms give 2896 nodes / 7981 edges, 2886 matching by
+(time, centroid), the 10 unmatched being intermediate merge-level hypotheses whose composition depends on merge
+order; only cohesion/adhesion move (cohesion 0.978/0.095 → 0.985/0.068, adhesion 0.909/0.242 → 0.896/0.270; 93 %
+of nodes have cohesion == 1 and 87 % adhesion == 1 on both arms), so at cost stds of ~30-50 vs drift ~800 the fix
+was expected to be, and is, a no-op to within one node and one edge. ILP objective ctrl −4,645,218.6 vs shift
+−4,642,147.3 (the cohesion/adhesion cost sum moving, not a different solution). The wsn1 due-diligence sweep
+(30 paired runs) is recorded in the WSN1 entry above; its best fixed-arm point (adh −500, sel 0.8616) is a tie
+with the control baseline (0.8615), so `s0_dw100_cw500` stays.
+
+Runs: worktree `469dee3`, env `mhat-cluster`, Gurobi 13.0.3, `sweep_request.py` sweep id `wzfix`, specs
+`scratch_configs/sweeps/wzfix_nc281_{train,test}.toml`, LSF 154371039-42, graph-cache misses.
+
+### WZ-R1: 02_nuclei_denoised_train, s0_dw100_cw500 params on `2026-07-02_10-32-29_wzfix`
+exp_uid: wzfix_s0
+Hypothesis: "Byte-identical seg ⇒ reproduces wsn_shift_R0 exactly"
+TE: 0.8093, TF_mean: 0.8319, Node_Recall: 0.9530, Edge_Recall: 0.9031, Purity: 0.9133
+Verdict: supported — identical (fp 73, fn 129, fp_edges 126, fn_edges 250). Citable post-fix train result.
+
+### WZ-R2: 02_nuclei_denoised_test, same params, `2026-07-08_14-40-36_wzfix`, run once
+exp_uid: wzfix_test_full
+Hypothesis: "Within ~0.001 of the old-convention test_full (TE 0.8290 / Purity 0.8861 / TF 0.8265)"
+TE: 0.8282, TF_mean: 0.8259, Node_Recall: 0.9622, Edge_Recall: 0.9129, Purity: 0.8849
+Verdict: supported — fp 132 (same), fn 100 → 99, fp_edges 183 → 185, fn_edges 211 → 212; the same one-node/one-edge
+ripple as on train. Citable post-fix held-out result.

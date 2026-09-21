@@ -12,10 +12,15 @@
 # Exclude the trackmate figure config — its consumer script isn't on this branch.
 /configs/evaluation/trackmate_vs_mhat.toml
 /scratch_configs
+# agent <-> sweep_watcher exchange dir (requests/, status/, archive/)
+/sweep_queue
+/scripts/cluster_watcher
+/scripts/04_tracking/sweep_request.py
 
 # Claude files
 /.claude
 CLAUDE.md
+tests/TESTING_POLICY.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

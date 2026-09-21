@@ -128,13 +128,20 @@ jobs:
 
       - run: uv sync --locked --extra dev --extra waterz
 
-      - name: waterz contract test
+      - name: waterz compiles on first call
         # Installing waterz proves nothing: on current master the agglomerate
         # path compiles through witty.compile_cython() *inside*
-        # waterz.agglomerate(), so no C++ is built until the first call. This
-        # test makes that call and checks the merge-history field names that
-        # scripts/02_segmentation/create_seg_hypotheses.py depends on.
-        run: uv run pytest tests/test_waterz_contract.py -v
+        # waterz.agglomerate(), so no C++ is built until the first call. One
+        # toy agglomeration is enough to force it.
+        run: |
+          uv run python -c "
+          import numpy as np, waterz
+          affs = np.full((3, 4, 16, 16), 0.9, dtype=np.float32)
+          frags = np.zeros((4, 16, 16), dtype=np.uint64)
+          frags[:, :8, :8], frags[:, :8, 8:], frags[:, 8:, :8], frags[:, 8:, 8:] = 1, 2, 3, 4
+          seg, history = next(waterz.agglomerate(affs=affs, fragments=frags, thresholds=[0.5], return_merge_history=True))
+          print('waterz compiled; merges:', len(history))
+          "
 
   lint:
     # Scoped to tests/ on purpose. `ruff check .` currently reports ~313

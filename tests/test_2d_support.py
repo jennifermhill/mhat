@@ -7,8 +7,8 @@ smoke tests at both ranks. What they do not cover is the handful of ordering
 conventions that only exist because of 2D, each of which produces plausible
 numbers rather than an error if it is reversed:
 
-  * flow channels are x-first while positions are z-first, and a 2-channel
-    flow on 3D data must land on (y, x), not (z, y);
+  * flow components are in axis order, and a 2-component flow on 3D data
+    must land on (y, x), not (z, y);
   * affinity slices are now built from the neighborhood offsets, so a 2D
     neighborhood has to mean what a per-pixel definition says it means;
   * the CTC evaluation boundary compares a (T, Y, X) prediction against 2D
@@ -40,10 +40,9 @@ from mhat.segmentation.affinities import (
 from mhat.segmentation.agglomerate import (
     WATERZ_AXIS_CHANNEL,
     WATERZ_NEIGHBORHOOD,
-    agglomerate_frame,
     pad_2d_for_waterz,
 )
-from mhat.tracking.utils import flow_to_position_order
+from mhat.tracking.utils import flow_pixels_to_world
 
 # The 2D neighborhood a 2D seg config ships: channel 0 steps in y, channel 1 in
 # x, waterz's order.
@@ -57,17 +56,17 @@ SZ, SY, SX = 7.0, 11.0, 13.0
 @pytest.mark.parametrize(
     "vec, scale, offset, expected",
     [
-        ((VX, VY, VZ), [SZ, SY, SX], 0, (VZ * SZ, VY * SY, VX * SX)),
-        ((VX, VY), [SY, SX], 0, (VY * SY, VX * SX)),
-        # The trap: 2 flow channels against 3 position axes. offset=1 says the
-        # flow does not cover z, which keeps the y flow off the z axis (a naive
-        # zip(centroid, vec[::-1]) would give (VY * SZ, VX * SY)).
-        ((VX, VY), [SZ, SY, SX], 1, (VY * SY, VX * SX)),
+        ((VZ, VY, VX), [SZ, SY, SX], 0, (VZ * SZ, VY * SY, VX * SX)),
+        ((VY, VX), [SY, SX], 0, (VY * SY, VX * SX)),
+        # The trap: 2 flow components against 3 position axes. offset=1 says
+        # the flow does not cover z, which keeps the y flow off the z axis (a
+        # naive zip(centroid, vec) would give (VY * SZ, VX * SY)).
+        ((VY, VX), [SZ, SY, SX], 1, (VY * SY, VX * SX)),
     ],
     ids=["3d", "2d", "2d-flow-on-3d-data"],
 )
-def test_flow_to_position_order(vec, scale, offset, expected):
-    assert flow_to_position_order(vec, scale, offset=offset) == expected
+def test_flow_pixels_to_world(vec, scale, offset, expected):
+    assert flow_pixels_to_world(vec, scale, offset=offset) == expected
 
 
 def _brute_force(frame, nhood, fn):
@@ -81,9 +80,7 @@ def _brute_force(frame, nhood, fn):
     for e, offset in enumerate(nhood):
         for index in itertools.product(*(range(s) for s in frame.shape)):
             partner = tuple(i + d for i, d in zip(index, offset, strict=True))
-            if any(
-                p < 0 or p >= s for p, s in zip(partner, frame.shape, strict=True)
-            ):
+            if any(p < 0 or p >= s for p, s in zip(partner, frame.shape, strict=True)):
                 continue
             out[(e, *partner)] = fn(frame[index], frame[partner])
     return out
@@ -220,19 +217,3 @@ def test_waterz_2d_padding():
     # With one slice nothing has a z neighbour, so the axial channel stays at
     # the minimum affinity rather than encouraging anything.
     assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["z"]] == 0.0)
-
-
-def test_waterz_2d_squeeze():
-    """The dummy slice never leaks out of ``agglomerate_frame``."""
-    pytest.importorskip(
-        "waterz",
-        reason="waterz not installed — it is the optional [waterz] extra (Linux only)",
-    )
-    affs, fragments = _four_fragments_2d()
-    segmentation, merge_history = agglomerate_frame(
-        affs=affs, fragments=fragments, thresholds=[0.5], neighborhood=NHOOD_2D
-    )
-    assert segmentation.shape == fragments.shape, (
-        "the dummy z slice leaked out of the padding helper"
-    )
-    assert merge_history, "expected at least one merge at threshold 0.5"

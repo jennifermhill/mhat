@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
+from mhat.opticalflow.utils import open_flow_raw
+
 
 def create_flow_color_wheel(width, height):
     # make a square legend with padding
@@ -69,7 +71,7 @@ def create_flow_color_wheel(width, height):
 
 
 def generate_flow_frame(flow, scale_factor=1):
-    """Colour-wheel image of one flow timepoint, (*lead, y, x, 2) -> (*lead, y, x, 3).
+    """Colour-wheel image of one flow timepoint, (*lead, y, x, c) -> (*lead, y, x, 3).
 
     ``lead`` is the z axis for 3D flow and empty for 2D, so the HSV->BGR loop
     below runs once per z slice in 3D and exactly once in 2D (``np.ndindex()``
@@ -79,7 +81,9 @@ def generate_flow_frame(flow, scale_factor=1):
     hsv = np.zeros((*lead, height, width, 3), dtype=np.uint8)  # initialize hsv image
     hsv[..., 1] = 255  # set saturation to maximum
 
-    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])  # calculate magnitude and angle
+    # Components are in axis order, so the in-plane pair is the last two:
+    # (.., vy, vx). cartToPolar wants x then y.
+    mag, ang = cv2.cartToPolar(flow[..., -1], flow[..., -2])  # calculate magnitude and angle
     hsv[..., 0] = ang * 180 / np.pi / 2  # set hue based on angle
     hsv[..., 2] = np.clip(mag * 255 * scale_factor, 0, 255).astype(np.uint8) # dim = 2550, medium = 25500, bright = 255000
 
@@ -94,7 +98,7 @@ def generate_flow_frame(flow, scale_factor=1):
 
 
 def generate_flow_frames(flow_zarr, scale_factor=0.1, color_wheel=False):
-    flow_raw = flow_zarr['flow_raw']
+    flow_raw = open_flow_raw(flow_zarr)  # axis-order components, legacy stores included
 
     T, *lead, Y, X, D = flow_raw.shape
 

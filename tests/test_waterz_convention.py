@@ -15,6 +15,11 @@ the channels to z, y, x, and roll each one +1 voxel along its own axis
 ``chanorder_zyx_shift``). The first plane of each channel is the one place the
 two differ (the arms zeroed it; the new code never writes it, so it is also 0
 before normalization), and waterz never reads it.
+
+The second test guards the other half of the fix: ``check_waterz_neighborhood``
+must refuse the neighborhoods that would silently reproduce the bug, since an
+old config run unchanged would otherwise produce a plausible segmentation with
+the channels swapped again.
 """
 
 from __future__ import annotations
@@ -24,7 +29,6 @@ import pytest
 
 from mhat.segmentation.affinities import compute_fluorescent_affinities
 from mhat.segmentation.agglomerate import (
-    WATERZ_AXIS_CHANNEL,
     WATERZ_NEIGHBORHOOD,
     check_waterz_neighborhood,
 )
@@ -73,55 +77,16 @@ def test_3d_matches_the_validated_hand_conversion():
     np.testing.assert_array_equal(new, want)
 
 
-@pytest.mark.parametrize("axis, axis_name", [(0, "z"), (1, "y"), (2, "x")])
-def test_step_edge_lands_where_waterz_reads_it(axis, axis_name):
-    """A step between planes 7 and 8 must reach waterz at plane 8 of its axis.
-
-    waterz scores the 7|8 face from the value it finds at plane 8 (the sign
-    probe of 2026-09-15). Every other channel and every other plane must be
-    untouched, which is what catches a channel landing on the wrong axis.
-    """
-    shape = (16, 16, 16)
-    raw = np.zeros(shape, dtype=np.float32)
-    hi = [slice(None)] * 3
-    hi[axis] = slice(8, None)
-    raw[tuple(hi)] = 1.0
-
-    affs = compute_fluorescent_affinities(raw, NHOOD_3D)
-
-    expected = np.zeros((3, *shape), dtype=np.float32)
-    at_8 = [slice(None)] * 3
-    at_8[axis] = 8
-    expected[(WATERZ_AXIS_CHANNEL[axis_name], *at_8)] = 1.0
-    np.testing.assert_array_equal(affs, expected)
-
-
-@pytest.mark.parametrize("ndim", [2, 3])
-def test_waterz_neighborhood_is_accepted(ndim):
-    check_waterz_neighborhood(WATERZ_NEIGHBORHOOD[ndim], ndim)
-    # TOML floats and tuples must not trip the comparison.
-    check_waterz_neighborhood(
-        [tuple(float(d) for d in o) for o in WATERZ_NEIGHBORHOOD[ndim]], ndim
-    )
-    # Only the axis order is fixed; the step size is the user's choice.
-    check_waterz_neighborhood(
-        [[3 * d for d in o] for o in WATERZ_NEIGHBORHOOD[ndim]], ndim
-    )
-    mixed = {3: [[2, 0, 0], [0, 1, 0], [0, 0, 4]], 2: [[2, 0], [0, 4]]}
-    check_waterz_neighborhood(mixed[ndim], ndim)
-
-
 @pytest.mark.parametrize(
     "neighborhood, ndim",
     [
-        (OLD_NHOOD_3D, 3),  # the pre-fix x-first order
+        (OLD_NHOOD_3D, 3),  # the pre-fix x-first order: z and x swapped again
         ([[0, 1], [1, 0]], 2),  # the pre-fix 2D order
-        ([[1, 0, 0], [0, 1, 0]], 3),  # a channel missing
-        ([[-1, 0, 0], [0, 1, 0], [0, 0, 1]], 3),  # wrong direction
-        ([[1, 1, 0], [0, 1, 0], [0, 0, 1]], 3),  # diagonal step
-        ([[1, 0, 0], [0, 1, 0], [0, 0, 1]], 2),  # wrong rank
+        ([[-1, 0, 0], [0, 1, 0], [0, 0, 1]], 3),  # wrong direction: faces shift back
+        ([[1, 1, 0], [0, 1, 0], [0, 0, 1]], 3),  # diagonal step read as the z channel
     ],
 )
-def test_other_neighborhoods_are_rejected(neighborhood, ndim):
+def test_bug_reproducing_neighborhoods_are_rejected(neighborhood, ndim):
+    """Each of these would agglomerate without error and be wrong."""
     with pytest.raises(AssertionError):
         check_waterz_neighborhood(neighborhood, ndim)

@@ -8,7 +8,7 @@ import numpy as np
 import zarr
 from tqdm import tqdm
 
-from mhat.opticalflow.utils import rename_flow_uid, frame_average
+from mhat.opticalflow.utils import create_flow_store, frame_average, rename_flow_uid
 from mhat.opticalflow.farneback import compute_farneback_flow_2d, compute_farneback_flow_3d
 from mhat.opticalflow.visualization import generate_flow_frames
 from mhat.utils import get_axes_metadata
@@ -36,21 +36,21 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
     # One chunk per displayed plane: 1 along every axis before the last two.
     plane_chunks = (1,) * (ndim - 1) + spatial_shape[-2:]
 
-    output_zarr = zarr.open(output_dir / 'flow.zarr', 'w')
-
     if do_3d:
         assert ndim == 3, (
             f"3D optical flow needs a 3D movie, but {zarr_path} is {ndim}D. "
             "Set do_3d = false for 2D data; 2D flow is all it has."
         )
-        output_zarr.create_dataset('flow_raw', shape=(T, *spatial_shape, 3), chunks=(*plane_chunks, 3), dtype=np.float32)
-        output_zarr.create_dataset('confidence', shape=(T, *spatial_shape), chunks=plane_chunks, dtype=np.float32)
         flow_function = compute_farneback_flow_3d
     else:
-        output_zarr.create_dataset('flow_raw', shape=(T, *spatial_shape, 2), chunks=(*plane_chunks, 2), dtype=np.float32)
         flow_function = compute_farneback_flow_2d
 
-    output_zarr['flow_raw'].attrs["axes"] = axes
+    # flow_raw is (t, *spatial, components) with the components in axis order,
+    # (vz, vy, vx) or (vy, vx), and that order recorded on the array.
+    output_zarr = create_flow_store(
+        output_dir / 'flow.zarr', T, spatial_shape, plane_chunks, axes,
+        with_confidence=do_3d,
+    )
     
     flow = flow_function(config, zarr_img, output_zarr)
     
@@ -62,7 +62,7 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
 
     if do_3d:
         output_zarr.create_dataset('flow_frames_Z', shape=(T, *spatial_shape), chunks=plane_chunks, dtype=np.float32)
-        output_zarr['flow_frames_Z'][:] = flow[..., 2]
+        output_zarr['flow_frames_Z'][:] = flow[..., 0]  # vz is component 0
 
 
 if __name__ == "__main__":

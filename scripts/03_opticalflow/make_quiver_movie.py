@@ -21,6 +21,8 @@ import matplotlib.pyplot as plt
 import colorcet as cc
 import cv2
 
+from mhat.opticalflow.utils import open_flow_raw
+
 
 def main(config, data_dir: Path):
 
@@ -46,7 +48,7 @@ def main(config, data_dir: Path):
     colormap = cc.m_CET_C8
 
     # Determine canvas size from first frame to set up consistent figure dimensions
-    flow = da.from_zarr(data_dir / "flow_raw")
+    flow = open_flow_raw(data_dir, dask=True)  # (vz, vy, vx), legacy stores included
     conf = da.from_zarr(data_dir / "confidence")
     T, Z, Y, X, _ = flow.shape
     flow_slice = flow[:, z_slice, :, :, :] # [T, Y, X, C]
@@ -92,9 +94,10 @@ def main(config, data_dir: Path):
         conf_mask = conf_frame > conf_thresh
 
         # --- Load velocity data ---
-        # channel order is x, y, z if 3D flow, and x, y if 2D flow
-        vx = flow_frame[..., 0].astype(float) # [Y, X]
-        vy = flow_frame[..., 1].astype(float) # [Y, X]
+        # components are in axis order, (vz, vy, vx) for 3D flow and (vy, vx)
+        # for 2D, so the in-plane pair is the last two either way
+        vy = flow_frame[..., -2].astype(float) # [Y, X]
+        vx = flow_frame[..., -1].astype(float) # [Y, X]
 
         # Apply confidence mask and convert to physical units
         for v in (vx, vy):

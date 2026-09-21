@@ -111,15 +111,22 @@ commit instead. Tag `v0.9.6` does **not** work on Python 3.11 either: its genera
 Note that installing waterz does not prove it works. On current master the agglomeration
 path compiles through `witty.compile_cython()`, and that call sits *inside*
 `waterz.agglomerate()` — so no C++ is built until the first call, not even at import.
-After installing the extra, verify with:
+After installing the extra, force the compile once with a toy agglomeration (the CI
+`waterz` job runs the same thing):
 
 ```bash
-pytest tests/test_waterz_contract.py
+python -c "
+import numpy as np, waterz
+affs = np.full((3, 4, 16, 16), 0.9, dtype=np.float32)
+frags = np.zeros((4, 16, 16), dtype=np.uint64)
+frags[:, :8, :8], frags[:, :8, 8:], frags[:, 8:, :8], frags[:, 8:, 8:] = 1, 2, 3, 4
+seg, history = next(waterz.agglomerate(affs=affs, fragments=frags, thresholds=[0.5], return_merge_history=True))
+print('waterz compiled; merges:', len(history))
+"
 ```
 
-That calls `agglomerate` on a toy volume, which forces the compile and checks the
-merge-history field names stage 02 depends on. The test is skipped automatically wherever
-waterz is not installed.
+Expect the first run to be slow. A missing compiler or Boost fails loudly here rather
+than midway through a segmentation run.
 
 On Windows and macOS, start from precomputed fragments instead — see the stage boundary
 below.

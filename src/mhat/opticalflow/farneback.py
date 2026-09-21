@@ -1,3 +1,5 @@
+import warnings
+
 import cv2
 import dask.array as da
 import numpy as np
@@ -121,6 +123,37 @@ def compute_farneback_flow_2d(config, zarr_img, output_zarr):
     return output_zarr['flow_raw']  # return the computed flow dataset
 
 
+def min_size_for_farneback_3d(scale, levels, poly_n):
+    """Smallest axis length for which every pyramid level survives opticalflow3D.
+
+    ``farneback_3d`` builds its pyramid by repeated ``int(round(size * scale))``
+    (``gaussian_pyramid_3d``), so level sizes are not ``size * scale**k`` -- they
+    round half-to-even and get stuck at fixed points (at scale 0.8 a length of 2
+    maps to 2 forever; at 0.5 a length of 1 rounds to 0). At every level the
+    polynomial expansion (``make_abc_fast``) pads each axis by ``(poly_n - 1) // 2``
+    with ``mode="reflect"``, and torch requires a reflect pad to be strictly
+    smaller than the axis it pads. The presmoothing and ``winsize`` filters use
+    replicate padding and impose nothing. So the binding constraint is that the
+    coarsest level exceeds ``(poly_n - 1) // 2``, and the only reliable way to
+    find the smallest length that satisfies it is to replay the pyramid.
+
+    Verified against ``farneback_3d`` on synthetic volumes (2026-09-21): the
+    predicted minimum matches the first non-failing Z for (0.8, 8 levels,
+    poly_n 5) -> 14, (0.5, 3, 3) -> 6 and (0.5, 3, 5) -> 11.
+    """
+    pad = (int(poly_n) - 1) // 2
+
+    def coarsest(size):
+        for _ in range(int(levels) - 1):
+            size = round(size * scale)
+        return size
+
+    size = pad + 1
+    while coarsest(size) <= pad:
+        size += 1
+    return size
+
+
 def compute_farneback_flow_3d(config, zarr_img, output_zarr):
     """Volumetric Farneback flow. 3D data only -- there is no 2D analogue.
 
@@ -134,12 +167,25 @@ def compute_farneback_flow_3d(config, zarr_img, output_zarr):
     )
     T, Z, Y, X = zarr_img.shape
 
-    # # Check if Z dim is large enough for 3D optical flow
-    min_z_size = (int(config['pyr_scale'][0])^(int(config['levels']) - 1)) * 3  # heuristic minimum size
-    if Z < min_z_size:
-        pad_z = min_z_size - Z
-    else:
-        pad_z = 0
+    # Pad Z up to the smallest length the pyramid can survive (see
+    # min_size_for_farneback_3d). Edge-mode padding adds replicated slices, so
+    # the more of them there are relative to the real ones, the less the
+    # z-flow says about the data.
+    min_z_size = min_size_for_farneback_3d(
+        config['pyr_scale'][0], config['levels'], config['poly_n']
+    )
+    pad_z = max(0, min_z_size - Z)
+    if pad_z >= Z:
+        warnings.warn(
+            f"3D Farneback: the volume has {Z} z slices but pyr_scale in Z ="
+            f"{config['pyr_scale'][0]}, levels={config['levels']}, "
+            f"poly_n={config['poly_n']} need at least {min_z_size}, so {pad_z} "
+            f"replicated edge slices are being added -- at least as many as the "
+            f"real ones. The z component of the flow will be dominated by "
+            f"padding; consider a larger pyr_scale in Z, fewer levels, or a "
+            f"smaller poly_n.",
+            stacklevel=2,
+        )
 
     # Check if Z, Y, or X dims are odd, and pad if so
     pad_y = 0

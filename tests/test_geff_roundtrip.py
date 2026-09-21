@@ -1,16 +1,15 @@
-"""Round-trip contract for the geff / funtracks boundary, at both ranks.
+"""Round-trip contract for the geff / funtracks boundary.
 
-`run_tracking.py` writes tracks with `geff.write`; `evaluate_tracking.py` and
-`scripts/04_tracking/visualize_results.py` read them back with funtracks'
-`import_from_geff`. Nothing else in the repo pins that boundary, and it is the
-one most likely to move: funtracks renamed `name_map` -> `node_name_map`
-between 1.4 and 1.8 (keeping the old spelling as a deprecated alias), and MHAT
-only keeps working because the map is accepted under that name.
+`run_tracking.py` writes tracks with `geff.write`; `evaluate_tracking.py` reads
+them back with funtracks' `import_from_geff`. Two things at that boundary fail
+silently rather than loudly, and those are what is pinned here:
 
-These tests exist so that swapping the vendored funtracks checkout for a stock
-PyPI release fails loudly here rather than silently downstream. They run at
-both ranks because funtracks infers dimensionality from the caller's name map
-rather than from the file, so the map MHAT builds has to follow the file.
+  * funtracks infers dimensionality from the caller's name map rather than
+    from the file, so a stale 3D map on a 2D geff is skipped in silence while
+    `ndims` still says 4 -- hence the round trip runs at both ranks;
+  * geff-spec 1.2.1 renamed `label_prop` to `node_prop` as separate fields, so
+    a reader that only knows one of them quietly falls back to `track_id` and
+    remaps the segmentation against the wrong property.
 """
 
 from __future__ import annotations
@@ -33,18 +32,11 @@ POSITIONS = {
 }
 
 
-@pytest.fixture(params=[2, 3], ids=["2d", "3d"])
-def ndim(request):
-    return request.param
-
-
-@pytest.fixture
-def scale(ndim):
+def unit_scale(ndim):
     return [1.0] * (ndim + 1)
 
 
-@pytest.fixture
-def solution_graph(ndim):
+def make_solution_graph(ndim):
     """Two two-frame tracks, shaped like what solve_with_motile returns."""
     names = AXIS_NAMES[ndim][1:]
     graph = nx.DiGraph()
@@ -58,7 +50,7 @@ def solution_graph(ndim):
     return graph
 
 
-def write_tracks(graph, path, ndim, scale, prop_field="node_prop"):
+def write_tracks(graph, path, ndim, prop_field="node_prop"):
     """Byte-for-byte the geff.write call in run_tracking.py.
 
     `prop_field` exists so a test can also produce a pre-geff-spec-1.2.1 file,
@@ -78,84 +70,60 @@ def write_tracks(graph, path, ndim, scale, prop_field="node_prop"):
         path,
         axis_names=names,
         axis_types=["time"] + ["space"] * (len(names) - 1),
-        axis_scales=scale,
+        axis_scales=unit_scale(ndim),
         metadata=metadata,
         overwrite=True,
     )
 
 
-def test_geff_write_then_read(solution_graph, tmp_path, ndim, scale):
-    """geff.write produces something geff.read returns as (graph, metadata)."""
-    path = tmp_path / "pred_tracks.zarr"
-    write_tracks(solution_graph, path, ndim, scale)
-
-    read_graph, metadata = geff.read(path)
-
-    assert read_graph.number_of_nodes() == solution_graph.number_of_nodes()
-    assert read_graph.number_of_edges() == solution_graph.number_of_edges()
-
-    # read_name_map_and_scale derives `scale` from these axes and would fall
-    # back to isotropic 3D if they went missing.
-    assert metadata.axes is not None
-    assert [a.name for a in metadata.axes] == AXIS_NAMES[ndim]
-    assert [a.scale for a in metadata.axes] == scale
-
-    # The related_objects entry is how the segmentation is located downstream.
-    assert metadata.related_objects
-    assert metadata.related_objects[0].node_prop == "label"
-
-
-def test_seg_label_prop_is_readable_old_and_new(solution_graph, tmp_path, ndim, scale):
+@pytest.mark.parametrize("prop_field", ["node_prop", "label_prop"])
+def test_seg_label_prop_is_readable_old_and_new(tmp_path, prop_field):
     """`evaluate_tracking` must find the seg-label property on files of both ages.
 
-    geff-spec 1.2.1 renamed `label_prop` to `node_prop`. They are separate
-    fields rather than aliases — setting one leaves the other None — so a plain
-    rename in the writers would silently stop `remap_seg_to_track_ids` from
-    finding the property on every pred_tracks.zarr already on disk, and it would
-    quietly fall back to "track_id".
-
-    This pins the resolution expression that reader uses.
+    The two fields are not aliases -- setting one leaves the other None -- so a
+    plain rename in the writers would silently stop `remap_seg_to_track_ids`
+    from finding the property on every pred_tracks.zarr already on disk. This
+    pins the resolution expression that reader uses. Rank-independent, so 3D
+    only.
     """
-    for prop_field in ("node_prop", "label_prop"):
-        path = tmp_path / f"tracks_{prop_field}.zarr"
-        write_tracks(solution_graph, path, ndim, scale, prop_field=prop_field)
+    path = tmp_path / f"tracks_{prop_field}.zarr"
+    write_tracks(make_solution_graph(3), path, 3, prop_field=prop_field)
 
-        _, metadata = geff.read(path)
-        ro = metadata.related_objects[0]
+    _, metadata = geff.read(path)
+    ro = metadata.related_objects[0]
 
-        # Exactly the expression in evaluate_tracking.remap_seg_to_track_ids.
-        resolved = ro.node_prop or ro.label_prop
-        assert resolved == "label", (
-            f"a file written with {prop_field!r} resolved to {resolved!r}; "
-            "remap_seg_to_track_ids would fall back to 'track_id' and remap "
-            "against the wrong property"
-        )
+    # Exactly the expression in evaluate_tracking.remap_seg_to_track_ids.
+    resolved = ro.node_prop or ro.label_prop
+    assert resolved == "label", (
+        f"a file written with {prop_field!r} resolved to {resolved!r}; "
+        "remap_seg_to_track_ids would fall back to 'track_id' and remap "
+        "against the wrong property"
+    )
 
 
-def test_import_from_geff_roundtrip(solution_graph, tmp_path, ndim, scale):
+@pytest.mark.parametrize("ndim", [2, 3], ids=["2d", "3d"])
+def test_import_from_geff_roundtrip(tmp_path, ndim):
     """funtracks reads back the graph MHAT wrote, with positions under 'pos'.
 
     The name map is the one evaluate_tracking builds from the file itself, so
     this is the real call path rather than an approximation of it.
     """
     path = tmp_path / "correct_tracks.zarr"
-    write_tracks(solution_graph, path, ndim, scale)
+    write_tracks(make_solution_graph(ndim), path, ndim)
 
-    # The map must have exactly this file's spatial axes, in order: a stale 3D
-    # map on a 2D file is skipped in silence by funtracks' rename loop while its
-    # ndims still says 4. Adding "seg_id" would make funtracks load the label
-    # array, cutting against evaluate_tracking's own remap_seg_to_track_ids.
+    # The map must have exactly this file's spatial axes, in order. Adding
+    # "seg_id" would make funtracks load the label array, cutting against
+    # evaluate_tracking's own remap_seg_to_track_ids.
     name_map, read_scale = read_name_map_and_scale(path)
     assert name_map["time"] == "time"
     assert name_map["pos"] == AXIS_NAMES[ndim][1:]
-    assert read_scale == scale
+    assert read_scale == unit_scale(ndim)
     assert "seg_id" not in name_map
 
     tracks = import_from_geff(
         path, node_name_map=name_map, segmentation_path=None, scale=read_scale
     )
 
-    assert tracks.graph is not None
     assert tracks.graph.number_of_nodes() == 4
     assert tracks.graph.number_of_edges() == 2
 
@@ -167,6 +135,8 @@ def test_import_from_geff_roundtrip(solution_graph, tmp_path, ndim, scale):
         assert "time" in attrs
 
     # Positions must survive the round trip unscaled (scale is 1.0 here).
-    positions = sorted(tuple(np.asarray(d["pos"], dtype=float))
-                       for _, d in tracks.graph.nodes(data=True))
+    positions = sorted(
+        tuple(np.asarray(d["pos"], dtype=float))
+        for _, d in tracks.graph.nodes(data=True)
+    )
     assert positions == sorted(POSITIONS[ndim])

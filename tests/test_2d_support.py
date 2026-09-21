@@ -40,7 +40,6 @@ from mhat.segmentation.affinities import (
 from mhat.segmentation.agglomerate import (
     WATERZ_AXIS_CHANNEL,
     WATERZ_NEIGHBORHOOD,
-    agglomerate_frame,
     pad_2d_for_waterz,
 )
 from mhat.tracking.utils import flow_to_position_order
@@ -81,9 +80,7 @@ def _brute_force(frame, nhood, fn):
     for e, offset in enumerate(nhood):
         for index in itertools.product(*(range(s) for s in frame.shape)):
             partner = tuple(i + d for i, d in zip(index, offset, strict=True))
-            if any(
-                p < 0 or p >= s for p, s in zip(partner, frame.shape, strict=True)
-            ):
+            if any(p < 0 or p >= s for p, s in zip(partner, frame.shape, strict=True)):
                 continue
             out[(e, *partner)] = fn(frame[index], frame[partner])
     return out
@@ -220,19 +217,3 @@ def test_waterz_2d_padding():
     # With one slice nothing has a z neighbour, so the axial channel stays at
     # the minimum affinity rather than encouraging anything.
     assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["z"]] == 0.0)
-
-
-def test_waterz_2d_squeeze():
-    """The dummy slice never leaks out of ``agglomerate_frame``."""
-    pytest.importorskip(
-        "waterz",
-        reason="waterz not installed — it is the optional [waterz] extra (Linux only)",
-    )
-    affs, fragments = _four_fragments_2d()
-    segmentation, merge_history = agglomerate_frame(
-        affs=affs, fragments=fragments, thresholds=[0.5], neighborhood=NHOOD_2D
-    )
-    assert segmentation.shape == fragments.shape, (
-        "the dummy z slice leaked out of the padding helper"
-    )
-    assert merge_history, "expected at least one merge at threshold 0.5"

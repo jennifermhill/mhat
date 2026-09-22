@@ -7,13 +7,17 @@ so we can pick a meaningful threshold.
 import numpy as np
 import zarr
 
+from mhat.opticalflow.utils import open_flow_raw
+
 
 def main():
     flow_3d_path = "C:/Users/hillj/Documents/mhat/experiments/opticalflow/Fluo-C3DL-MDA231/01_cells/opticalflow_3d/2026-02-17_15-55-00/flow.zarr"
     seg_path = "C:/Users/hillj/Documents/mhat/experiments/segmentation/Fluo-C3DL-MDA231/01_cells/2026-04-03_11-09-49/data.zarr"
 
     flow_zarr = zarr.open(flow_3d_path, mode="r")
-    flow = flow_zarr["flow_raw"][:]
+    # open_flow_raw normalizes to axis order (vz, vy, vx) regardless of
+    # whether this store is native or legacy x-first on disk.
+    flow = np.asarray(open_flow_raw(flow_zarr)[:])
     conf = flow_zarr["confidence"][:]
     print(f"flow shape: {flow.shape}")
     print(f"conf shape: {conf.shape}")
@@ -73,9 +77,9 @@ def main():
     print("=" * 80)
     print("Flow magnitudes by in-region |conf| quantile (pixel units, unscaled)")
     print("=" * 80)
-    vx = flow[..., 0][in_region_mask]
+    vz = flow[..., 0][in_region_mask]
     vy = flow[..., 1][in_region_mask]
-    vz = flow[..., 2][in_region_mask]
+    vx = flow[..., 2][in_region_mask]
 
     quantile_edges = np.quantile(abs_conf_in, [0, 0.2, 0.4, 0.6, 0.8, 1.0])
     print(

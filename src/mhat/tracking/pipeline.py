@@ -21,6 +21,7 @@ from mhat.evaluation.evaluate_tracking import (
     read_name_map_and_scale,
     remap_seg_to_track_ids,
 )
+from mhat.opticalflow.utils import open_flow_raw
 from mhat.tracking import create_multihypo_graph, utils
 from mhat.utils import get_axes_metadata, seg_chunks
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
@@ -114,12 +115,12 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     fragments = seg_zarr_root["fragments"]
 
     if flow_2d_zarr_path is not None:
-        flow_2d_zarr = zarr.open(flow_2d_zarr_path)["flow_raw"]
+        flow_2d_zarr = open_flow_raw(zarr.open(flow_2d_zarr_path))
     else:
         flow_2d_zarr = None
     if flow_3d_zarr_path is not None:
         flow_3d_root = zarr.open(flow_3d_zarr_path)
-        flow_3d_zarr = flow_3d_root["flow_raw"]
+        flow_3d_zarr = open_flow_raw(flow_3d_root)  # (vz, vy, vx)
         if "confidence" in flow_3d_root:
             confidence_3d_zarr = flow_3d_root["confidence"]
         else:

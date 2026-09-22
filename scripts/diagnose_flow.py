@@ -8,6 +8,22 @@ import argparse
 import numpy as np
 import zarr
 
+from mhat.opticalflow.utils import FLOW_CHANNEL_ORDER, flow_channel_order
+
+
+def _to_axis_order(arr_group, data):
+    """Reverse the component axis if ``arr_group`` is a legacy x-first store.
+
+    Mirrors ``open_flow_raw``, but this script's fallback loop can find the
+    array under a group name other than ``flow_raw``, so it can't call
+    ``open_flow_raw`` directly (that function hardcodes the ``"flow_raw"``
+    key).
+    """
+    order = flow_channel_order(arr_group)
+    if order == FLOW_CHANNEL_ORDER[data.shape[-1]]:
+        return data
+    return data[..., ::-1]
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -31,7 +47,7 @@ def main():
         try:
             arr = f3[name]
             print(f"Found 3D flow at group: {name}, shape={arr.shape}, dtype={arr.dtype}")
-            flow_3d_data = arr[:]
+            flow_3d_data = _to_axis_order(arr, arr[:])
             break
         except Exception:
             continue
@@ -47,7 +63,7 @@ def main():
         try:
             arr = f2[name]
             print(f"Found 2D flow at group: {name}, shape={arr.shape}, dtype={arr.dtype}")
-            flow_2d_data = arr[:]
+            flow_2d_data = _to_axis_order(arr, arr[:])
             break
         except Exception:
             continue
@@ -56,17 +72,17 @@ def main():
         print(f2.tree())
         return
 
-    # flow_3d shape (T, Z, Y, X, 3) with channels (vx, vy, vz)
-    # flow_2d shape (T, Z, Y, X, 2) with channels (vx, vy)
+    # flow_3d shape (T, Z, Y, X, 3) with channels (vz, vy, vx), axis order
+    # flow_2d shape (T, Z, Y, X, 2) with channels (vy, vx), axis order
     print()
     print("=" * 80)
-    print("3D FLOW STATISTICS (pixel units, raw from zarr)")
+    print("3D FLOW STATISTICS (pixel units, axis order)")
     print("=" * 80)
     print(f"Shape: {flow_3d_data.shape}")
     if flow_3d_data.shape[-1] >= 3:
-        vx = flow_3d_data[..., 0]
+        vz = flow_3d_data[..., 0]
         vy = flow_3d_data[..., 1]
-        vz = flow_3d_data[..., 2]
+        vx = flow_3d_data[..., 2]
         for name, arr, scale in [
             ("vx (pixel)", vx, 1.0),
             ("vy (pixel)", vy, 1.0),
@@ -83,12 +99,12 @@ def main():
             )
     print()
     print("=" * 80)
-    print("2D FLOW STATISTICS (pixel units, raw from zarr)")
+    print("2D FLOW STATISTICS (pixel units, axis order)")
     print("=" * 80)
     print(f"Shape: {flow_2d_data.shape}")
     if flow_2d_data.shape[-1] >= 2:
-        vx2 = flow_2d_data[..., 0]
-        vy2 = flow_2d_data[..., 1]
+        vy2 = flow_2d_data[..., 0]
+        vx2 = flow_2d_data[..., 1]
         for name, arr, scale in [
             ("vx_2d (pixel)", vx2, 1.0),
             ("vy_2d (pixel)", vy2, 1.0),
@@ -108,8 +124,8 @@ def main():
         print("=" * 80)
         print("3D vs 2D comparison (XY axes, pixel units)")
         print("=" * 80)
-        vx = flow_3d_data[..., 0]
         vy = flow_3d_data[..., 1]
+        vx = flow_3d_data[..., 2]
         # handle possible T dimension differences — take min
         t_min = min(vx.shape[0], vx2.shape[0])
         vx = vx[:t_min]

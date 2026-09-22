@@ -3,15 +3,19 @@ import geff
 import zarr
 import numpy as np
 
+from mhat.opticalflow.utils import open_flow_raw
+
 # Load GT tracks
 g, m = geff.read("C:/Users/hillj/Documents/mhat/experiments/tracking/NC281-Fl2mSiH2B/03_nuclei/correct_tracks.zarr")
 scale = [a.scale for a in m.axes]
 print(f"Scale: {scale}")
 
-# Load flow fields
-fb3d = zarr.open("C:/Users/hillj/Documents/mhat/experiments/opticalflow/NC281-Fl2mSiH2B/03_nuclei/opticalflow_3d/2026-03-24_17-16-56/flow.zarr")["flow_raw"][:]
-fb2d = zarr.open("C:/Users/hillj/Documents/mhat/experiments/opticalflow/NC281-Fl2mSiH2B/03_nuclei/opticalflow_2d/2026-03-24_17-16-56/flow.zarr")["flow_raw"][:]
-lk = zarr.open("C:/Users/hillj/Documents/mhat/experiments/opticalflow/NC281-Fl2mSiH2B/03_nuclei/opticalflow_lucaskanade/2026-03-24_17-16-56/flow.zarr")["flow_raw"][:]
+# Load flow fields. open_flow_raw normalizes components to axis order
+# (vz, vy, vx) / (vy, vx) regardless of whether the store on disk is native
+# or legacy x-first, so every vector below is read out in that order directly.
+fb3d = np.asarray(open_flow_raw(zarr.open("C:/Users/hillj/Documents/mhat/experiments/opticalflow/NC281-Fl2mSiH2B/03_nuclei/opticalflow_3d/2026-03-24_17-16-56/flow.zarr"))[:])
+fb2d = np.asarray(open_flow_raw(zarr.open("C:/Users/hillj/Documents/mhat/experiments/opticalflow/NC281-Fl2mSiH2B/03_nuclei/opticalflow_2d/2026-03-24_17-16-56/flow.zarr"))[:])
+lk = np.asarray(open_flow_raw(zarr.open("C:/Users/hillj/Documents/mhat/experiments/opticalflow/NC281-Fl2mSiH2B/03_nuclei/opticalflow_lucaskanade/2026-03-24_17-16-56/flow.zarr"))[:])
 print(f"FB3D shape: {fb3d.shape}, FB2D shape: {fb2d.shape}, LK shape: {lk.shape}")
 
 no_flow_dists = []
@@ -35,16 +39,16 @@ for u, v in g.edges():
     py = np.clip(py, 0, fb3d.shape[2] - 1)
     px = np.clip(px, 0, fb3d.shape[3] - 1)
 
-    # Farneback: z from 3D, y/x from 2D (matching nodes_from_segmentation logic)
+    # Farneback: z from 3D, y/x from 2D (matching nodes_from_segmentation logic).
+    # Both arrays are already in axis order (z, y, x) / (y, x) via open_flow_raw.
     t_fb = min(t, fb3d.shape[0] - 1)
     fb3d_flow = fb3d[t_fb, pz, py, px]
     fb2d_flow = fb2d[min(t, fb2d.shape[0] - 1), pz, py, px]
-    fb_flow_vec = np.array([fb3d_flow[2], fb2d_flow[1], fb2d_flow[0]])
+    fb_flow_vec = np.array([fb3d_flow[0], fb2d_flow[0], fb2d_flow[1]])
 
-    # LK: all from 3D
+    # LK: all from 3D, already in axis order (z, y, x)
     t_lk = min(t, lk.shape[0] - 1)
-    lk_flow_raw = lk[t_lk, pz, py, px]
-    lk_flow_vec = np.array([lk_flow_raw[2], lk_flow_raw[1], lk_flow_raw[0]])
+    lk_flow_vec = lk[t_lk, pz, py, px]
 
     no_flow_dists.append(np.linalg.norm(pos_u - pos_v))
     fb_dists.append(np.linalg.norm(pos_u + fb_flow_vec - pos_v))
@@ -74,8 +78,8 @@ for u, v in g.edges():
     t_fb = min(t, fb3d.shape[0] - 1)
     fb3d_flow = fb3d[t_fb, pz, py, px]
     fb2d_flow = fb2d[min(t, fb2d.shape[0] - 1), pz, py, px]
-    fb_vec = np.array([fb3d_flow[2], fb2d_flow[1], fb2d_flow[0]])
-    lk_vec = lk[min(t, lk.shape[0] - 1), pz, py, px][[2, 1, 0]]
+    fb_vec = np.array([fb3d_flow[0], fb2d_flow[0], fb2d_flow[1]])
+    lk_vec = lk[min(t, lk.shape[0] - 1), pz, py, px]
     fb_mags.append(np.linalg.norm(fb_vec))
     lk_mags.append(np.linalg.norm(lk_vec))
 

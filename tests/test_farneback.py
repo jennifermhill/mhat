@@ -71,7 +71,7 @@ def flow_config_2d(downsample_factor=1):
     }
 
 
-def run_flow(compute, config, movie, tmp_path):
+def run_flow(compute, config, movie, tmp_path, do_3d):
     """Run a compute_farneback_flow_* on an in-memory movie via the real store."""
     import dask.array as da
 
@@ -83,7 +83,7 @@ def run_flow(compute, config, movie, tmp_path):
         tuple(spatial),
         (1,) * (ndim - 1) + tuple(spatial[-2:]),
         UNIT_AXES[: ndim + 1],
-        with_confidence=(ndim == 3),
+        do_3d=do_3d,
     )
     compute(config, da.from_array(movie, chunks=-1), out)
     return out
@@ -118,7 +118,8 @@ def test_compute_3d_warns_when_padding_dominates(tmp_path):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         out = run_flow(
-            compute_farneback_flow_3d, flow_config_3d(poly_n=5), movie, tmp_path
+            compute_farneback_flow_3d, flow_config_3d(poly_n=5), movie, tmp_path,
+            do_3d=True,
         )
 
     padding_warnings = [w for w in caught if "replicated edge slices" in str(w.message)]
@@ -167,6 +168,7 @@ def test_3d_components_are_axis_ordered_and_rescaled_per_axis(tmp_path, monkeypa
         flow_config_3d(downsample_factor=(ds_z, ds_y, ds_x)),
         movie,
         tmp_path,
+        do_3d=True,
     )
 
     # The fake must have been fed the downsampled grid, or the test is vacuous.
@@ -198,7 +200,9 @@ def test_2d_components_are_axis_ordered(tmp_path, monkeypatch):
     monkeypatch.setattr(cv2, "calcOpticalFlowFarneback", fake_calc)
 
     movie = np.random.default_rng(0).random((2, 16, 16), dtype=np.float32)
-    out = run_flow(compute_farneback_flow_2d, flow_config_2d(), movie, tmp_path)
+    out = run_flow(
+        compute_farneback_flow_2d, flow_config_2d(), movie, tmp_path, do_3d=False
+    )
 
     assert out["flow_raw"].attrs["channel_order"] == ["y", "x"]
     flow = out["flow_raw"][0]

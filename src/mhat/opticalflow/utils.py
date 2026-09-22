@@ -84,23 +84,24 @@ LEGACY_FLOW_CHANNEL_ORDER = {3: ["x", "y", "z"], 2: ["x", "y"]}
 
 
 def create_flow_store(path, n_frames, spatial_shape, plane_chunks, axes,
-                      with_confidence):
+                      do_3d=False):
     """Create ``flow.zarr`` with an empty ``flow_raw`` (and ``confidence`` for 3D).
 
-    ``flow_raw`` gets one component per spatial axis, in axis order, and both
-    the ``axes`` metadata and the ``channel_order`` marker that readers use.
+    ``do_3d determines the number of flow components: 3 for 3D flow (vz, vy, vx) 
+    and 2 for 2D flow (vy, vx). The array carries the ``axes`` metadata and the 
+    ``channel_order`` marker that readers use.
     """
-    ndim = len(spatial_shape)
     root = zarr.open(path, mode="w")
+    n_components = 3 if do_3d else 2
     flow_raw = root.create_dataset(
         "flow_raw",
-        shape=(n_frames, *spatial_shape, ndim),
-        chunks=(*plane_chunks, ndim),
+        shape=(n_frames, *spatial_shape, n_components),
+        chunks=(*plane_chunks, n_components),
         dtype=np.float32,
     )
     flow_raw.attrs["axes"] = axes
-    flow_raw.attrs["channel_order"] = FLOW_CHANNEL_ORDER[ndim]
-    if with_confidence:
+    flow_raw.attrs["channel_order"] = FLOW_CHANNEL_ORDER[n_components]
+    if do_3d:
         root.create_dataset(
             "confidence",
             shape=(n_frames, *spatial_shape),

@@ -45,11 +45,12 @@ def calculate_flow(config, zarr_path: Path, output_dir: Path, do_3d: bool = Fals
     else:
         flow_function = compute_farneback_flow_2d
 
-    # flow_raw is (t, *spatial, components) with the components in axis order,
-    # (vz, vy, vx) or (vy, vx), and that order recorded on the array.
+    # flow_raw is (t, *spatial, components) with the components in axis order:
+    # (vz, vy, vx) for 3D flow, (vy, vx) for 2D flow (per z slice on a 3D
+    # movie), and that order recorded on the array.
     output_zarr = create_flow_store(
         output_dir / 'flow.zarr', T, spatial_shape, plane_chunks, axes,
-        with_confidence=do_3d,
+        do_3d=do_3d,
     )
     
     flow = flow_function(config, zarr_img, output_zarr)

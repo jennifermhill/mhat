@@ -63,19 +63,19 @@ reduction = "scalar"
 
 [mda231.conditions.baseline]
 label = "Baseline"
-seg_uid = "seg_cp_20260720_fs1_cpm6"
+seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Shared run for baseline (= solver baseline/full); identical config, full data on Y:.
-tracking_uid = "fs1cpm6v2_baseline"
+tracking_uid = "regenF01_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "seg_cp_20260720_fs1_cpm6"
+seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Ported from the solver - Coh/Adh re-opt (new zero-cost ablation, drift_w=100,
 # z_flow absent). Same seg/flow as the merge baseline.
-tracking_uid = "fs1cpm6v2_no_cohesion"
+tracking_uid = "regenF01_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 # 2026-07-29 RESULT, not an oversight: with cohesion/adhesion zeroed (the
@@ -90,16 +90,16 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 # baseline under the old definition) was considered and deliberately not adopted.
 [mda231.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "fs1cpm6_seg_noaff"
+seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "fs1cpm6v2_no_affinities"
+tracking_uid = "<fill in>"  # - Affinities not regenerated yet (waterz scoring-function bug); bar left blank
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_affinities_config.toml"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
-seg_uid = "fs1cpm6_seg_nomrg"
+seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "fs1cpm6v2_no_merges"
+tracking_uid = "regenF01_no_merges"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 
 # =============================================================================
@@ -142,31 +142,31 @@ reduction = "scalar"
 
 [mda231_02cells.conditions.baseline]
 label = "Baseline"
-seg_uid = "holdout_fs1_cpm6"
+seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
-tracking_uid = "fs1cpm6v2_baseline"
+tracking_uid = "regenF02_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "holdout_fs1_cpm6"
+seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Consolidated with the solver - Coh/Adh re-opt (drift_w=100, zeroed coh/adh).
-tracking_uid = "fs1cpm6v2_no_cohesion"
+tracking_uid = "regenF02_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "fs1cpm6_seg_noaff"
+seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "fs1cpm6v2_no_affinities"
+tracking_uid = "<fill in>"  # - Affinities not regenerated yet (waterz scoring-function bug); bar left blank
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_affinities_config.toml"
 
 [mda231_02cells.conditions.no_merges]
 label = "- Merges"
-seg_uid = "fs1cpm6_seg_nomrg"
+seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "fs1cpm6v2_no_merges"
+tracking_uid = "regenF02_no_merges"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_merges_config.toml"
 
 # =============================================================================

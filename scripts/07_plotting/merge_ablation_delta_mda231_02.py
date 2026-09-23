@@ -49,7 +49,12 @@ PALETTE = {
 METRICS = ["TRA", "DET", "SEG"]
 
 
+PLACEHOLDER = "<fill in>"  # same sentinel as merge_ablation_figure.py: unfilled uid -> bar skipped
+
+
 def load_ctc(eval_dir, uid):
+    if uid == PLACEHOLDER:
+        return None
     path = eval_dir / uid / "track_metrics.json"
     return json.loads(path.read_text())["CTCMetrics"]
 
@@ -82,6 +87,9 @@ def main():
     for cond_name in CONDITION_ORDER[1:]:
         cond = conditions[cond_name]
         m = load_ctc(eval_dir, cond["tracking_uid"])
+        if m is None:
+            print(f"warning: tracking_uid for {cond_name!r} is unfilled, skipping")
+            continue
         deltas = {k: m[k] - base[k] for k in METRICS}
         rows.append((cond["label"], PALETTE[cond_name], deltas))
 

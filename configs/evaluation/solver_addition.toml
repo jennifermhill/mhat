@@ -74,50 +74,50 @@ reduction = "scalar"
 [mda231.conditions.none]
 label = "None"
 color = "#999999"
-note = "base_edge_constant=-200 (identical to - All)"
-tracking_uid = "fs1cpm6v2_none"
+note = "base_edge_constant=-500 (identical to - All)"
+tracking_uid = "regenF01_none"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/none_config.toml"
 
 [mda231.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#009E73"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "fs1cpm6v2_plus_cohesion"
+tracking_uid = "regenF01_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_cohesion_config.toml"
 
 [mda231.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "active: intensity (w=8, c=-3000)"
-tracking_uid = "fs1cpm6v2_plus_intensity"
+tracking_uid = "regenF01_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_intensity_config.toml"
 
 [mda231.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "active: area (w=500, c=-500)"
-tracking_uid = "fs1cpm6v2_plus_volume"
+tracking_uid = "regenF01_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_volume_config.toml"
 
 [mda231.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#0072B2"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "fs1cpm6v2_plus_curvature"
+tracking_uid = "regenF01_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_curvature_config.toml"
 
 [mda231.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "fs1cpm6v2_plus_drift"
+tracking_uid = "regenF01_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_drift_config.toml"
 
 [mda231.conditions.full]
 label = "Full"
 color = "#000000"
-note = "full tuned baseline (drift_constant=-4000, adhesion_weight=-500; curvature off)"
-tracking_uid = "fs1cpm6v2_baseline"
+note = "full tuned baseline (wzfix_final params with adhesion_weight=-2500; curvature off)"
+tracking_uid = "regenF01_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 # =============================================================================
@@ -156,50 +156,50 @@ reduction = "scalar"
 [mda231_02cells.conditions.none]
 label = "None"
 color = "#999999"
-note = "base_edge_constant=-200 (identical to - All)"
-tracking_uid = "fs1cpm6v2_none"
+note = "base_edge_constant=-500 (identical to - All)"
+tracking_uid = "regenF02_none"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/none_config.toml"
 
 [mda231_02cells.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#009E73"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "fs1cpm6v2_plus_cohesion"
+tracking_uid = "regenF02_plus_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_cohesion_config.toml"
 
 [mda231_02cells.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "active: intensity (w=8, c=-3000)"
-tracking_uid = "fs1cpm6v2_plus_intensity"
+tracking_uid = "regenF02_plus_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_intensity_config.toml"
 
 [mda231_02cells.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "active: area (w=500, c=-500)"
-tracking_uid = "fs1cpm6v2_plus_volume"
+tracking_uid = "regenF02_plus_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_volume_config.toml"
 
 [mda231_02cells.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#0072B2"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "fs1cpm6v2_plus_curvature"
+tracking_uid = "regenF02_plus_curvature"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_curvature_config.toml"
 
 [mda231_02cells.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "fs1cpm6v2_plus_drift"
+tracking_uid = "regenF02_plus_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_drift_config.toml"
 
 [mda231_02cells.conditions.full]
 label = "Full"
 color = "#000000"
-note = "full tuned baseline (drift_constant=-4000, adhesion_weight=-500; curvature off)"
-tracking_uid = "fs1cpm6v2_baseline"
+note = "full tuned baseline (wzfix_final params with adhesion_weight=-2500; curvature off)"
+tracking_uid = "regenF02_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 # =============================================================================

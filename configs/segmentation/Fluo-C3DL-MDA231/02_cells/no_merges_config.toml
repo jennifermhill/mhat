@@ -5,7 +5,9 @@ dataset = "02_cells"
 overwrite = false
 merge_thresholds = [ 1.0,]
 skip_merges = true
-exp_uid = "fs1cpm6_seg_nomrg"
+exp_uid = "fs1cpm6_seg_nomrg_wzfix"
+derived_from = "fs1cpm6_seg_nomrg"
+waterz_convention = "affinities stored in waterz layout: z,y,x channels, edge (v - e, v) at v (fixed 2026-09-17)"
 
 [seg_params]
 seg_method = "cellpose"
@@ -14,7 +16,7 @@ outline_sigma = 1.0
 
 [affinity_params]
 smoothing = [ 1, 1, 1,]
-neighborhood = [ [ 0, 0, 1,], [ 0, 1, 0,], [ 1, 0, 0,],]
+neighborhood = [ [ 1, 0, 0,], [ 0, 1, 0,], [ 0, 0, 1,],]
 
 [waterz_params]
 

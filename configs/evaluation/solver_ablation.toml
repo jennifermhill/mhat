@@ -73,43 +73,43 @@ reduction = "scalar"
 [mda231.conditions.baseline]
 label = "Baseline"
 color = "#000000"
-params = "full model; drift_constant=-4000, adhesion_weight=-500"
-tracking_uid = "fs1cpm6v2_baseline"
+params = "full model; wzfix_final params with adhesion_weight=-2500 (retuned 2026-09-22 on the cellpose-4.2.1.1 seg)"
+tracking_uid = "regenF01_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_intensity]
 label = "- Intensity"
 color = "#E69F00"
-params = "intensity zeroed; drift_constant=-4000, adhesion_weight=-500"
-tracking_uid = "fs1cpm6v2_no_intensity"
+params = "intensity zeroed; adhesion_weight=-2000"
+tracking_uid = "regenF01_no_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_intensity_config.toml"
 
 [mda231.conditions.no_volume]
 label = "- Volume"
 color = "#D55E00"
-params = "area zeroed; drift_constant=-5000, drift_weight=30"
-tracking_uid = "fs1cpm6v2_no_volume"
+params = "area zeroed; drift_weight=57, drift_constant=-4000, adhesion_weight=-2000"
+tracking_uid = "regenF01_no_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_volume_config.toml"
 
 [mda231.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
-params = "drift zeroed; area_constant=-5000"
-tracking_uid = "fs1cpm6v2_no_drift"
+params = "drift zeroed; area_constant=-5000, area_weight=2500, adhesion_weight=-2000, adhesion_constant=1000"
+tracking_uid = "regenF01_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_drift_config.toml"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
 color = "#009E73"
 params = "cohesion+adhesion zeroed; drift_weight=100, area_weight=2500"
-tracking_uid = "fs1cpm6v2_no_cohesion"
+tracking_uid = "regenF01_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 [mda231.conditions.no_all]
 label = "- All"
 color = "#999999"
-params = "all feature costs zeroed; base_edge_constant=-200"
-tracking_uid = "fs1cpm6v2_no_all"
+params = "all feature costs zeroed; base_edge_constant=-500"
+tracking_uid = "regenF01_no_all"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_all_config.toml"
 
 # =============================================================================
@@ -149,43 +149,43 @@ reduction = "scalar"
 [mda231_02cells.conditions.baseline]
 label = "Baseline"
 color = "#000000"
-params = "full model; drift_constant=-4000, adhesion_weight=-500"
-tracking_uid = "fs1cpm6v2_baseline"
+params = "full model; wzfix_final params with adhesion_weight=-2500 (retuned 2026-09-22 on the cellpose-4.2.1.1 seg)"
+tracking_uid = "regenF02_baseline"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_intensity]
 label = "- Intensity"
 color = "#E69F00"
-params = "intensity zeroed; drift_constant=-4000, adhesion_weight=-500"
-tracking_uid = "fs1cpm6v2_no_intensity"
+params = "intensity zeroed; adhesion_weight=-2000"
+tracking_uid = "regenF02_no_intensity"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_intensity_config.toml"
 
 [mda231_02cells.conditions.no_volume]
 label = "- Volume"
 color = "#D55E00"
-params = "area zeroed; drift_constant=-5000, drift_weight=30"
-tracking_uid = "fs1cpm6v2_no_volume"
+params = "area zeroed; drift_weight=57, drift_constant=-4000, adhesion_weight=-2000"
+tracking_uid = "regenF02_no_volume"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_volume_config.toml"
 
 [mda231_02cells.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
-params = "drift zeroed; area_constant=-5000"
-tracking_uid = "fs1cpm6v2_no_drift"
+params = "drift zeroed; area_constant=-5000, area_weight=2500, adhesion_weight=-2000, adhesion_constant=1000"
+tracking_uid = "regenF02_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_drift_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
 color = "#009E73"
 params = "cohesion+adhesion zeroed; drift_weight=100, area_weight=2500"
-tracking_uid = "fs1cpm6v2_no_cohesion"
+tracking_uid = "regenF02_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_all]
 label = "- All"
 color = "#999999"
-params = "all feature costs zeroed; base_edge_constant=-200"
-tracking_uid = "fs1cpm6v2_no_all"
+params = "all feature costs zeroed; base_edge_constant=-500"
+tracking_uid = "regenF02_no_all"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_all_config.toml"
 
 # =============================================================================

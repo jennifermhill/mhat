@@ -152,3 +152,75 @@ The per-feature std approach hits a sweet spot: enough conditioning to converge 
 - Sweep output: `/tmp/sweep_reg10.out` (per-feature std) and `/tmp/sweep_graphnorm.out` (graph norm) — temp files, may not persist
 - Fit config: `scripts/04_tracking/MDA231_ssvm_fit.toml` (`ssvm_reg = 0.1` — current default after the 2026-05-15 ilpy fix; the pre-fix experiments in this doc used `ssvm_reg = 10.0`)
 - Hand-tuned config: `scripts/04_tracking/MDA231_baseline.toml`
+
+---
+
+## 2026-09-30: SSVM refit on the REGENERATED MDA231 segmentation (post waterz fix)
+
+The hand-tuned MDA231 bars had already been regenerated on `fs1cpm6_seg_base_wzfix`
+(post waterz affinity-convention fix, cellpose 4.2.1.1) as `regenF01_baseline` /
+`regenF02_baseline`; the SSVM bars had not. Both `ssvm_vs_handtuned` figures are now
+on the regenerated inputs.
+
+### Protocol
+
+Stage 1 re-calibration on the regenerated **train** split only, then verbatim transfer
+to test — no leakage. Spec:
+`scratch_configs/tracking/Fluo-C3DL-MDA231/01_cells/gt_amount_regen_stage1.toml`
+(a copy of the published stage-2 config with only seg/flow, `regsweep_subdir` and the
+grid changed, so `ablate_curvature`, the GT label space and the candidate-graph params
+are identical to the published sweep).
+
+13-point twelfth-decade grid, 0.1 → 0.01, chosen to bracket the old plateau
+[0.0215, 0.0825] on both sides. All 13 fits converged (ε → 0 from above; the chosen one
+in 35 of 100 allowed iterations) and none was empty. `n_labeled` = **1864** on the new
+segmentation, down from 2023.
+
+| ssvm_reg | 0.1 | .0825 | .0681 | .0562 | .0464 | **.0383** | .0316 | .0261 | .0215 | .0178 | .0147 | .0121 | .01 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| train TRA | .9079 | .9061 | .9039 | .9078 | .9083 | **.9099** | .9095 | .8988 | .8993 | .8998 | .9041 | .9034 | .9046 |
+
+Top-3 spread 0.0017 < 0.005, so the **plateau rule** applies rather than the argmax.
+The contiguous within-0.005 run is [0.0316, 0.0562], bracketed on both sides
+(0.0261 → 0.8988, 0.0681 → 0.9039); its geometric centre is 0.04214 and the nearest
+measured point in log space is **0.0383** (marginally closer than 0.0464). That is both
+the plateau centre and, here, the argmax — and it is the same `ssvm_reg` the pre-fix
+calibration selected. Effective reg = 0.0383 × 1864 = **71.39** (was 77.48).
+
+Chosen fit: `gt_amount/stage1_regsweep_regen/regsweep_r05`. Its weights were applied
+verbatim to 02_cells via
+`scratch_configs/tracking/Fluo-C3DL-MDA231/02_cells/ssvm_regen_test_config.toml`
+(every candidate-graph key asserted equal to `regenF02_baseline`'s, so the two test
+bars differ only in the ILP weights) → `gt_amount/stage3_solves_regen/regsweep_r05`.
+
+### Results — regenerated vs superseded
+
+| Split | Bar | TRA | DET | LNK | SEG | run |
+|---|---|---|---|---|---|---|
+| 01_cells (train) | hand-tuned | **0.9156** | 0.9203 | 0.8812 | 0.6892 | `regenF01_baseline` |
+| 01_cells (train) | SSVM | **0.9099** | 0.9118 | 0.8963 | 0.6708 | `gt_amount/stage1_regsweep_regen/regsweep_r05` |
+| 02_cells (test) | hand-tuned | **0.9469** | 0.9501 | 0.9236 | 0.7187 | `regenF02_baseline` |
+| 02_cells (test) | SSVM | **0.9306** | 0.9337 | 0.9078 | 0.6850 | `gt_amount/stage3_solves_regen/regsweep_r05` |
+
+Superseded (old seg `seg_cp_20260720_fs1_cpm6` / `holdout_fs1_cpm6`): train hand-tuned
+0.9061, train SSVM 0.9044; test hand-tuned 0.9369, test SSVM 0.9359.
+
+### Reading
+
+- **On train the gap narrows to 0.0057 TRA** (0.9156 vs 0.9099), the closest SSVM has
+  come to hand-tuning on this dataset. SSVM actually wins LNK (0.8963 vs 0.8812) and
+  loses on nodes (DET 0.9118 vs 0.9203, fp 136 vs 130, fn 17 vs 12) — the old
+  "SSVM's weakness is linking" reading no longer holds here.
+- **On test the gap widens to 0.0163 TRA**, where it used to be 0.0010. Both bars moved
+  in opposite directions (hand-tuned 0.9369 → 0.9469, SSVM 0.9359 → 0.9306), so the
+  near-tie in the published test figure does not survive regeneration. Note the
+  asymmetry in how the two were re-optimized: the hand-tuned params got a full
+  coordinate retune on the regenerated train data (`rtC_base` / `rtC2_base`,
+  `adhesion_weight` → −2500), while SSVM only re-fits and re-calibrates its single
+  regularizer. Both are each method's own protocol, so the comparison is fair, but the
+  hand-tuned side had more degrees of freedom to exploit the new segmentation.
+- SEG is lower for SSVM on both splits (0.6708 / 0.6850 vs 0.6892 / 0.7187), consistent
+  with it selecting more nodes than the hand-tuned solve on both: 480 vs 474 on train,
+  740 vs 704 on test.
+
+NC281 bars in both figures are untouched and remain on their pre-fix segmentation.

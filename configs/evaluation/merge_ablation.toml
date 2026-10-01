@@ -75,7 +75,10 @@ seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Ported from the solver - Coh/Adh re-opt (new zero-cost ablation, drift_w=100,
 # z_flow absent). Same seg/flow as the merge baseline.
-tracking_uid = "regenF01_no_cohesion"
+# Parity retune 2026-10-01: every bar was given the identical 37-point search
+# (specs scratch_configs/sweeps/{naff01,coh01,bas01,mrg01}*), rule TRA primary /
+# SEG tie-break. Baseline's winner was R0, so its uid is unchanged.
+tracking_uid = "coh01c_a1400_ec500"  # appear = disappear = 1400, area_constant = -1000
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 # 2026-07-29 RESULT, not an oversight: with cohesion/adhesion zeroed (the
@@ -92,14 +95,14 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 label = "- Affinities"
 seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "<fill in>"  # - Affinities not regenerated yet (waterz scoring-function bug); bar left blank
+tracking_uid = "naff01e_a1400_ec500"  # appear = disappear = 1400, area_constant = -1000
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_affinities_config.toml"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
 seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "regenF01_no_merges"
+tracking_uid = "mrg01c_app1400"  # appear = disappear = 1400
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 
 # =============================================================================
@@ -152,21 +155,21 @@ label = "- Coh/Adh"
 seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Consolidated with the solver - Coh/Adh re-opt (drift_w=100, zeroed coh/adh).
-tracking_uid = "regenF02_no_cohesion"
+tracking_uid = "parF02_no_cohesion"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_affinities]
 label = "- Affinities"
 seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "<fill in>"  # - Affinities not regenerated yet (waterz scoring-function bug); bar left blank
+tracking_uid = "parF02_no_affinities"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_affinities_config.toml"
 
 [mda231_02cells.conditions.no_merges]
 label = "- Merges"
 seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "regenF02_no_merges"
+tracking_uid = "parF02_no_merges"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_merges_config.toml"
 
 # =============================================================================

@@ -389,6 +389,41 @@ def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bo
             print("Warning: cohesion/adhesion weights/constants are nonzero but will be ignored in no-merge mode")
     write_merge_history_csv(normalized_merge_history_csv_path, merge_history, no_merges)
 
+    # Cost-only: the graph (and its cache key) are untouched. config.toml above
+    # keeps the user-facing weights; the solver gets the effective ones.
+    normalize_features = config.get("normalize_features", None)
+    if normalize_features is not None:
+        if normalize_features != "zscore":
+            raise ValueError(
+                f"Unknown normalize_features {normalize_features!r}; expected 'zscore'"
+            )
+        config, norm_stats = utils.zscore_cost_params(config, track_graph)
+        print("z-scored cost features (weight * (x - mean) / std + constant):")
+        for attr, s in norm_stats.items():
+            print(
+                f"  {attr:<16} n={s['count']:>7} "
+                f"mean={s['mean']:.4g} std={s['std']:.4g} "
+                f"w={s['weight']:+g} c={s['constant']:+g} -> "
+                f"w_eff={s['weight_eff']:.6g} c_eff={s['constant_eff']:.6g}"
+            )
+        with open(output_dir / "normalized_costs.toml", "w") as handle:
+            toml.dump(
+                {
+                    "effective_params": {
+                        key: config[key]
+                        for key in [
+                            *(k for p in utils.COST_FEATURE_PARAMS.values() for k in p),
+                            "appear_constant",
+                            "disappear_constant",
+                            "base_edge_constant",
+                        ]
+                        if key in config
+                    },
+                    "stats": norm_stats,
+                },
+                handle,
+            )
+
     if stats_only:
         report_graph_statistics(config, track_graph)
         print("Stats-only mode: skipping ILP solve and result saving.")

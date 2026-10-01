@@ -634,6 +634,119 @@ def add_hyperedges(candidate_graph: nx.DiGraph, divisions: bool = True) -> nx.Di
     
     return candidate_graph
 
+# Each cost feature and the config keys of its weight and constant. Node
+# features first; the order is the order report_graph_statistics prints in.
+COST_FEATURE_PARAMS = {
+    "cohesion": ("cohesion_weight", "cohesion_constant"),
+    "adhesion": ("adhesion_weight", "adhesion_constant"),
+    "drift_dist": ("drift_weight", "drift_constant"),
+    "area_diff": ("area_weight", "area_constant"),
+    "intensity_diff": ("intensity_weight", "intensity_constant"),
+    "curvature": ("curvature_weight", "curvature_constant"),
+}
+NODE_COST_FEATURES = ("cohesion", "adhesion")
+
+
+def collect_cost_features(track_graph, include_curvature: bool = True):
+    """The raw value of every cost feature, one entry per candidate.
+
+    Returns ``(values, num_leaves)``: ``values`` maps each feature in
+    COST_FEATURE_PARAMS to an array over the candidates that carry it (nodes
+    for cohesion/adhesion, edges for drift/area/intensity, simple-or-hyper edge
+    pairs for curvature, computed exactly as CurvatureCost does).
+    ``num_leaves`` maps each node feature to the matching per-node leaf counts.
+    A feature no candidate carries (cohesion/adhesion in no-merge mode) is an
+    empty array. Curvature is skipped (empty) unless ``include_curvature``,
+    since enumerating edge pairs is slow on dense graphs.
+    """
+    values = {attr: [] for attr in COST_FEATURE_PARAMS}
+    num_leaves = {attr: [] for attr in NODE_COST_FEATURES}
+    for data in track_graph.nodes.values():
+        for attr in NODE_COST_FEATURES:
+            if attr in data:
+                values[attr].append(data[attr])
+                num_leaves[attr].append(data.get("num_leaves", 1))
+
+    edge_features = [
+        a for a in COST_FEATURE_PARAMS
+        if a not in NODE_COST_FEATURES and a != "curvature"
+    ]
+    for data in track_graph.edges.values():
+        for attr in edge_features:
+            if attr in data:
+                values[attr].append(data[attr])
+
+    if include_curvature:
+        curvature_cost = CurvatureCost(position_attribute="centroid")
+        for node in track_graph.nodes:
+            in_edges = list(track_graph.prev_edges[node])
+            out_edges = list(track_graph.next_edges[node])
+            for in_edge in in_edges:
+                in_offset = curvature_cost.get_edge_offset(track_graph, in_edge)
+                for out_edge in out_edges:
+                    out_offset = curvature_cost.get_edge_offset(track_graph, out_edge)
+                    values["curvature"].append(np.linalg.norm(out_offset - in_offset))
+
+    values = {attr: np.asarray(v, dtype=float) for attr, v in values.items()}
+    num_leaves = {attr: np.asarray(v, dtype=float) for attr, v in num_leaves.items()}
+    return values, num_leaves
+
+
+def zscore_cost_params(config, track_graph):
+    """Rewrite feature weights/constants so they apply to z-scored features.
+
+    The config's ``<feature>_weight`` w and ``<feature>_constant`` c are read as
+    a cost ``w * z + c`` on the standardized feature ``z = (x - mu) / sigma``,
+    with mu and sigma taken over this graph's candidates (raw attribute values,
+    not weighted by num_leaves). That is the ordinary cost ``w' * x + c'`` with
+    ``w' = w / sigma`` and ``c' = c - w * mu / sigma``, so the existing cost
+    classes apply it unchanged; node features keep their num_leaves scaling on
+    top, as usual. Only features with a nonzero weight are rewritten. Appear,
+    disappear, base_edge and division are not features and pass through.
+
+    Returns ``(effective_config, stats)``; ``stats`` maps each rewritten
+    feature to its mean, std and the original and effective weight/constant.
+    """
+    weighted = [
+        attr for attr, (w_key, _) in COST_FEATURE_PARAMS.items()
+        if config.get(w_key, 0) != 0
+    ]
+    values, _ = collect_cost_features(
+        track_graph, include_curvature="curvature" in weighted
+    )
+    effective = dict(config)
+    stats = {}
+    for attr in weighted:
+        w_key, c_key = COST_FEATURE_PARAMS[attr]
+        arr = values[attr]
+        if arr.size == 0:
+            if attr in NODE_COST_FEATURES:
+                # No merge hierarchy: add_costs skips cohesion/adhesion anyway.
+                print(f"z-score: no candidate carries {attr}; leaving it unnormalized")
+                continue
+            raise ValueError(f"Cannot z-score {attr}: no candidate carries it")
+        mean, std = float(arr.mean()), float(arr.std())
+        if std == 0:
+            raise ValueError(
+                f"Cannot z-score {attr}: it is constant ({mean}) "
+                f"over {arr.size} candidates"
+            )
+        weight = float(config[w_key])
+        constant = float(config.get(c_key, 0.0))
+        effective[w_key] = weight / std
+        effective[c_key] = constant - weight * mean / std
+        stats[attr] = {
+            "count": int(arr.size),
+            "mean": mean,
+            "std": std,
+            "weight": weight,
+            "constant": constant,
+            "weight_eff": effective[w_key],
+            "constant_eff": effective[c_key],
+        }
+    return effective, stats
+
+
 def report_graph_statistics(config, track_graph):
     """Print mean/std of graph attributes and their ILP costs.
 
@@ -641,42 +754,14 @@ def report_graph_statistics(config, track_graph):
     seen by the ILP solver (LeavesScaledNodeSelection bakes num_leaves
     into the node feature values).
     """
-    # Collect node attributes (only those with ILP cost parameters)
-    node_attrs = {"cohesion": ([], []), "adhesion": ([], [])}
-    for node_id, data in track_graph.nodes.items():
-        num_leaves = data.get("num_leaves", 1)
-        for attr in node_attrs:
-            if attr in data:
-                node_attrs[attr][0].append(data[attr])
-                node_attrs[attr][1].append(num_leaves)
-
-    # Collect edge attributes
-    edge_attrs = {"drift_dist": [], "area_diff": [], "intensity_diff": []}
-    for edge_key, data in track_graph.edges.items():
-        for attr in edge_attrs:
-            if attr in data:
-                edge_attrs[attr].append(data[attr])
-
-    curvature_cost = CurvatureCost(position_attribute="centroid")
-    curvature_values = []
-    for node in track_graph.nodes:
-        in_edges = list(track_graph.prev_edges[node])
-        out_edges = list(track_graph.next_edges[node])
-        for in_edge in in_edges:
-            in_offset = curvature_cost.get_edge_offset(track_graph, in_edge)
-            for out_edge in out_edges:
-                out_offset = curvature_cost.get_edge_offset(track_graph, out_edge)
-                curvature_values.append(np.linalg.norm(out_offset - in_offset))
-
-    # Config parameter mapping
-    param_map = {
-        "cohesion": ("cohesion_weight", "cohesion_constant"),
-        "adhesion": ("adhesion_weight", "adhesion_constant"),
-        "drift_dist": ("drift_weight", "drift_constant"),
-        "area_diff": ("area_weight", "area_constant"),
-        "intensity_diff": ("intensity_weight", "intensity_constant"),
-        "curvature": ("curvature_weight", "curvature_constant"),
+    values, leaves = collect_cost_features(track_graph)
+    node_attrs = {attr: (values[attr], leaves[attr]) for attr in NODE_COST_FEATURES}
+    edge_attrs = {
+        attr: values[attr] for attr in COST_FEATURE_PARAMS
+        if attr not in NODE_COST_FEATURES and attr != "curvature"
     }
+    curvature_values = values["curvature"]
+    param_map = COST_FEATURE_PARAMS
 
     print("\n" + "=" * 100)
     print("Graph Attribute Statistics (node costs scaled by num_leaves)")
@@ -687,7 +772,7 @@ def report_graph_statistics(config, track_graph):
 
     # Node attributes: scale costs by num_leaves
     for attr, (values, leaves) in node_attrs.items():
-        if not values:
+        if len(values) == 0:
             continue
         arr = np.array(values)
         leaves_arr = np.array(leaves)
@@ -700,7 +785,7 @@ def report_graph_statistics(config, track_graph):
     # Edge attributes: no leaves scaling
     all_edge_attrs = {**edge_attrs, "curvature": curvature_values}
     for attr, values in all_edge_attrs.items():
-        if not values:
+        if len(values) == 0:
             continue
         arr = np.array(values)
         w_key, c_key = param_map[attr]

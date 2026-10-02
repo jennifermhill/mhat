@@ -402,7 +402,7 @@ label = "None"
 color = "#999999"
 note = "empty model (drift_weight=0, drift_constant=-2000 flat edge cost); sel=0.326"
 tracking_uid = "add_none_dc2000"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/none_config.toml"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_all_config.toml"
 
 [nc281_sparse_train.conditions.plus_cohesion]
 label = "+ Cohesion"
@@ -481,7 +481,7 @@ label = "None"
 color = "#999999"
 note = "train params applied to test (empty model); sel=0.316"
 tracking_uid = "test_none"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/none_config.toml"
+config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_all_config.toml"
 
 [nc281_sparse_test.conditions.plus_cohesion]
 label = "+ Cohesion"

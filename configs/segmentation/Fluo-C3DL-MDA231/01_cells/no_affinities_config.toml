@@ -5,7 +5,10 @@ dataset = "01_cells"
 overwrite = false
 merge_thresholds = [ 1.0,]
 skip_merges = false
-exp_uid = "fs1cpm6_seg_noaff"
+exp_uid = "fs1cpm6_seg_noaff_wzfix"
+derived_from = "end-to-end run of create_seg_hypotheses.py on gpu_h100 (job 154488423, host h12u08, 2026-10-01): cellpose fragments, affinities and symmetric-scoring agglomeration all generated here from the raw zarr. Its fragments are bit-identical to fs1cpm6_seg_base_wzfix, so this bar and the Baseline share one fragment set as the merge ablation requires. NOTE: cellpose 4.2.1.1 fragments are deterministic within a GPU architecture but differ between them -- gpu_h100 and gpu_h200 reproduce this segmentation exactly, gpu_a100 gives 584 labels instead of 582 (0.4% of foreground). Regenerate on H100/H200 only."
+waterz_convention = "affinities stored in waterz layout: z,y,x channels, edge (v - e, v) at v (fixed 2026-09-17)"
+gpu_queue = "gpu_h100"
 
 [seg_params]
 seg_method = "cellpose"
@@ -14,7 +17,7 @@ outline_sigma = 1.0
 
 [affinity_params]
 smoothing = [ 1, 1, 1,]
-neighborhood = [ [ 0, 0, 1,], [ 0, 1, 0,], [ 1, 0, 0,],]
+neighborhood = [ [ 1, 0, 0,], [ 0, 1, 0,], [ 0, 0, 1,],]
 
 [waterz_params]
 scoring_function = "symmetric"

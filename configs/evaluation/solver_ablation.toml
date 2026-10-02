@@ -98,6 +98,13 @@ params = "drift zeroed; area_constant=-5000, area_weight=2500, adhesion_weight=-
 tracking_uid = "regenF01_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_drift_config.toml"
 
+# DELIBERATE, 2026-10-02: `config` points at the MERGE ablation's - Coh/Adh config
+# (the parity-retuned run), which does NOT match tracking_uid below. The two figures'
+# - Coh/Adh bars diverged when only the merge one was retuned, and build_config_archive.py
+# answers that by splitting the file into _merge/_solver. Kept as one shared file on
+# purpose: this whole solver figure needs regenerating anyway, and when it is re-run on
+# the retuned parameters the two uids agree again and this pointer is already correct --
+# no split to undo. Until then the archived config here is NOT this run's config.
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
 color = "#009E73"
@@ -174,6 +181,13 @@ params = "drift zeroed; area_constant=-5000, area_weight=2500, adhesion_weight=-
 tracking_uid = "regenF02_no_drift"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_drift_config.toml"
 
+# DELIBERATE, 2026-10-02: `config` points at the MERGE ablation's - Coh/Adh config
+# (the parity-retuned run), which does NOT match tracking_uid below. The two figures'
+# - Coh/Adh bars diverged when only the merge one was retuned, and build_config_archive.py
+# answers that by splitting the file into _merge/_solver. Kept as one shared file on
+# purpose: this whole solver figure needs regenerating anyway, and when it is re-run on
+# the retuned parameters the two uids agree again and this pointer is already correct --
+# no split to undo. Until then the archived config here is NOT this run's config.
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
 color = "#009E73"

@@ -5,7 +5,9 @@ dataset = "02_cells"
 overwrite = false
 merge_thresholds = [ 1.0,]
 skip_merges = false
-exp_uid = "fs1cpm6_seg_noaff"
+exp_uid = "fs1cpm6_seg_noaff_wzfix"
+derived_from = "fragments and affinities copied bit-for-bit from fs1cpm6_seg_base_wzfix; only the waterz agglomeration was re-run, with symmetric scoring (waterz 0.10.0rc1). Deliberate, not a shortcut: the merge ablation requires all four conditions to share one fragment set, and the 2026-09-22 cellpose fragments are no longer reproducible on the 2026-10-01 stack -- three runs that day across two A100 nodes agree with each other bit-for-bit at 584 labels vs the baseline 582, with raw data, packages and cellpose model weights all unchanged. gpu_h100/h200 probe pending."
+waterz_convention = "affinities stored in waterz layout: z,y,x channels, edge (v - e, v) at v (fixed 2026-09-17)"
 
 [seg_params]
 seg_method = "cellpose"
@@ -14,7 +16,7 @@ outline_sigma = 1.0
 
 [affinity_params]
 smoothing = [ 1, 1, 1,]
-neighborhood = [ [ 0, 0, 1,], [ 0, 1, 0,], [ 1, 0, 0,],]
+neighborhood = [ [ 1, 0, 0,], [ 0, 1, 0,], [ 0, 0, 1,],]
 
 [waterz_params]
 scoring_function = "symmetric"

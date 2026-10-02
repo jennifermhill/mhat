@@ -1,8 +1,9 @@
 """Hand-tuned vs SSVM-fit comparison figure across datasets.
 
-Renders a single grouped bar chart: one x-group per dataset, two bars per group
-(hand-tuned, SSVM-fit). Because the primary metric differs per dataset (TRA for a
-CTC-matched dataset, TE for a point-matched one), each dataset carries its own
+Renders a single grouped bar chart: one x-group per dataset, one bar per
+condition in `condition_order` (default: the order of [conditions.*]). Because
+the primary metric differs per dataset (TRA for a CTC-matched dataset, TE for a
+point-matched one), each dataset carries its own
 `json_path`, and its group label names the dataset. Bar colors encode the
 condition (hand-tuned vs SSVM), shared across datasets, so a single legend reads
 the whole figure. Formatting matches the MHAT-vs-other-methods figures: light
@@ -14,6 +15,7 @@ Config schema (TOML) -- see configs/evaluation/ssvm_vs_handtuned.toml:
     suptitle     = ""           # empty -> no title
     ylabel       = "Score (higher is better)"
     dataset_order = ["mda231", "nc281_train"]
+    condition_order = ["ssvm", "hand_tuned"]   # optional
 
     [conditions.hand_tuned]  # shared style for the hand-tuned bar
     label = "Hand-tuned"
@@ -91,7 +93,8 @@ def main():
 
     cfg = toml.load(args.config)
     cond_style = cfg["conditions"]  # {hand_tuned: {label,color}, ssvm: {...}}
-    cond_keys = ["hand_tuned", "ssvm"]
+    # Bar order within each group; defaults to the order of [conditions.*].
+    cond_keys = cfg.get("condition_order", list(cond_style))
     datasets = cfg["datasets"]
     order = cfg.get("dataset_order", list(datasets.keys()))
 
@@ -106,7 +109,7 @@ def main():
 
     n_groups = len(order)
     x = np.arange(n_groups)
-    width = 0.38
+    width = 0.76 / len(cond_keys)
 
     fig, ax = plt.subplots(figsize=(2.6 * n_groups + 2, 5))
     for i, ck in enumerate(cond_keys):
@@ -138,7 +141,9 @@ def main():
     ax.set_ylabel(cfg.get("ylabel", "Score (higher is better)"))
     if cfg.get("suptitle"):
         ax.set_title(cfg["suptitle"], fontsize=13, fontweight="bold")
-    ax.legend(frameon=False, fontsize=10)
+    # One row above the axes, so it never sits on a bar's value label.
+    ax.legend(frameon=False, fontsize=10, loc="lower center",
+              bbox_to_anchor=(0.5, 1.0), ncol=len(cond_keys))
 
     ax.spines[["top", "right"]].set_visible(False)
     ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)

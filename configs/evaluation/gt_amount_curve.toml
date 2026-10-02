@@ -23,7 +23,7 @@
 #
 # These are HELD-OUT TEST splits: the test GT is dense, full-length and identical for
 # every arm, so the protocols are directly comparable (plan ground rule 3). Only the
-# two arms worth comparing are drawn — sparse crops (A) and dense crops (C); arm B is
+# two arms worth comparing are drawn — sparse GT (A) and dense GT (C); arm B is
 # commented out below.
 #
 # Arm C's crops are sized by annotation BUDGET, not by volume, so its points land on
@@ -34,13 +34,13 @@
 # annotator actually spends (one object per frame). Crop budgets are measured rather
 # than requested, so fixed track ticks no longer fit.
 x_field = "n_gt_nodes_annotated"
-xlabel = "Annotated GT nodes used for fitting"
+xlabel = "Annotated linked detections"
 xticks = []
 suptitle = ""
 
 # Arm A = sparse annotation (unlabeled candidates removed from the graph).
 [arms.A]
-label = "Sparse crops"
+label = "Sparse GT"
 color = "#0072B2"
 linestyle = "-"
 
@@ -55,7 +55,7 @@ linestyle = "-"
 # Keep linestyle solid: a dashed style triggers the hollow-marker "control condition"
 # styling used by the merged two-sweep figure, which would misread here.
 [arms.C]
-label = "Dense crops"
+label = "Dense GT"
 color = "#009E73"
 linestyle = "-"
 
@@ -68,13 +68,13 @@ output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sp
 output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/gt_amount_panels.png"
 metric_column = "target_effectiveness"
 panel_metrics = ["target_effectiveness", "edge_recall", "node_recall"]
-ylabel = "Target effectiveness (held-out test)"
+ylabel = "Target effectiveness"
 
 # Reference lines on the same held-out test split.
 [datasets.NC281-sparse-label.baselines.hand_tuned]
-label = "Hand-tuned (full GT)"
+label = "Claude-tuned (full GT)"
 value = 0.8290
-color = "#555555"
+color = "#CC79A7"
 
 # REMOVED FROM THE FIGURE: the older full-GT SSVM run fit at ssvm_reg = 0.1
 # (effective ~1088, test TE 0.7209). It was never a correctness check against this
@@ -104,7 +104,7 @@ output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3D
 output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/gt_amount_panels.png"
 metric_column = "tra"
 panel_metrics = ["tra", "det", "seg"]
-ylabel = "CTC TRA (held-out test)"
+ylabel = "CTC TRA"
 
 # `metric` is REQUIRED on every baseline here. gt_amount_curve.py filters reference
 # lines with base.get("metric", "target_effectiveness"), so an MDA231 baseline
@@ -115,10 +115,10 @@ ylabel = "CTC TRA (held-out test)"
 # scored on test. It also runs curvature_weight = 0.0, matching this sweep's
 # ablate_curvature = true.
 [datasets.Fluo-C3DL-MDA231.baselines.hand_tuned]
-label = "Hand-tuned (full GT)"
+label = "Claude-tuned (full GT)"
 value = 0.9392
 metric = "tra"
-color = "#555555"
+color = "#CC79A7"
 
 # REMOVED FROM THE FIGURE: SSVM at the old default ssvm_reg = 0.1, full GT,
 # curvature-ablated, produced on this seg pair by stage 0c (stage-1 grid point

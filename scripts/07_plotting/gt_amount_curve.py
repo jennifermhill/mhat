@@ -338,7 +338,7 @@ def render(cfg, metrics, output_path, errorbar) -> None:
         else:
             ax.set_title(labels.get(metric, metric), fontsize=11)
     if len(metrics) > 1:
-        axes[0].set_ylabel("Score on held-out test (higher is better)")
+        axes[0].set_ylabel(cfg.get("panels_ylabel", "Score (higher is better)"))
 
     if len(metrics) == 1:
         axes[0].legend(frameon=False, fontsize=10, loc="lower right")

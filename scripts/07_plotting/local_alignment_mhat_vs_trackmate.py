@@ -147,7 +147,7 @@ def main():
         ("TrackMate", args.trackmate_result, TRACKMATE_COLOR),
     ]
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(7.5, 5))
     for label, result_dir, color in datasets:
         tracks = import_from_geff(result_dir / "pred_tracks.zarr", NAME_MAP, scale=scale)
         avg = local_alignment_by_time(tracks, args.k)

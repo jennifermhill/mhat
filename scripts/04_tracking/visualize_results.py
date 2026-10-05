@@ -99,7 +99,7 @@ def main(config, ground_truth: bool = False, compute: bool = False):
                 tracks_viewer.tracking_layers.points_layer.visible = False
 
             # Load segmentation outside of track import to avoid memory issues.
-            # The store is labelled by node id, so relabel to track_id to colour
+            # The store is labeled by node id, so relabel to track_id to color
             # each track consistently over time, as the compute=True path does.
             # This stays lazy: only the slice on screen is read.
             if not compute and track_seg_zarr_path is not None:

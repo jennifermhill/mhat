@@ -23,7 +23,7 @@ result is every node reachable from those seeds by following edges forward in
 time, and nothing else. Note that this only removes false positives -- it cannot
 recover a missed link, and in fact makes one more expensive, because a lineage
 that breaks at frame k loses every node after k as well. That is the CTB
-scoring behaviour, not an artefact of doing it here.
+scoring behavior, not an artifact of doing it here.
 
 The CTC SEG measure must NOT be read off a pruned result. The segmentation
 benchmark filters extra cells itself, and its reference annotation covers cells
@@ -75,7 +75,7 @@ def seed_from_markers(markers, pred_frame):
 
     Both arrays are on the same voxel grid: ``markers`` holds the small
     (~75-voxel) CTC track markers, ``pred_frame`` frame 0 of ``pred_seg.zarr``,
-    which is labelled by graph node id.
+    which is labeled by graph node id.
 
     Only the marker voxels are ever touched, so the cost is set by the total
     marker volume (a few thousand voxels) rather than by the image, which for
@@ -163,9 +163,9 @@ def lineage_survival(graph, seeds, n_frames):
 def write_pruned_segmentation(src_path, dst_path, keep, max_label):
     """Copy ``src_path`` to ``dst_path`` with every label outside ``keep`` zeroed.
 
-    The node-id labelling convention is preserved (kept labels keep their value)
+    The node-id labeling convention is preserved (kept labels keep their value)
     so the pruned store still satisfies the invariant
-    ``evaluate_tracking._check_labelled_by_node_id`` enforces. Frames are copied
+    ``evaluate_tracking._check_labeled_by_node_id`` enforces. Frames are copied
     one at a time: a full DRO volume is ~19 GB as uint32, one frame is ~380 MB.
     """
     src = zarr.open(str(src_path), mode="r")

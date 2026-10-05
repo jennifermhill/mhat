@@ -58,7 +58,7 @@ def run_linajea_metrics(config, gt_data_dir, pred_data_dir):
     """Score the prediction using the linajea error definitions.
 
     Separate from ``evaluate_tracking`` because linajea is not a traccuracy
-    metric: it does its own nearest-neighbour edge matching within
+    metric: it does its own nearest-neighbor edge matching within
     ``matching_threshold`` micrometers and reports error *counts* normalized by
     the number of GT edges, which is the form the published linajea/TGMM
     baselines are quoted in.

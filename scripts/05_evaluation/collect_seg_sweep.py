@@ -14,7 +14,7 @@ one candidate are links ``MaxParents(1)`` forbids outright, and they were 64 of
 71 lineage truncations) is kept as a secondary column, but it only fires when
 *two annotated* markers claim one candidate and so misses most fusions on
 sparsely annotated data. Recall is the constraint, over-merge is the objective.
-``offset`` is the tiebreaker -- a candidate whose centre sits far from the
+``offset`` is the tiebreaker -- a candidate whose center sits far from the
 nucleus makes the correct link cost more than a wrong one.
 
 Against the sweep's ``baseline`` run it also reports per-marker ``gained`` and
@@ -96,7 +96,7 @@ def main():
             "collided": summary.get("n_markers_collided", ""),
             "collision_rate": round(summary.get("collision_rate", 0.0), 4),
             # The ranking statistic: unlike `collided`, it sees fusions with
-            # UNANNOTATED neighbours. See mhat.evaluation.seg_detectability.
+            # UNANNOTATED neighbors. See mhat.evaluation.seg_detectability.
             "over_merged": summary.get("n_over_merged", ""),
             "over_merge_rate": round(summary.get("over_merge_rate", 0.0), 4),
             "size_ratio_median": (
@@ -170,9 +170,9 @@ def main():
         "",
         "overmrg = THE RANKING COLUMN: detected markers whose smallest covering "
         "candidate is",
-        "          bigger than one cell, i.e. fused with a neighbour. Unlike "
+        "          bigger than one cell, i.e. fused with a neighbor. Unlike "
         "'collided' it does",
-        "          not need the neighbour to be annotated, so it sees the "
+        "          not need the neighbor to be annotated, so it sees the "
         "fusions that matter on",
         "          sparsely annotated data. '--' = scored before the metric "
         "existed; re-run the",

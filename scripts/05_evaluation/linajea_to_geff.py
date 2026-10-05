@@ -22,7 +22,7 @@ in units of the *xy* pixel, i.e. ``z_voxel = z_column / anisotropy`` where
 ``anisotropy = voxel_size_z / voxel_size_x`` (5.0 for this dataset:
 2.03 um / 0.406 um). The ``y`` and ``x`` columns are already voxel indices.
 Verified empirically: the CTC ``Fluo-N3DL-DRO`` TRA markers coincide with
-these points to a median nearest-neighbour distance of 0.0 voxels once z is
+these points to a median nearest-neighbor distance of 0.0 voxels once z is
 divided by 5.
 
 Output positions are written in **micrometers**, matching every other geff in

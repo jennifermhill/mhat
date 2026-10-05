@@ -57,55 +57,6 @@ def report_solver_backend():
         )
 
 
-def gurobi_license_status():
-    """Say whether ilpy's default backend choice will pick Gurobi or SCIP.
-
-    ``solver.solve()`` uses ``ilpy.Preference.Any``, which picks Gurobi only
-    when a full license is available and otherwise falls back to SCIP without
-    printing anything. The size-limited license bundled with the pip
-    ``gurobipy`` wheel (``LicenseID == 0``) counts as no license. This
-    mirrors that rule (``ilpy.solver_backends.create_solver_backend`` in
-    ilpy 0.6) with gurobipy's public API, so the fallback can be reported
-    before a long SCIP solve starts rather than discovered from its runtime.
-
-    Returns:
-        (uses_gurobi, reason): reason is None when a full license was found.
-    """
-    try:
-        import gurobipy as gp
-    except ImportError:
-        return False, "gurobipy is not installed"
-    try:
-        with gp.Env(empty=True) as env:
-            env.setParam("OutputFlag", 0)
-            env.start()
-            if int(env.getParam("LicenseID")) != 0:
-                return True, None
-    except gp.GurobiError as e:
-        return False, f"no usable Gurobi license was found ({e})"
-    return False, "only the size-limited license bundled with pip gurobipy was found"
-
-
-def report_solver_backend():
-    """Print which ILP backend will run, warning when ilpy falls back to SCIP
-    although gurobipy is installed (the user evidently wanted Gurobi)."""
-    uses_gurobi, reason = gurobi_license_status()
-    if uses_gurobi:
-        print("ILP solver: Gurobi (full license found)")
-    elif reason == "gurobipy is not installed":
-        print("ILP solver: SCIP (gurobipy is not installed)")
-    else:
-        warnings.warn(
-            f"Gurobi is installed but {reason}, so ilpy is solving with SCIP. "
-            "The solution is still optimal, but SCIP is much slower on real "
-            "tracking problems, and equal-cost ties can break differently than "
-            "under Gurobi. To use Gurobi, make a full license visible to "
-            "gurobipy (GRB_LICENSE_FILE, ~/gurobi.lic, or `module load gurobi` "
-            "on a cluster); academic licenses are free from gurobi.com.",
-            stacklevel=2,
-        )
-
-
 def add_costs(solver, config, no_merges=False):
     """Add all ILP cost terms to the solver.
 

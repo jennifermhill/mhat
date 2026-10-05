@@ -1,14 +1,14 @@
 """Two-metric trade-off plot for the solver ablation + addition study.
 
-Each condition is a point in a 2-metric plane (x vs y), coloured by a third
+Each condition is a point in a 2-metric plane (x vs y), colored by a third
 metric. Full/Baseline is a filled star, None an open star. Arrows go Full -> each
 ablation (solid) and None -> each addition (dashed), so you can read which lever
 each cost is: e.g. removing an edge cost pulls a point along the linking axis, a
 node cost along the detection axis.
 
-Metrics, axes and colour are read from the experiment TOML, so the same script
+Metrics, axes and color are read from the experiment TOML, so the same script
 works for CTC datasets (DET / LNK / TRA) and overlap datasets (TE / Purity / TF).
-Defaults: x=DET|TE, y=LNK|Purity, colour=TRA|TF; override with --x/--y/--color.
+Defaults: x=DET|TE, y=LNK|Purity, color=TRA|TF; override with --x/--y/--color.
 
 Usage:
     python scripts/07_plotting/metric_tradeoff.py --ablation configs/evaluation/solver_ablation.toml \
@@ -74,7 +74,7 @@ def main():
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--x", default=None, help="metric key for x-axis")
     ap.add_argument("--y", default=None, help="metric key for y-axis")
-    ap.add_argument("--color", default=None, help="metric key for colour")
+    ap.add_argument("--color", default=None, help="metric key for color")
     ap.add_argument("--mode", choices=["both", "ablation", "addition"], default="both")
     ap.add_argument("--output", default=None)
     args = ap.parse_args()

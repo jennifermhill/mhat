@@ -22,7 +22,7 @@ The candidate pool is reconstructed exactly as ``nodes_from_fragments`` builds
 it, because a hypothesis that pool excludes is not available to the tracker no
 matter how good the underlying fragments are:
 
-* base fragments, and every merge-tree node whose (normalised) merge cost lies
+* base fragments, and every merge-tree node whose (normalized) merge cost lies
   in ``[min_merge_cost, max_merge_cost)``;
 * all of them filtered by ``size_threshold``.
 
@@ -58,8 +58,8 @@ further measurements say whether the detecting object is the *right* object:
                 it. Every collision is a link the tracker cannot make regardless
                 of cost.
 ``offset``      distance from the marker centroid to its candidate's centroid,
-                in micrometres. GT flow-corrected drift between frames is ~1 um,
-                so an object whose centre sits several micrometres off the
+                in micrometers. GT flow-corrected drift between frames is ~1 um,
+                so an object whose center sits several micrometers off the
                 nucleus makes the correct link look longer than a wrong one --
                 the detection is nominally right and the geometry is not.
 
@@ -93,14 +93,14 @@ import numpy as np
 CTC_DETECTION_FRACTION = 0.5
 
 # A detected marker whose smallest covering candidate exceeds this many marker
-# volumes is fused with at least one neighbour. The DRO median is ~11 (= one
+# volumes is fused with at least one neighbor. The DRO median is ~11 (= one
 # nucleus, a 75-voxel marker inside a ~710-voxel nucleus), so ~2x that is the
 # point where the candidate can no longer be a single cell.
 #
 # This is the annotation-independent companion to `collisions`. A collision
 # needs TWO annotated markers to claim one candidate, but only ~4% of DRO
 # objects are annotated, so nearly every fusion is between an annotated nucleus
-# and an unannotated neighbour and stays invisible to it. The over-merge rate
+# and an unannotated neighbor and stays invisible to it. The over-merge rate
 # needs only one annotated marker, because the fused blob is simply twice the
 # size. Rank segmentations on it; see the module docstring.
 OVER_MERGE_RATIO = 20.0
@@ -131,7 +131,7 @@ def prepare_merge_history(merge_history, max_node_id, n_frames):
     """Normalise and renumber exactly as ``run_tracking`` does before building.
 
     Both steps are global over the frames being tracked, so they must be applied
-    to the whole (truncated) history at once -- normalising per frame would
+    to the whole (truncated) history at once -- normalizing per frame would
     rescale each frame's costs against a different range and silently change
     which merges the ``min_merge_cost``/``max_merge_cost`` gate admits.
     """
@@ -228,7 +228,7 @@ def frame_detectability(
 ):
     """Best overlap fraction per marker, under each of the three candidate pools.
 
-    ``merges`` are this frame's rows only, already normalised and renumbered.
+    ``merges`` are this frame's rows only, already normalized and renumbered.
     ``scale`` is the physical voxel size (z, y, x) used for the offset metric.
     """
     overlaps, marker_sizes = marker_overlaps(gt_frame, frag_frame)
@@ -294,7 +294,7 @@ def frame_detectability(
         offer(c, pools)
 
     def offset(marker):
-        """Physical distance from the marker's centre to its candidate's."""
+        """Physical distance from the marker's center to its candidate's."""
         node = best[marker]["tight_node"]
         if not node or node not in node_coord or not node_size.get(node):
             return None
@@ -330,7 +330,7 @@ def voxel_scale(fragments):
     """(z, y, x) voxel size in physical units from the zarr ``axes`` metadata.
 
     Falls back to voxels if the attribute is absent, in which case ``offset`` is
-    still comparable across runs on the same data -- just not in micrometres.
+    still comparable across runs on the same data -- just not in micrometers.
     """
     axes = fragments.attrs.get("axes")
     if not axes:
@@ -446,11 +446,11 @@ def summarize(per_frame):
         "offset_median": float(np.median(offsets_arr)) if offsets else None,
         "offset_p90": float(np.percentile(offsets_arr, 90)) if offsets else None,
         # Against ~1 um of real per-frame drift, a candidate more than 2 um off
-        # centre makes the correct link cost more than a wrong one.
+        # center makes the correct link cost more than a wrong one.
         "offset_over_2um": int((offsets_arr > 2.0).sum()) if offsets else 0,
         "size_ratio_median": float(np.median(size_ratios)) if size_ratios else None,
         "size_ratio_p90": float(np.percentile(size_ratios, 90)) if size_ratios else None,
-        # Over-merge: sees fusions with UNANNOTATED neighbours, which
+        # Over-merge: sees fusions with UNANNOTATED neighbors, which
         # `collision_rate` cannot. This is the ranking statistic.
         "over_merge_ratio": OVER_MERGE_RATIO,
         "n_over_merged": n_over,
@@ -500,10 +500,10 @@ def format_report(label, summary):
             f"{summary['size_ratio_median']:.1f}, p90 {summary['size_ratio_p90']:.1f}"
             "   (~10 is one DRO nucleus)",
             f"  OVER-MERGED (> {summary['over_merge_ratio']:.0f}x marker volume, "
-            f"i.e. fused with a neighbour): {summary['n_over_merged']} "
+            f"i.e. fused with a neighbor): {summary['n_over_merged']} "
             f"({summary['over_merge_rate']:.4f})",
             "      unlike collisions above, this counts fusions with "
-            "UNANNOTATED neighbours too -- rank on it",
+            "UNANNOTATED neighbors too -- rank on it",
         ]
 
     n_miss = len(summary["misses"])

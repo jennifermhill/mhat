@@ -1,7 +1,7 @@
 """z-scored cost features (``normalize_features = "zscore"``), the negative control.
 
 A sign slip or a mean/std mix-up in the weight/constant rewrite would still
-solve and still score, just as a different (and wrongly labelled) control. This
+solve and still score, just as a different (and wrongly labeled) control. This
 pins the costs the ILP actually sees to hand-computed values of
 ``weight * (x - mean) / std``, num_leaves-scaled on nodes.
 """

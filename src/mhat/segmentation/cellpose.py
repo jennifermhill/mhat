@@ -29,7 +29,7 @@ def segment_with_cellpose(image: np.ndarray, gpu: bool = False, **kwargs) -> np.
     eval_params = {
         "batch_size": 32,
         "flow_threshold": 0.4,
-        "cellprob_threshold": -3.0,
+        "cellprob_threshold": 0.0,
     }
     if image.ndim == 3:
         eval_params.update({

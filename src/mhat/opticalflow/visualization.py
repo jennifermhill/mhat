@@ -11,7 +11,7 @@ def create_flow_color_wheel(width, height):
     legend_size = int(size * 0.15) # Legend size as 15% of frame dimension
     min_size = 10
     legend_size = max(legend_size, min_size)
-    legend = np.zeros((legend_size, legend_size, 3), dtype=np.uint8) + 20  # dark grey background
+    legend = np.zeros((legend_size, legend_size, 3), dtype=np.uint8) + 20  # dark gray background
     
     # calculate center and radius
     center_x, center_y = legend_size // 2, legend_size // 2
@@ -71,7 +71,7 @@ def create_flow_color_wheel(width, height):
 
 
 def generate_flow_frame(flow, scale_factor=1):
-    """Colour-wheel image of one flow timepoint, (*lead, y, x, c) -> (*lead, y, x, 3).
+    """Color-wheel image of one flow timepoint, (*lead, y, x, c) -> (*lead, y, x, 3).
 
     ``lead`` is the z axis for 3D flow and empty for 2D, so the HSV->BGR loop
     below runs once per z slice in 3D and exactly once in 2D (``np.ndindex()``

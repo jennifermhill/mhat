@@ -36,7 +36,7 @@ matchers_dict = {
 def build_node_id_lut(graph):
     """Lookup table from segmentation label (= graph node id) to ``track_id``.
 
-    Segmentations in this pipeline are labelled by graph node id -- both
+    Segmentations in this pipeline are labeled by graph node id -- both
     ``pred_seg.zarr`` from run_tracking and ``correct_seg.zarr`` from
     from_ctc_to_geff -- which is the invariant funtracks relies on as well
     (``Tracks.get_pixels`` does ``segmentation[time] == node``).
@@ -73,7 +73,7 @@ def _apply_lut(block, lut, seg_path):
 
 
 def remap_seg_to_track_ids(graph, seg_path):
-    """Relabel a node-id-labelled segmentation to the graph's ``track_id``s.
+    """Relabel a node-id-labeled segmentation to the graph's ``track_id``s.
 
     Reads the zarr a frame at a time and maps each through
     :func:`build_node_id_lut`, so peak memory is the returned array rather than
@@ -100,7 +100,7 @@ def remap_seg_to_track_ids(graph, seg_path):
         if not checked:
             nodes_here = [n for n, d in graph.nodes(data=True) if int(d["time"]) == t]
             if nodes_here:
-                _check_labelled_by_node_id(frame, nodes_here, seg_path, t)
+                _check_labeled_by_node_id(frame, nodes_here, seg_path, t)
                 checked = True
         remapped[t] = _apply_lut(frame, lut, seg_path)
     return remapped
@@ -115,7 +115,7 @@ def remap_seg_to_track_ids_lazy(graph, seg_path):
     measured -- napari pulls only the slice on screen.
 
     Unlike the eager version this cannot check the node-id convention up front,
-    since that would mean reading a frame; a mislabelled store shows up as
+    since that would mean reading a frame; a mislabeled store shows up as
     background instead of raising.
     """
     lut = build_node_id_lut(graph)
@@ -124,20 +124,20 @@ def remap_seg_to_track_ids_lazy(graph, seg_path):
     )
 
 
-def _check_labelled_by_node_id(frame, nodes, seg_path, t, sample=5):
-    """Fail loudly if a segmentation frame is not labelled by graph node id.
+def _check_labeled_by_node_id(frame, nodes, seg_path, t, sample=5):
+    """Fail loudly if a segmentation frame is not labeled by graph node id.
 
     Every node in a frame came from an object in that frame, so under the
     convention its node id must appear as a label. A store written before the
-    convention is labelled by track_id instead, where the node ids are absent --
+    convention is labeled by track_id instead, where the node ids are absent --
     which would otherwise map every object to background in silence.
     """
     missing = [n for n in nodes[:sample] if not np.any(frame == n)]
     if missing:
         raise ValueError(
-            f"Segmentation at {seg_path} is not labelled by graph node id: "
+            f"Segmentation at {seg_path} is not labeled by graph node id: "
             f"node ids {missing} have no pixels in frame {t}. Stores written "
-            f"before this convention labelled the segmentation by track_id -- "
+            f"before this convention labeled the segmentation by track_id -- "
             f"delete the tracks store and its segmentation and let them be "
             f"regenerated."
         )

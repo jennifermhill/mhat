@@ -46,13 +46,10 @@
 #   pip install -e ".[flow3d]"        3D Farneback optical flow (pulls torch)
 #   pip install -e ".[segmentation]"  cellpose backend (pulls torch)
 #   pip install -e ".[all]"           napari + flow3d + segmentation
-#   pip install -e ".[waterz]"        affinity/agglomeration fragments.
-#                                     LINUX ONLY today, and needs a C++
-#                                     toolchain plus Boost headers.
-#   pip install -e ".[gurobi]"        commercial solver; needs your own licence.
+#   pip install -e ".[gurobi]"        commercial solver; needs your own license.
 #                                     The default solver is SCIP, which ships
 #                                     inside the pyscipopt wheel and needs no
-#                                     licence.
+#                                     license.
 #
 # For CUDA torch, follow https://pytorch.org rather than pinning a +cuXXX wheel
 # here.

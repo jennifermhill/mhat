@@ -62,6 +62,27 @@ jobs:
         # in a core install, someone has moved a dependency into the wrong place.
         run: uv run python -c "import importlib.util as u, sys; [sys.exit(f'{m} leaked into the core install') for m in ('torch','PyQt5','napari') if u.find_spec(m)]"
 
+      - name: waterz agglomerates
+        # waterz is core since 0.10.0's prebuilt wheels. The tests no longer
+        # call it, and importing it proves nothing about the compiled module,
+        # so run one toy agglomeration with each scoring function MHAT ships
+        # (both are prebuilt; neither may need a compiler). waterz writes the
+        # segmentation into `fragments` in place, hence the copy.
+        run: |
+          uv run python -c "
+          import numpy as np, waterz
+          affs = np.full((3, 4, 16, 16), 0.9, dtype=np.float32)
+          frags = np.zeros((4, 16, 16), dtype=np.uint64)
+          frags[:, :8, :8], frags[:, :8, 8:], frags[:, 8:, :4], frags[:, 8:, 4:] = 1, 2, 3, 4
+          symmetric = ('Divide<Subtract<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>,'
+                       'Add<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>>')
+          for sf in ('OneMinus<MeanAffinity<RegionGraphType, ScoreValue>>', symmetric):
+              seg, history = next(waterz.agglomerate(affs=affs, fragments=frags.copy(), thresholds=[1.0],
+                                                     return_merge_history=True, scoring_function=sf))
+              assert len(history) == 3, history
+          print('waterz', waterz.__version__, 'ok')
+          "
+
       - run: uv run pytest
       - run: uv pip check
 
@@ -105,42 +126,6 @@ jobs:
           from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
           from mhat.visualization.napari_utils import view_run
           print('napari', napari.__version__)
-          "
-
-  waterz:
-    # Affinity/agglomeration fragment generation. Linux only: PyPI has no usable
-    # waterz, so pyproject pins a commit of funkey/waterz that needs a C++
-    # toolchain and Boost headers.
-    name: waterz extra (linux)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Boost headers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libboost-dev
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          python-version: "3.11"
-
-      - run: uv sync --locked --extra dev --extra waterz
-
-      - name: waterz compiles on first call
-        # Installing waterz proves nothing: on current master the agglomerate
-        # path compiles through witty.compile_cython() *inside*
-        # waterz.agglomerate(), so no C++ is built until the first call. One
-        # toy agglomeration is enough to force it.
-        run: |
-          uv run python -c "
-          import numpy as np, waterz
-          affs = np.full((3, 4, 16, 16), 0.9, dtype=np.float32)
-          frags = np.zeros((4, 16, 16), dtype=np.uint64)
-          frags[:, :8, :8], frags[:, :8, 8:], frags[:, 8:, :8], frags[:, 8:, 8:] = 1, 2, 3, 4
-          seg, history = next(waterz.agglomerate(affs=affs, fragments=frags, thresholds=[0.5], return_merge_history=True))
-          print('waterz compiled; merges:', len(history))
           "
 
   lint:

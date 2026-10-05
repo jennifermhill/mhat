@@ -38,7 +38,7 @@ def from_ctc_to_geff(
     Adapted from geff but modified to save with zarr extension, use "time" as frame key,
     and track_id as the track node property.
 
-    The exported segmentation is labelled by **graph node id**, matching
+    The exported segmentation is labeled by **graph node id**, matching
     ``pred_seg.zarr`` from ``run_tracking.py``. That is the invariant funtracks
     relies on throughout (``Tracks.get_pixels`` resolves a node's pixels with
     ``segmentation[time] == node``), so ground truth and predictions load and

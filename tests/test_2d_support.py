@@ -115,7 +115,7 @@ def test_affinities_2d_match_brute_force(compute, make_frame, definition, dtype)
 
 
 # A minimal 2D CTC sequence: two solid squares per frame, each drifting one
-# pixel per frame in x, labelled by tracklet id.
+# pixel per frame in x, labeled by tracklet id.
 T, Y, X = 3, 16, 16
 OBJECTS = {1: (2, 6), 2: (10, 14)}
 
@@ -214,6 +214,6 @@ def test_waterz_2d_padding():
     assert fragments_3d.dtype == np.uint64
     assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["y"], 0] == 0.75)
     assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["x"], 0] == 0.25)
-    # With one slice nothing has a z neighbour, so the axial channel stays at
+    # With one slice nothing has a z neighbor, so the axial channel stays at
     # the minimum affinity rather than encouraging anything.
     assert np.all(affs_3d[WATERZ_AXIS_CHANNEL["z"]] == 0.0)

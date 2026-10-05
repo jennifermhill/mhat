@@ -2229,6 +2229,7 @@ dependencies = [
     { name = "toml" },
     { name = "tqdm" },
     { name = "traccuracy" },
+    { name = "waterz" },
     { name = "zarr" },
 ]
 
@@ -2267,9 +2268,6 @@ napari = [
 segmentation = [
     { name = "cellpose" },
     { name = "torch" },
-]
-waterz = [
-    { name = "waterz" },
 ]
 
 [package.metadata]
@@ -2313,10 +2311,10 @@ requires-dist = [
     { name = "tqdm" },
     { name = "traccuracy", specifier = ">=0.4.3,<0.5" },
     { name = "uv", marker = "extra == 'dev'" },
-    { name = "waterz", marker = "extra == 'waterz'", git = "https://github.com/funkey/waterz?rev=a0184d2af2ab3ed044721fb92822fc6ea9cee665" },
+    { name = "waterz", specifier = ">=0.10,<0.11" },
     { name = "zarr", specifier = ">=2.18.7,<3" },
 ]
-provides-extras = ["napari", "flow3d", "segmentation", "waterz", "gurobi", "dev", "all"]
+provides-extras = ["napari", "flow3d", "segmentation", "gurobi", "dev", "all"]
 
 [[package]]
 name = "motile"
@@ -2464,11 +2462,11 @@ wheels = [
 
 [[package]]
 name = "nanobind"
-version = "3.0.0"
+version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d8/37/5f136054cfdba93e763d956898048a21997b7478ccadcfec6dfebf4b72aa/nanobind-3.0.0.tar.gz", hash = "sha256:68583c41d58af77649b830407d2ba84627f21f07ad4ae2e32c6988fb96eaa71a", size = 1141160, upload-time = "2026-08-22T04:23:31.014Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/1f/e28fae715401e8f57400e72aeaff4fde12046d31828164f34f61f0816da8/nanobind-3.1.0.tar.gz", hash = "sha256:6661e3dc1434d78781ccf7913442d90361dab395c3424efadb63bbb6ddea7ea3", size = 1145390, upload-time = "2026-09-18T15:59:42.726Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/8b/cbd87788012d98179686ecdce7d73d154e277c50859458157ec5575c0352/nanobind-3.0.0-py3-none-any.whl", hash = "sha256:3808620334b1e7e647d71feb1bf525496216b48ee2a8cd4c4a31ae1f1cbb1c6f", size = 316362, upload-time = "2026-08-22T04:23:29.737Z" },
+    { url = "https://files.pythonhosted.org/packages/36/c1/6fd56f7a02a478d54a1a3e6000eccd34b446b1c45cbf0d002fe5d2937126/nanobind-3.1.0-py3-none-any.whl", hash = "sha256:96984dbe8154ffb86e653b1b60aaeed6985c710c5e75ad0279eb87943c66292d", size = 316917, upload-time = "2026-09-18T15:59:37.796Z" },
 ]
 
 [[package]]
@@ -5060,12 +5058,20 @@ wheels = [
 
 [[package]]
 name = "waterz"
-version = "0.9.7.dev17+ga0184d2af"
-source = { git = "https://github.com/funkey/waterz?rev=a0184d2af2ab3ed044721fb92822fc6ea9cee665#a0184d2af2ab3ed044721fb92822fc6ea9cee665" }
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "witty", extra = ["cython"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/e2/2e49e0b9c3451995d5684da55310bb09e4d130b5787587c60a97e5a52501/waterz-0.10.0.tar.gz", hash = "sha256:f76551443c30b7399280a6294d142c4f6f2e30c57cbf5539cd1d693b08663e97", size = 41581, upload-time = "2026-10-03T13:10:54.205Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/32/60484acdc1513b2580ac181260a5538895960f64f87be249032e9dba94af/waterz-0.10.0-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:a429b6bc78bcc670c78598340bf04f29f3fb37a9abca0eda1a1fb80eb153cdfd", size = 423555, upload-time = "2026-10-03T13:10:44.688Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/56/4b03bff295f75d05ee0e72ccfadc1d476abe076957892677aa01db939f8e/waterz-0.10.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:a7b263f8379a34d5859a7b2f855a84571fabf9a0822384b822939ace0134f12e", size = 413596, upload-time = "2026-10-03T13:10:46.398Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/08/5c70b8642f81abc4d55e5e8f159d9c005009ae2315088a5803e24a7976dc/waterz-0.10.0-cp311-abi3-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:804ec97857f2640274413979e5d5767e12abeb576ab25450abfa3124731ee8eb", size = 441978, upload-time = "2026-10-03T13:10:48.22Z" },
+    { url = "https://files.pythonhosted.org/packages/91/a3/2a76bf20fbfc96e711721a7fd908c8f686a41d6bce67c137191bee46d45d/waterz-0.10.0-cp311-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:0ae0c95ed0963bceb8d13768fc44a63f7eb5d54ab09d63de7cbcf64057b7039f", size = 467659, upload-time = "2026-10-03T13:10:49.728Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/e8/99f6028b2557ffe4dbd797316789bf0889f9524893bb4a47a097a2557cf2/waterz-0.10.0-cp311-abi3-win_amd64.whl", hash = "sha256:9ce50bd18c095cc0a46b93be8a45e6c0a64d18bab2891767151de99260a41c3a", size = 510801, upload-time = "2026-10-03T13:10:51.693Z" },
 ]
 
 [[package]]
@@ -5079,16 +5085,17 @@ wheels = [
 
 [[package]]
 name = "witty"
-version = "0.3.2"
+version = "0.3.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cython" },
     { name = "nanobind" },
     { name = "setuptools" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ff/a3/211a17423c88445308156f50186696bbab6442dce14e41dd3a97bd88a33f/witty-0.3.2.tar.gz", hash = "sha256:e0a3b1a84fc4429d8b8ab6031c9d2c171b30ef2e64d80dbe89a02b12e3442fa3", size = 12564, upload-time = "2026-07-26T11:41:30.184Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/99/a614e1f75d7b2f7ef4090b6909d7521586ccef5ca2b5bf591a81afdbb527/witty-0.3.4.tar.gz", hash = "sha256:505e15e33a336ef20482481750ca511846cf3f13c9a6858237ff8516c800e0f0", size = 13311, upload-time = "2026-09-30T15:06:15.722Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dc/06/3d97145eedc8e8905d2482ff34b2086808fafe7528fcaa9d46bdfb95d6ee/witty-0.3.2-py3-none-any.whl", hash = "sha256:1de2e8d4353134d26413f221c584d68b978830d6788434266ff03e05ae33dab4", size = 8972, upload-time = "2026-07-26T11:41:29.085Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/64/40b6717c5b5ed05f731162f1ae074c1f92447f5daf192640a0d77b7704ef/witty-0.3.4-py3-none-any.whl", hash = "sha256:005202a9bf69571b644cd68ffadf02da8db461faf5769181f1e26dabd04e8c98", size = 9232, upload-time = "2026-09-30T15:06:14.663Z" },
 ]
 
 [package.optional-dependencies]

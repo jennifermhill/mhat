@@ -80,7 +80,7 @@ def pad_2d_for_waterz(affs: np.ndarray, fragments: np.ndarray):
     know what rank they came from.
 
     The two 2D channels (y, x) go into waterz's y and x slots. The z slot is
-    left at 0.0: with a single slice no voxel has a z neighbour, so waterz
+    left at 0.0: with a single slice no voxel has a z neighbor, so waterz
     never reads it.
 
     Args:
@@ -123,7 +123,7 @@ def agglomerate_frame(affs, fragments, thresholds, neighborhood, **kwargs):
         (segmentation, merge_history) for the first threshold, with the
         segmentation at the same rank as ``fragments``.
     """
-    import waterz  # type: ignore  # optional [waterz] extra, Linux only
+    import waterz  # type: ignore  # no type stubs
 
     ndim = fragments.ndim
     check_waterz_neighborhood(neighborhood, ndim)

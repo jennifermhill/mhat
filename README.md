@@ -17,7 +17,7 @@ cd mhat
 conda env create -f environment.yml
 conda activate mhat
 pip install -e ".[dev]"                 # test tooling
-pytest                                  # 7 passed, 1 skipped
+pytest                                  # 24 passed, 2 skipped (3D flow tests need .[flow3d])
 ```
 
 For a byte-reproducible install, use the committed lockfile instead. `uv.lock` is a
@@ -33,7 +33,8 @@ Regenerate it with `uv lock` whenever `pyproject.toml` changes; CI fails if the 
 drift apart.
 
 The core install is **headless and CPU-only** — no torch, no CUDA, no GPU. It covers
-stages 02_segmentation (threshold backends) through 05_evaluation, plus 07_plotting.
+stages 02_segmentation (threshold backends and waterz affinity agglomeration) through
+05_evaluation, plus 07_plotting.
 
 Requires **Python 3.11 or newer**. That floor comes from `motile-tracker`; everything
 else in the stack accepts 3.10.
@@ -41,10 +42,10 @@ else in the stack accepts 3.10.
 ### Solver
 
 The ILP is solved with **SCIP by default**, which ships inside the `pyscipopt` wheel —
-no separate install and no licence. Gurobi is optional:
+no separate install and no license. Gurobi is optional:
 
 ```bash
-pip install -e ".[gurobi]"              # requires your own Gurobi licence
+pip install -e ".[gurobi]"              # requires your own Gurobi license
 ```
 
 ### Optional extras
@@ -56,9 +57,8 @@ None of these are needed for stages 02–05 or 07_plotting.
 | `.[napari]` | The per-stage `visualize_results.py` viewers | Already included by `environment.yml` |
 | `.[flow3d]` | 3D Farneback optical flow | Pulls `torch` |
 | `.[segmentation]` | The cellpose backend (`seg_method = "cellpose"`) | Pulls `torch` |
-| `.[all]` | `napari` + `flow3d` + `segmentation` | Not literally everything — omits the two below |
-| `.[waterz]` | Affinity/agglomeration fragment generation | **Linux only today** — see below |
-| `.[gurobi]` | Gurobi instead of SCIP | Needs your own licence |
+| `.[all]` | `napari` + `flow3d` + `segmentation` | Not literally everything — omits `gurobi` |
+| `.[gurobi]` | Gurobi instead of SCIP | Needs your own license |
 | `.[dev]` | Tests, linting, lockfile tooling | |
 
 Extras are additive and can be combined: `pip install -e ".[napari,flow3d]"` is the same
@@ -102,34 +102,12 @@ wheel here.
 cupy/CUDA package of the same name on PyPI. It is GPLv3 while mhat is BSD-3, so it stays
 a separate distribution. Note the import name is capitalised: `from opticalflow3D.helpers ...`.
 
-**`waterz`** is Linux-only for now, and needs a C++ toolchain plus Boost headers.
-PyPI's `waterz` is 0.9.4 (2020), with wheels only for CPython 2.7–3.8 and no source
-tarball, so the extra pins [funkey/waterz](https://github.com/funkey/waterz) master by
-commit instead. Tag `v0.9.6` does **not** work on Python 3.11 either: its generated
-`evaluate.cpp` is committed to the repo and includes the pre-3.11 `longintrepr.h`.
-
-Note that installing waterz does not prove it works. On current master the agglomeration
-path compiles through `witty.compile_cython()`, and that call sits *inside*
-`waterz.agglomerate()` — so no C++ is built until the first call, not even at import.
-After installing the extra, force the compile once with a toy agglomeration (the CI
-`waterz` job runs the same thing):
-
-```bash
-python -c "
-import numpy as np, waterz
-affs = np.full((3, 4, 16, 16), 0.9, dtype=np.float32)
-frags = np.zeros((4, 16, 16), dtype=np.uint64)
-frags[:, :8, :8], frags[:, :8, 8:], frags[:, 8:, :8], frags[:, 8:, 8:] = 1, 2, 3, 4
-seg, history = next(waterz.agglomerate(affs=affs, fragments=frags, thresholds=[0.5], return_merge_history=True))
-print('waterz compiled; merges:', len(history))
-"
-```
-
-Expect the first run to be slow. A missing compiler or Boost fails loudly here rather
-than midway through a segmentation run.
-
-On Windows and macOS, start from precomputed fragments instead — see the stage boundary
-below.
+**`waterz`** (affinity agglomeration, stage 02) is a core dependency. Since 0.10.0 PyPI
+ships prebuilt wheels for Linux, Windows and macOS, and the two scoring functions MHAT
+uses — the default mean affinity and the size-ratio `scoring_function = "symmetric"` —
+are compiled into the wheel, so no C++ toolchain or Boost is needed. Any other
+`scoring_function` (for example `"random"`) is compiled on first use through `witty`
+and does need a C++ compiler plus Boost headers.
 
 ## Pipeline
 
@@ -150,9 +128,8 @@ Stage 02 produces exactly two artifacts that anything downstream reads:
 - `data.zarr/fragments` — uint32 labels, shape `(T, Z, Y, X)`, with an `axes` attribute
 - `merge_history.csv` — columns `a, b, c, cost, timepoint`, sorted by ascending cost
 
-Any segmentation that emits those two can be tracked, so stages 03–05 and 07 are usable
-without a working stage 02. This is the supported route on platforms where `waterz`
-cannot be built.
+Any segmentation that emits those two can be tracked, so stages 03–05 and 07 can also be
+run on fragments and merge histories produced elsewhere.
 
 ## Development
 

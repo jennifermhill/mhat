@@ -23,9 +23,10 @@ authors = [
     { email = "malinmayorc@janelia.hhmi.org", name = "Funke Lab" },
 ]
 
-# Core: stages 02_segmentation (threshold backends) through 05_evaluation, plus
-# 07_plotting. Runs headless and CPU-only — no torch, no Qt, no GPU. Everything
-# here installs from public PyPI on Linux, Windows and macOS.
+# Core: stages 02_segmentation (threshold backends and waterz agglomeration)
+# through 05_evaluation, plus 07_plotting. Runs headless and CPU-only — no
+# torch, no Qt, no GPU. Everything here installs from public PyPI on Linux,
+# Windows and macOS.
 dependencies = [
   # --- ILP tracking stack -----------------------------------------------------
   # Pinned to motile 0.3.x deliberately. src/mhat/tracking/{division_cost,
@@ -92,6 +93,14 @@ dependencies = [
   # opencv-python-headless makes which cv2 wins depend on import order.
   "opencv-python-headless>=4.10",
   "colorcet",
+  # Affinity/agglomeration fragment generation (stage 02). 0.10.0 is the first
+  # PyPI release since 0.9.4 (2020) and ships prebuilt cp311-abi3 wheels for
+  # Linux, Windows and macOS, so it no longer needs a C++ toolchain or Boost
+  # for the scoring functions MHAT uses: the default mean affinity and the
+  # size-ratio ("symmetric") function are compiled into the wheel. Any other
+  # scoring_function (e.g. "random") is still JIT-compiled through witty on
+  # first use and does need a compiler plus Boost headers.
+  "waterz>=0.10,<0.11",
 ]
 
 [project.optional-dependencies]
@@ -154,18 +163,6 @@ segmentation = [
   "torch",
 ]
 
-# Affinity/agglomeration fragment generation.
-#
-# Linux only for now. PyPI's `waterz` is 0.9.4 (2020) with manylinux cp27-cp38
-# wheels and no sdist, so it cannot install here at all — hence the git pin.
-# Tag v0.9.6 does NOT work either: its generated evaluate.cpp is committed and
-# includes the pre-3.11 "longintrepr.h", so it fails to compile on Python 3.11.
-# master dropped the generated sources, so Cython runs at build time.
-# Needs a C++ toolchain and Boost headers.
-waterz = [
-  "waterz @ git+https://github.com/funkey/waterz@a0184d2af2ab3ed044721fb92822fc6ea9cee665",
-]
-
 # Opt-in commercial solver. Requires your own Gurobi license.
 gurobi = [
   "ilpy[gurobi]>=0.5.3,<0.7",
@@ -183,13 +180,10 @@ dev = [
   "uv",
 ]
 
-# Convenience bundle. NOT "every extra" — it deliberately omits two:
-#   waterz  because it is Linux-only and needs a C++ toolchain plus Boost, so
-#           including it here would make `pip install mhat[all]` fail outright
-#           on Windows and macOS.
-#   gurobi  because it requires a commercial licence.
-# So `[all]` cannot be used to verify that every extra installs; install each
-# one separately for that.
+# Convenience bundle. NOT "every extra" — it deliberately omits gurobi, because
+# it requires a commercial license (and dev, which is tooling). So `[all]`
+# cannot be used to verify that every extra installs; install each one
+# separately for that.
 #
 # Verified safe in an environment.yml environment (2026-08-24): napari, torch,
 # cellpose and opticalflow3d coexist because the whole stack is pip-native and

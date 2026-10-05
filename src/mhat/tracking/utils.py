@@ -339,7 +339,7 @@ def get_solution_lookup(merge_history, solution_graph, frag_ids, max_frag_id, dt
     """Build a leaf-fragment-id -> solution-node-id lookup table.
 
     Applying it to one frame with ``lookup[frame]`` relabels that frame in a
-    single vectorized pass, so the movie is never relabelled in memory all at
+    single vectorized pass, so the movie is never relabeled in memory all at
     once.
 
     Args:

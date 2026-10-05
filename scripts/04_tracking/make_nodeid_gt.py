@@ -7,8 +7,8 @@ by geff node id (with a ``label`` node property and ``related_objects.node_prop 
 "label"``), and ``evaluate_tracking.remap_seg_to_track_ids`` *requires* that
 convention. A GT converted by the current code therefore needs no twin: point
 ``gt_data_dir`` at it directly. This script remains for GT stores converted before
-that change, which are still track-id-labelled on disk; on an already node-id-
-labelled source it is a no-op copy (detected below, not assumed).
+that change, which are still track-id-labeled on disk; on an already node-id-
+labeled source it is a no-op copy (detected below, not assumed).
 
 WHY THIS EXISTS
 ---------------
@@ -32,8 +32,8 @@ by `from_ctc_to_geff`, which labels the voxels with the CTC **track_id** and dec
     and keeps an unrelated set of nodes — then trips the driver's
     `n_gt_nodes_kept == n_gt_nodes_annotated` assertion.
 
-Rather than teach both materializers to honour `label_prop` — which would be a real
-behaviour change to the no-oracle-verified crop path — this writes a *twin* GT in the
+Rather than teach both materializers to honor `label_prop` — which would be a real
+behavior change to the no-oracle-verified crop path — this writes a *twin* GT in the
 label space they already document, and the sweep config points `gt_data_dir` at it.
 The original GT directory is never touched.
 
@@ -117,7 +117,7 @@ def main() -> None:
     if metadata.related_objects:
         for ro in metadata.related_objects:
             # geff-spec 1.2.1 renamed label_prop -> node_prop; the current
-            # from_ctc_to_geff writes node_prop="label". Honour either, or the
+            # from_ctc_to_geff writes node_prop="label". Honor either, or the
             # ids-as-labels default when the named property is absent.
             prop = getattr(ro, "node_prop", None) or ro.label_prop
             if ro.type == "labels" and prop:

@@ -182,9 +182,9 @@ segmentation, down from 2023.
 
 Top-3 spread 0.0017 < 0.005, so the **plateau rule** applies rather than the argmax.
 The contiguous within-0.005 run is [0.0316, 0.0562], bracketed on both sides
-(0.0261 → 0.8988, 0.0681 → 0.9039); its geometric centre is 0.04214 and the nearest
+(0.0261 → 0.8988, 0.0681 → 0.9039); its geometric center is 0.04214 and the nearest
 measured point in log space is **0.0383** (marginally closer than 0.0464). That is both
-the plateau centre and, here, the argmax — and it is the same `ssvm_reg` the pre-fix
+the plateau center and, here, the argmax — and it is the same `ssvm_reg` the pre-fix
 calibration selected. Effective reg = 0.0383 × 1864 = **71.39** (was 77.48).
 
 Chosen fit: `gt_amount/stage1_regsweep_regen/regsweep_r05`. Its weights were applied

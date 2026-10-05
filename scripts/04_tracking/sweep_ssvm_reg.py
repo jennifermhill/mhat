@@ -81,7 +81,7 @@ SWEEP_KEYS = (
 )
 
 #: Short name -> path into track_metrics.json. `selection_metric` in the sweep
-#: config picks which one ranks the grid. Default keeps the NC281 behaviour.
+#: config picks which one ranks the grid. Default keeps the NC281 behavior.
 SELECTION_METRIC_PATHS = {
     "target_effectiveness": ("TrackOverlapMetrics", "target_effectiveness"),
     "track_purity": ("TrackOverlapMetrics", "track_purity"),
@@ -220,7 +220,7 @@ def main() -> None:
 
         # Bracket + plateau report. A grid this fine routinely ends on a plateau, and
         # picking the argmax off a plateau fits the regularizer to eval noise — which
-        # stage 2 then imposes on every subset fit. Print the neighbourhood so that
+        # stage 2 then imposes on every subset fit. Print the neighborhood so that
         # call is made on the numbers rather than on the single best cell.
         by_reg = sorted(scored, key=lambda r: r["ssvm_reg"])
         pos = by_reg.index(best)
@@ -243,7 +243,7 @@ def main() -> None:
         )
         if spread < 0.005:
             print(
-                "  ^^ PLATEAU: top-3 spread < 0.005. Prefer the geometric centre of the\n"
+                "  ^^ PLATEAU: top-3 spread < 0.005. Prefer the geometric center of the\n"
                 "     plateau over the argmax — the ranking here is within eval noise."
             )
         summary_out = train_root / subdir if subdir else train_root

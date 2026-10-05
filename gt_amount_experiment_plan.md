@@ -401,7 +401,7 @@ All three are realizable protocols.
 
 | arm | what is unlabeled, and why | what happens to it | what it represents |
 |---|---|---|---|
-| **A** | touches **none of the annotated tracks** — decidable from the annotations alone | deleted from the fit graph with its edges; exclusion sets pruned | restrict fitting to the annotated neighbourhoods — a true ignore |
+| **A** | touches **none of the annotated tracks** — decidable from the annotations alone | deleted from the fit graph with its edges; exclusion sets pruned | restrict fitting to the annotated neighborhoods — a true ignore |
 | **B** | same rule as A | `gt_selected = None`, kept in the graph | motile's documented sparse-GT API |
 | **C** | not **fully inside the annotated box** — decidable from the box alone, without looking at the GT at all | deleted from the fit graph, as in A | annotate one region exhaustively instead of everything thinly, until the budget runs out |
 
@@ -472,7 +472,7 @@ ground rule 2.
 ## Known gotchas
 
 - **Label spaces.** Three incompatible numberings: geff node id (what
-  `correct_seg.zarr` is labelled with), raw geff `track_id`, and the
+  `correct_seg.zarr` is labeled with), raw geff `track_id`, and the
   funtracks-renumbered `track_id` (what `gt_seg` carries and what sampling uses).
   `import_from_geff` renumbering **changes the count** — 164 raw → 167 funtracks. Never
   hard-code the full size; `include_full = true` derives it. Cross-check only by node id.

@@ -124,7 +124,7 @@ def test_outputs_round_trip_as_ground_truth(on_disk_scene, tracking_config, tmp_
     """write_tracking_outputs -> read_name_map_and_scale / load_gt -> annotation.
 
     The written stores must declare exactly the data's axes, be chunked one
-    tile of one slice, and be labelled by node id, or evaluate_tracking's
+    tile of one slice, and be labeled by node id, or evaluate_tracking's
     remap refuses them. Re-reading them as a ground truth also exercises
     ``load_gt`` and ``annotate_gt_on_candidate_graph`` at this rank: a
     solution annotated against itself must label every selected node positive.

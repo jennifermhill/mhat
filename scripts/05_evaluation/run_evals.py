@@ -1,6 +1,6 @@
 """Run evaluate_tracks.py over many eval configs in one process.
 
-Same per-run behaviour as evaluate_tracks.py — including the `gt_data_dir`
+Same per-run behavior as evaluate_tracks.py — including the `gt_data_dir`
 override — but pays the import cost once instead of once per config. A run that
 fails is reported and skipped rather than aborting the batch.
 

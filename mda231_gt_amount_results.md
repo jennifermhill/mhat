@@ -103,11 +103,11 @@ Measured, all six such runs:
 So two of the six are genuinely scoreable, and both are arm B's. The effect on the figures is
 small — MDA231's arm-B bottom rung moves from 0.074 (8 seeds) to 0.065 (10 seeds), and NC281's
 figure is unchanged because both of its empties really are empty on test — but the old
-behaviour reached the right answer by luck, not by evidence.
+behavior reached the right answer by luck, not by evidence.
 
 ### Why the weights go degenerate
 
-Two things fail together, visible by comparing the empties against working neighbours at the
+Two things fail together, visible by comparing the empties against working neighbors at the
 same rung:
 
 | run | drift_c | cohesion_w | appear_c | disappear_c | train solve |
@@ -147,9 +147,9 @@ Pass 2 (fine, 6 points, twelfth-decade, appended as `r13..r18` inside the pass-1
 Pass 2's real contribution was not a better winner but showing the pass-1 winner sat on a
 **plateau**, not a peak: eight consecutive points from 0.0215 to 0.0825 lie within 0.0028 of each
 other, bracketed on both sides (0.0100 -> 0.8973, 0.1000 -> 0.8944). Under the < 0.005 rule
-declared before the sweep ran, the argmax was rejected and the geometric centre taken:
+declared before the sweep ran, the argmax was rejected and the geometric center taken:
 
-    plateau [0.0215, 0.0825], geometric centre 0.04214
+    plateau [0.0215, 0.0825], geometric center 0.04214
     -> nearest measured point ssvm_reg = 0.0383 (TRA 0.9041)
     -> ssvm_reg_effective_target = 77.48   at n_labeled = 2023
 

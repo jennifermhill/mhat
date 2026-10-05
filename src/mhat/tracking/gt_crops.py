@@ -28,7 +28,7 @@ them, at N=100 and at N=12 alike). The fit learns to arbitrate between hypothese
 of cells it knows about, and never learns that a detection can be spurious.
 
 Inside a crop the GT is dense, so a contained candidate matching nothing is a
-genuine false positive and labelling it ``0`` is exactly what the annotator's work
+genuine false positive and labeling it ``0`` is exactly what the annotator's work
 supports. The crop's negative sample is therefore *unbiased with respect to the
 GT* — selected by geometry, not by proximity to an annotated cell — and includes
 the spurious detections in the proportion the solver meets them at inference. The
@@ -45,7 +45,7 @@ Two different tests, deliberately not the same one:
 
 So any GT object overlapping a used candidate shares a voxel with a region that
 lies entirely inside the box, hence intersects the box, hence is annotated. No
-candidate can ever be labelled ``0`` because of a cell the annotator did not
+candidate can ever be labeled ``0`` because of a cell the annotator did not
 annotate — the failure mode that made the pre-2026-08-03 sparse rule an oracle.
 ``assert_no_unannotated_overlap`` re-checks this on real data rather than trusting
 the argument.
@@ -68,7 +68,7 @@ Two ways to size a crop
   caught 643 GT nodes and seed 1 caught 1780. That variance lands straight on the
   x-axis, where the whole point is to compare protocols at equal budget.
 - **By annotation budget** (``sample_crop_boxes_for_budgets``) — grow the box from
-  its seeded centre until it holds about N annotated GT nodes. Seeds then land on
+  its seeded center until it holds about N annotated GT nodes. Seeds then land on
   the same x (824 / 822 / 821 for a target of 821) and the crop *volume* absorbs
   the density difference instead (55% of the field for one seed, 27% for another).
 
@@ -128,7 +128,7 @@ def fraction_token(fraction: float) -> str:
 
     ``int(x * 1000 + 0.5)`` rather than ``round``: 0.0625 * 1000 is 62.5, and
     Python's banker's rounding would turn it into ``f062`` while 0.0635 also
-    lands on 62 — the half-up form keeps neighbouring fractions distinct.
+    lands on 62 — the half-up form keeps neighboring fractions distinct.
     """
     return f"f{int(float(fraction) * 1000 + 0.5):03d}"
 
@@ -256,12 +256,12 @@ def sample_crop_boxes(
 ) -> dict[float, CropBox]:
     """Draw nested random crop boxes, one per requested volume fraction.
 
-    A single random centre per seed, shared by every fraction, so — exactly like
+    A single random center per seed, shared by every fraction, so — exactly like
     ``sample_track_subsets`` — the smaller crops are strict subsets of the larger
     ones and the learning curve is monotone-comparable within a seed.
 
-    Nesting survives the clamp to the volume: the admissible centre interval for a
-    small box strictly contains that of a large one, so a centre clamped for the
+    Nesting survives the clamp to the volume: the admissible center interval for a
+    small box strictly contains that of a large one, so a center clamped for the
     large box still leaves the small box inside it. Integer rounding can violate
     that by a pixel, so each box is additionally clamped into its predecessor,
     which makes the containment exact rather than almost-exact.
@@ -312,7 +312,7 @@ def sample_crop_boxes(
 
 
 def _centers_for_seed(volume_shape, axes, seed: int) -> dict[str, float]:
-    """One centre per cropped axis, drawn from the seed before any size is known.
+    """One center per cropped axis, drawn from the seed before any size is known.
 
     Shared by every box of a seed, which is what makes the family nested and what
     keeps crop placement independent of where the ground truth happens to be.
@@ -332,7 +332,7 @@ def _box_for_fraction(
     target_gt_nodes: int | None = None,
     realized_gt_nodes: int | None = None,
 ) -> CropBox:
-    """Centred box covering `fraction` of the volume, clamped inside `enclosing`."""
+    """Centered box covering `fraction` of the volume, clamped inside `enclosing`."""
     side_power = 1.0 / len(axes)
     side = fraction**side_power
     starts, stops = [], []
@@ -449,7 +449,7 @@ def grow_crop_to_gt_budget(
     ground truth; only the size adapts, never the position.
 
     The count is monotone non-decreasing in fraction, because the boxes form a
-    nested family around one centre, so a coarse scan on `step`-sized increments
+    nested family around one center, so a coarse scan on `step`-sized increments
     brackets the target and a bisection refines it. Whichever of the bracketing
     pair lands closer to the target wins, so a target between two achievable counts
     resolves to the nearer one rather than always overshooting.
@@ -738,7 +738,7 @@ def assert_no_unannotated_overlap(
                 if label not in keep_gt_labels:
                     raise AssertionError(
                         f"candidate {cand} (t={t}) survives the crop but overlaps GT "
-                        f"track {label}, which the crop did not annotate — labelling "
+                        f"track {label}, which the crop did not annotate — labeling "
                         "it gt_selected=0 would be supervision the annotator could "
                         "not supply"
                     )
@@ -766,7 +766,7 @@ def materialize_cropped_gt(
     rather than per track. A track that wanders out of the box therefore comes back
     truncated (possibly into several pieces) — that is the annotation, not a defect.
 
-    Note ``correct_seg.zarr`` is labelled with **geff node ids**, while
+    Note ``correct_seg.zarr`` is labeled with **geff node ids**, while
     ``gt_track_labels_in_crop`` reads the track-id-remapped volume. Both are views
     of the same voxels, so the two label sets correspond exactly.
     """

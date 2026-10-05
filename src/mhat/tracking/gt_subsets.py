@@ -22,7 +22,7 @@ Both arms here are realizable protocols: "does this candidate touch one of the
 cells I annotated?" needs only the annotations in hand. (Before 2026-08-03 the rule was
 "touches a *removed* track", which read the hidden GT — see the note in
 ``gt_annotation.assign_gt_labels``. Arm A under that rule was an oracle; under
-the current rule it is simply "restrict fitting to the annotated neighbourhoods".)
+the current rule it is simply "restrict fitting to the annotated neighborhoods".)
 
 Arm B is not equivalent to arm A. ``structsvm.HammingCosts`` zeroes the loss
 coefficients for masked variables, but ``SoftMarginLoss`` still builds
@@ -35,7 +35,7 @@ Label-space warning
 -------------------
 Three numbering systems are in play and they do not agree:
 
-1. **geff node id** — what ``correct_seg.zarr`` is actually labelled with.
+1. **geff node id** — what ``correct_seg.zarr`` is actually labeled with.
 2. **raw geff ``track_id`` prop** — what the annotation tool wrote.
 3. **funtracks-renumbered ``track_id``** — what ``import_from_geff`` produces
    and what ``gt_seg`` carries after ``remap_seg_to_track_ids``.
@@ -379,7 +379,7 @@ def materialize_masked_gt(
     )
     masked = raw_graph.subgraph(kept_node_ids).copy()
 
-    # correct_seg.zarr is labelled with geff node ids (the GT metadata names a
+    # correct_seg.zarr is labeled with geff node ids (the GT metadata names a
     # `seg_id` prop that does not exist, so remap_seg_to_track_ids falls through
     # to the node id). Write seg_id explicitly here so the masked copy does not
     # depend on that fallback — the value is identical either way.

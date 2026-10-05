@@ -149,7 +149,7 @@ def compute_gt_overlaps(
             continue
 
         # No GT for this frame -> empty label set, so every candidate ends up
-        # gt_selected=0 in assign_gt_labels (same as the pre-split behaviour).
+        # gt_selected=0 in assign_gt_labels (same as the pre-split behavior).
         if t >= gt_seg.shape[0]:
             gt_label_sizes: dict[int, int] = {}
         else:

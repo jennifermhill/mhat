@@ -137,7 +137,7 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
             else:
                 failed[key].append((x_of(row), row["seed"]))
 
-        # Each condition is summarised at the mean of its seeds' budgets.
+        # Each condition is summarized at the mean of its seeds' budgets.
         summary = {}
         for key, pairs in by_group.items():
             group_x = np.asarray([p[0] for p in pairs], dtype=float)

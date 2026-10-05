@@ -278,7 +278,7 @@ def load_gt(gt_data_dir: Path, scale):
 
     Returns:
         (gt_graph, gt_seg): the funtracks graph (``track_id`` renumbered by
-        funtracks) and the ``correct_seg.zarr`` volume relabelled to match it.
+        funtracks) and the ``correct_seg.zarr`` volume relabeled to match it.
     """
     gt_data_dir = Path(gt_data_dir)
     gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
@@ -325,7 +325,7 @@ def geff_axis_kwargs(axes) -> dict:
 def write_tracking_outputs(solution_graph, fragments, merge_history, scale, axes, output_dir):
     """Write ``pred_seg.zarr`` and ``pred_tracks.zarr`` the way run_tracking.py does.
 
-    The segmentation is labelled by solution node id (the convention
+    The segmentation is labeled by solution node id (the convention
     ``evaluate_tracking.remap_seg_to_track_ids`` relies on) and chunked one
     tile of one slice, whatever the rank. ``fragments`` may be a lazy zarr: it
     is read one frame at a time. Assigns tracklet ids on ``solution_graph``.

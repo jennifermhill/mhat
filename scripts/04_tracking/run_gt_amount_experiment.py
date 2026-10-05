@@ -303,7 +303,7 @@ def run_crop_self_test() -> None:
 
     # The same geometry on a 2D movie: boxes are (t, y, x), the time axis is
     # still untouched, and the seed-0 y/x placement is identical to the 3D case
-    # (the centre draw does not depend on z existing).
+    # (the center draw does not depend on z existing).
     shape_2d = (20, 512, 512)
     for seed in range(4):
         boxes_2d = sample_crop_boxes(shape_2d, fractions, seed=seed, axes=("y", "x"))
@@ -846,7 +846,7 @@ def main() -> None:
             )
             assert not any(
                 graph.nodes[node].get("gt_selected") == 1 for node in masked
-            ), f"{token}: a masked node is still labelled positive"
+            ), f"{token}: a masked node is still labeled positive"
             stats.update({f"arm_b_{k}": v for k, v in mask_stats.items()})
             fit_graph = graph
             fit_exclusion_sets = base_exclusion_sets

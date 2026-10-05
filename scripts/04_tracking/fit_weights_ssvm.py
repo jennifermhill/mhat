@@ -32,7 +32,7 @@ from mhat.tracking.pipeline import (  # noqa: F401 -- load_gt is re-exported for
     resolve_input_dirs,
     write_tracking_outputs,
 )
-from mhat.tracking.solve_with_motile import add_costs
+from mhat.tracking.solve_with_motile import add_costs, report_solver_backend
 from mhat.tracking.utils import report_graph_statistics
 from motile.variables import EdgeSelected, NodeSelected
 
@@ -368,6 +368,9 @@ def fit_and_solve_on_graph(
 
     report_graph_statistics(config, fit_graph)
 
+    # The fit's loss-augmented ILPs and the final solve below all use ilpy's
+    # Preference.Any, so this one report covers every solve in this function.
+    report_solver_backend()
     print("\nFitting weights via SSVM (this may take a while)...")
     if config.get("ssvm_standardize", False):
         # Per-feature standardized fit: recondition the QP by dividing each feature
@@ -434,7 +437,7 @@ def fit_and_solve_on_graph(
 
     # `gt_selected` is a fitting label, not a prediction. Drop it before writing:
     # it is meaningless in the output, and for unlabeled candidates it is None,
-    # which geff cannot serialise (it infers a dtype from the first value).
+    # which geff cannot serialize (it infers a dtype from the first value).
     for _, node_data in solution_graph.nodes(data=True):
         node_data.pop("gt_selected", None)
     for _, _, edge_data in solution_graph.edges(data=True):
@@ -459,7 +462,7 @@ def fit_and_solve_on_graph(
         }
 
     print("Saving results...")
-    # Same writer as run_tracking.py: node-id-labelled pred_seg.zarr and a geff
+    # Same writer as run_tracking.py: node-id-labeled pred_seg.zarr and a geff
     # whose axis names come from the data's own metadata (2D or 3D).
     write_tracking_outputs(solution_graph, fragments, merge_history, scale, axes, output_dir)
 

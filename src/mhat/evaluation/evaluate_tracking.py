@@ -3,18 +3,149 @@ from pathlib import Path
 
 import dask.array as da
 import geff
+import networkx as nx
 import numpy as np
 import tifffile
 import zarr
 
 from geff_spec import Axis
 from traccuracy import TrackingGraph, run_metrics
+from traccuracy._tracking_graph import EdgeFlag, NodeFlag
+from traccuracy.matchers._matched import Matched
 import traccuracy.matchers as matchers
 import traccuracy.metrics as metrics
 
 from funtracks.import_export import import_from_geff
 
 from mhat.utils import spatial_axis_names
+
+
+class F1AOGMMetrics(metrics.AOGMMetrics):
+    """Detection F1, division F1 and AOGM, as reported in the Ultrack paper.
+
+    Bergamaschi et al., Nat. Methods 2025 (doi:10.1038/s41592-025-02778-0),
+    Methods, "Tracking evaluation metrics":
+
+    - **AOGM** is the weighted error sum with the CTC weights (NS 5, FN 10,
+      FP 1, FP edge 1, FN edge 1.5, wrong semantics 1). Note that traccuracy's
+      plain ``AOGMMetrics`` (``"aogm"`` below) defaults every weight to 1.
+    - **Detection F1** is ``2 TP / (2 TP + FP + FN)`` over the detections the
+      matcher pairs up. Under the CTC matcher one prediction can cover k GT
+      cells (a non-split); it is counted as 1 TP and k - 1 FN -- one cell found,
+      the rest still needing a split -- so ``FN`` here is CTC's FN plus the NS
+      count. Under a one-to-one matcher there are no non-splits and this is
+      plain matched / unmatched counting.
+    - **Division F1** is ``2 TP / (2 TP + FP + FN)`` over divisions, using
+      traccuracy's division classification (frame buffer 0). A division with
+      the right parent but wrong daughters counts as both an FP and an FN, which
+      reproduces traccuracy's own ``Division F1``. traccuracy only classifies
+      divisions under a one-to-one matching, so with the CTC matcher the
+      non-split pairs are dropped first: a prediction that merges two GT
+      daughters cannot be a correct division. NaN when neither graph divides.
+
+    Works under both one-to-one and many-to-one matchers. With sparse GT the FP
+    terms (and so F1 and AOGM) count unannotated true objects as errors.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            vertex_ns_weight=5,
+            vertex_fp_weight=1,
+            vertex_fn_weight=10,
+            edge_fp_weight=1,
+            edge_fn_weight=1.5,
+            edge_ws_weight=1,
+        )
+
+    def _compute(
+        self,
+        data: Matched,
+        relax_skips_gt: bool = False,
+        relax_skips_pred: bool = False,
+    ) -> dict[str, float]:
+        # Division classification must run on unannotated copies: traccuracy
+        # marks flags on the graphs in place, and a later "division" metric on
+        # the original graphs would otherwise skip annotation and reuse these.
+        division_counts = _division_counts(data)
+        errors = super()._compute(data)
+
+        ctc_tp = len(data.gt_graph.get_nodes_with_flag(NodeFlag.CTC_TRUE_POS))
+        det_tp = ctc_tp + len(data.pred_graph.get_nodes_with_flag(NodeFlag.NON_SPLIT))
+        det_fp = errors["fp_nodes"]
+        det_fn = errors["fn_nodes"] + errors["ns_nodes"]
+
+        div_tp = division_counts["tp"]
+        div_fp = division_counts["fp"] + division_counts["wc"]
+        div_fn = division_counts["fn"] + division_counts["wc"]
+
+        return {
+            "AOGM": errors["AOGM"],
+            "Detection F1": _f1(det_tp, det_fp, det_fn),
+            "Detection TP": det_tp,
+            "Detection FP": det_fp,
+            "Detection FN": det_fn,
+            "Division F1": _f1(div_tp, div_fp, div_fn),
+            "Division TP": div_tp,
+            "Division FP": div_fp,
+            "Division FN": div_fn,
+            "Wrong Children Divisions": division_counts["wc"],
+            "Total GT Divisions": division_counts["gt"],
+            "Total Pred Divisions": division_counts["pred"],
+            **{k: v for k, v in errors.items() if k != "AOGM"},
+        }
+
+
+def _f1(tp, fp, fn):
+    """``2 TP / (2 TP + FP + FN)``; NaN when there is nothing to score."""
+    denominator = 2 * tp + fp + fn
+    return 2 * tp / denominator if denominator else np.nan
+
+
+def _unannotated_copy(tracking_graph):
+    """A copy of a TrackingGraph with every traccuracy flag stripped."""
+    flags = {f.value for f in NodeFlag} | {f.value for f in EdgeFlag}
+    graph = nx.DiGraph()
+    graph.add_nodes_from(
+        (n, {k: v for k, v in d.items() if k not in flags})
+        for n, d in tracking_graph.graph.nodes(data=True)
+    )
+    graph.add_edges_from(
+        (u, v, {k: x for k, x in d.items() if k not in flags})
+        for u, v, d in tracking_graph.graph.edges(data=True)
+    )
+    return TrackingGraph(
+        graph=graph,
+        frame_key=tracking_graph.frame_key,
+        label_key=tracking_graph.label_key,
+        location_keys=tracking_graph.location_keys,
+        validate=False,
+    )
+
+
+def _division_counts(matched):
+    """traccuracy division TP/FP/FN/wrong-children counts on the one-to-one part
+    of ``matched``'s mapping, computed on flag-free copies of its graphs."""
+    one_to_one = [
+        (gt, pred)
+        for gt, pred in matched.mapping
+        if len(matched.gt_pred_map[gt]) == 1 and len(matched.pred_gt_map[pred]) == 1
+    ]
+    copy = Matched(
+        _unannotated_copy(matched.gt_graph),
+        _unannotated_copy(matched.pred_graph),
+        one_to_one,
+        {"name": "one-to-one subset", "matching type": "one-to-one"},
+    )
+    result = metrics.DivisionMetrics()._compute(copy)["Frame Buffer 0"]
+    return {
+        "tp": result["True Positive Divisions"],
+        "fp": result["False Positive Divisions"],
+        "fn": result["False Negative Divisions"],
+        "wc": result["Wrong Children Divisions"],
+        "gt": result["Total GT Divisions"],
+        "pred": result["Total Predicted Divisions"],
+    }
+
 
 metrics_dict = {
     "basic": metrics.BasicMetrics,
@@ -23,6 +154,7 @@ metrics_dict = {
     "aogm": metrics.AOGMMetrics,
     "ctc": metrics.CTCMetrics,
     "division": metrics.DivisionMetrics,
+    "f1_aogm": F1AOGMMetrics,
     "track_overlap": metrics.TrackOverlapMetrics,
 }
 

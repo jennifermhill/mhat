@@ -1,31 +1,40 @@
 import argparse
 from pathlib import Path
 import numpy as np
-import toml
 import napari
 import zarr
 import dask.array as da
 
+from mhat.dataset import Dataset, absolute_path
 from mhat.opticalflow.utils import open_flow_raw
 from mhat.utils import get_axes_metadata
 
-def main(config, compute: bool = False, scale_factor: float = 1.0):
-    experiment = config["experiment"]
-    dataset = config["dataset"]
-    exp_uid = config["exp_uid"]
-
-    # Base directories come from the flow config that produced this run, so the
-    # viewer works on any machine. opticalflow.py reads these same two keys.
-    input_base_dir = Path(config["input_base_dir"])
-    output_base_dir = Path(config["output_base_dir"])
-
-    path_to_raw = Path(input_base_dir / experiment / f"{dataset}.zarr")
-    path_to_2d = Path(output_base_dir / experiment / dataset / "opticalflow_2d" / exp_uid / "flow.zarr")
-    path_to_3d = Path(output_base_dir / experiment / dataset / "opticalflow_3d" / exp_uid / "flow.zarr")
+def main(run_dir: Path, raw_path: Path | None = None, compute: bool = False,
+         scale_factor: float = 1.0):
+    # The output directory is found from where the run sits, so this works on
+    # any machine; raw comes from raw.toml unless --raw overrides it. Either
+    # flow kind's run directory shows both the 2D and 3D flow of that uid.
+    run_dir = absolute_path(run_dir)
+    if run_dir.name == "config.toml":
+        run_dir = run_dir.parent
+    ds = Dataset.from_run_dir(run_dir, "opticalflow")
+    exp_uid = run_dir.name
+    path_to_raw = raw_path or ds.raw_path
+    path_to_2d = ds.flow_dir(exp_uid, "2d") / "flow.zarr"
+    path_to_3d = ds.flow_dir(exp_uid, "3d") / "flow.zarr"
 
     viewer = napari.Viewer()
 
-    if path_to_raw.exists():
+    # The flow stores carry the raw movie's axes, so the scale is available
+    # even when the raw movie is not.
+    scale = None
+    for path in (path_to_2d, path_to_3d):
+        if path.exists():
+            flow_raw = zarr.open(path, mode='r')["flow_raw"]
+            scale = [axis["scale"] for axis in get_axes_metadata(flow_raw)]
+            break
+
+    if path_to_raw is not None and Path(path_to_raw).exists():
         zarr_img = zarr.open(path_to_raw, mode='r')
         raw_img = da.from_zarr(path_to_raw)
         axes = get_axes_metadata(zarr_img)
@@ -36,13 +45,13 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
         print(f"Raw image shape: {raw_img.shape}")
         viewer.add_image(raw_img, name="Raw Image", scale=scale)
     else:
-        print(f"Raw data not found at {path_to_raw}")
+        print(f"Raw data not found at {path_to_raw}; pass --raw to show it.")
 
     if path_to_2d.exists():
         flow_zarr = zarr.open(path_to_2d, mode='a')
 
         path_to_flow_frames_2d = path_to_2d / "flow_frames_XY"
-        if not path_to_flow_frames_2d.exists(): 
+        if not path_to_flow_frames_2d.exists():
             from mhat.opticalflow.visualization import generate_flow_frames
 
             print(f"Flow frames path does not exist. Creating at: {path_to_2d / 'flow_frames_XY'}")
@@ -62,7 +71,7 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
         flow_zarr = zarr.open(path_to_3d, mode='a')
 
         path_to_flow_frames_3d_XY = path_to_3d / "flow_frames_XY"
-        if not path_to_flow_frames_3d_XY.exists(): 
+        if not path_to_flow_frames_3d_XY.exists():
             from mhat.opticalflow.visualization import generate_flow_frames
 
             print(f"Flow frames path does not exist. Creating at: {path_to_3d / 'flow_frames_XY'}")
@@ -95,10 +104,16 @@ def main(config, compute: bool = False, scale_factor: float = 1.0):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="View optical flow results in napari. Pass the config.toml "
-                    "that opticalflow.py wrote next to the results you want to see."
+        description="View optical flow results in napari: one run's 2D and 3D flow."
     )
-    parser.add_argument("config", help="path to an optical flow run's config.toml")
+    parser.add_argument(
+        "run", type=Path,
+        help="a flow run, <output_dir>/opticalflow/<2d|3d>/<uid> (or its config.toml)",
+    )
+    parser.add_argument(
+        "--raw", type=Path, default=None,
+        help="raw movie to show, if the path in raw.toml is not valid on this machine",
+    )
     parser.add_argument(
         "--compute",
         action="store_true",
@@ -109,5 +124,5 @@ if __name__ == "__main__":
         help="scale factor applied to the flow vectors when displaying (default: 1.0)",
     )
     args = parser.parse_args()
-    config = toml.load(args.config)
-    main(config, compute=args.compute, scale_factor=args.scale_factor)
+    main(args.run, raw_path=args.raw, compute=args.compute,
+         scale_factor=args.scale_factor)

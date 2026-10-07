@@ -111,7 +111,8 @@ and does need a C++ compiler plus Boost headers.
 
 ## Pipeline
 
-Each numbered stage under `scripts/` takes a TOML config and writes into `experiments/`.
+Each numbered stage under `scripts/` takes a TOML config (see the `*_config_example.toml`
+next to each script) and writes into an output directory you choose.
 
 | Stage | Does |
 |---|---|
@@ -121,15 +122,49 @@ Each numbered stage under `scripts/` takes a TOML config and writes into `experi
 | `05_evaluation` | Tracking and segmentation metrics via traccuracy |
 | `07_plotting` | Figures from evaluation results |
 
-### The 02 → 03 boundary is data, not code
+### Data layout
 
-Stage 02 produces exactly two artifacts that anything downstream reads:
+You give three kinds of path, with no required structure relative to each other:
 
-- `data.zarr/fragments` — uint32 labels, shape `(T, Z, Y, X)`, with an `axes` attribute
-- `merge_history.csv` — columns `a, b, c, cost, timepoint`, sorted by ascending cost
+- **`raw_path`** — the raw movie, a zarr array `(t, c, *spatial)` with an `axes`
+  attribute (`scripts/ctc_to_zarr.py` converts Cell Tracking Challenge sequences).
+- **`output_dir`** — one directory per raw movie, holding everything computed from it.
+- **ground truth** — for evaluation only: `gt_tracks` (a geff), optionally `gt_seg` and
+  `ctc_seg_dir`. The pipeline never writes to these.
 
-Any segmentation that emits those two can be tracked, so stages 03–05 and 07 can also be
-run on fragments and merge histories produced elsewhere.
+Inside the output directory the layout is fixed, so each stage finds the others' runs by
+uid (a timestamp unless you set `exp_uid`):
+
+```
+<output_dir>/
+    raw.toml                       the raw movie this directory belongs to
+    segmentation/<uid>/            data.zarr  merge_history.csv  config.toml
+    opticalflow/{2d,3d}/<uid>/     flow.zarr  config.toml
+    tracking/<uid>/                pred_tracks.zarr  pred_seg.zarr  config.toml
+        evaluation/<label>/            track_metrics.json  eval_config.toml
+```
+
+- Every run saves the config that made it. A tracking run's config names the
+  segmentation and flow runs it read (`seg_result`, `flow_result`).
+- `raw.toml` ties the directory to one raw movie: segmentation, optical flow and
+  tracking refuse to run with a different `raw_path`, so results from two movies can
+  never be mixed. If the movie moves, or you work on another machine, update its `path`.
+- Evaluations live inside the tracking run they score, one directory each, named
+  `<ground truth>_<metrics>_<timestamp>`, so evaluating against another ground truth or
+  metric set never overwrites an earlier result. No run is ever redone in place: a
+  fixed `exp_uid` must be new, so to redo a run use a new uid, or delete the old run
+  directory first.
+- Cell Tracking Challenge ground truth is converted once with
+  `scripts/05_evaluation/convert_ctc_gt.py`.
+- The `visualize_results.py` viewers take a run directory and find everything else from
+  it; `--raw` / `--gt-tracks` cover paths that differ on the viewing machine.
+
+### Bringing your own segmentation
+
+Any integer label image can be the fragments for stage 02: set `seg_method = "file"` and
+`fragments_path` to a zarr array `(t, *spatial)` of the raw movie's shape (per-frame
+numbering is fine). Stage 02 then computes the affinities, the merge history and the
+segmentation hypotheses from it as usual. Optical flow is always computed by stage 03.
 
 ## Development
 

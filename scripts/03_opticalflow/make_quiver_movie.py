@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import colorcet as cc
 import cv2
 
+from mhat.dataset import Dataset, require_dir
 from mhat.opticalflow.utils import open_flow_raw
 
 
@@ -195,20 +196,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    input_base_dir = Path(config['input_base_dir'])
-    experiment: str = config['experiment']
-    dataset: str = config['dataset']
-    exp_uid: str = config['exp_uid']
-    assert input_base_dir.is_dir()
-
-    if config["flow_result"] == "2d":
-        # data_dir = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_2d" / exp_uid / "flow.zarr"
-        raise ValueError("2D flow visualization not implemented yet (needs confidence array). Please set flow_result to '3d'.")
-    elif config["flow_result"] == "3d":
-        data_dir = input_base_dir / "opticalflow" / experiment / dataset / "opticalflow_3d" / exp_uid / "flow.zarr"
-    else:
-        raise ValueError(f"Invalid flow_result value: {config['flow_result']}. Must be '2d' or '3d'.")
+    ds = Dataset.from_config(config)
+    flow_kind = config.get("flow_kind", "3d")
+    if flow_kind == "2d":
+        raise ValueError("2D flow visualization not implemented yet (needs confidence array). Please set flow_kind to '3d'.")
+    elif flow_kind != "3d":
+        raise ValueError(f"Invalid flow_kind value: {flow_kind}. Must be '2d' or '3d'.")
+    data_dir = require_dir(ds.flow_dir(config["flow_result"], flow_kind) / "flow.zarr", "Flow store")
     print(f"Loading data from {data_dir}")
-    assert data_dir.is_dir()
 
     main(config, data_dir)

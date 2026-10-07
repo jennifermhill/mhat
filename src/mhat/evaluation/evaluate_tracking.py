@@ -404,17 +404,24 @@ def read_name_map_and_scale(tracks_path: Path):
     return node_name_map, scale
 
 
-def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
+def load_tracking_graphs(
+    config,
+    gt_tracks_path: Path,
+    gt_seg_path: Path | None,
+    pred_data_dir: Path,
+):
     """Load GT and predicted tracks (with segmentations) as traccuracy graphs.
 
     Shared by ``evaluate_tracking`` and the post-evaluation diagnostics so both
     see exactly the same graphs, positions and scale.
 
     Args:
-        config (dict): Evaluation configuration dictionary (unused today, kept
-            for symmetry with the other entry points).
-        gt_data_dir (Path): Path to ground truth data directory.
-        pred_data_dir (Path): Path to predicted data directory.
+        config (dict): Evaluation configuration dictionary.
+        gt_tracks_path (Path): Ground-truth tracks geff.
+        gt_seg_path (Path | None): Ground-truth segmentation, labeled by geff
+            node id, or None.
+        pred_data_dir (Path): Tracking run directory holding
+            ``pred_tracks.zarr`` and, optionally, ``pred_seg.zarr``.
 
     Returns:
         tuple: (gt_graph, pred_graph, scale) where the graphs are
@@ -425,7 +432,7 @@ def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
     # Each store's name map is built from its own metadata, so a GT/pred axis
     # divergence fails loudly here rather than silently mis-mapping one of them
     # against the other's axes.
-    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
+    gt_tracks_path = Path(gt_tracks_path)
     pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
     gt_name_map, gt_own_scale = read_name_map_and_scale(gt_tracks_path)
     pred_name_map, scale = read_name_map_and_scale(pred_tracks_path)
@@ -453,8 +460,6 @@ def load_tracking_graphs(config, gt_data_dir: Path, pred_data_dir: Path):
             f"in place -- do not delete it."
         )
 
-    gt_seg_path = gt_data_dir / "correct_seg.zarr"
-    gt_seg_path = gt_seg_path if gt_seg_path.exists() else None
     # Segmentations are loaded by remap_seg_to_track_ids, not funtracks -- see
     # the note there about funtracks scaling the time index.
     gt_tracks = import_from_geff(
@@ -523,14 +528,21 @@ def build_matcher(config):
 
 
 def evaluate_tracking(
-    config, gt_data_dir: Path, pred_data_dir: Path, return_matched: bool = False
+    config,
+    gt_tracks_path: Path,
+    gt_seg_path: Path | None,
+    pred_data_dir: Path,
+    return_matched: bool = False,
 ):
     """Calculate metrics for linked tracks by comparing to ground truth.
 
     Args:
         config (dict): Evaluation configuration dictionary.
-        gt_data_dir (Path): Path to ground truth data directory.
-        pred_data_dir (Path): Path to predicted data directory.
+        gt_tracks_path (Path): Ground-truth tracks geff.
+        gt_seg_path (Path | None): Ground-truth segmentation, labeled by geff
+            node id, or None.
+        pred_data_dir (Path): Tracking run directory holding
+            ``pred_tracks.zarr`` and, optionally, ``pred_seg.zarr``.
         return_matched (bool): If True, also return the traccuracy ``Matched``
             object so callers can run further diagnostics without re-matching.
 
@@ -538,7 +550,9 @@ def evaluate_tracking(
         results (dict): Dictionary of metric results, or (results, matched) if
         ``return_matched`` is True.
     """
-    gt_graph, pred_graph, _ = load_tracking_graphs(config, gt_data_dir, pred_data_dir)
+    gt_graph, pred_graph, _ = load_tracking_graphs(
+        config, gt_tracks_path, gt_seg_path, pred_data_dir
+    )
 
     # match_threshold = config.get("match_threshold", 5.0)
     metrics = config.get("metrics", ["basic", "track_overlap"])
@@ -563,11 +577,15 @@ def evaluate_tracking(
     return results
 
 
-def match_tracking(config, gt_data_dir: Path, pred_data_dir: Path):
+def match_tracking(
+    config, gt_tracks_path: Path, gt_seg_path: Path | None, pred_data_dir: Path
+):
     """Load the graphs and run only the matcher, returning the Matched object.
 
     Used by the standalone diagnostic scripts, which need the matching but not
     the metrics.
     """
-    gt_graph, pred_graph, _ = load_tracking_graphs(config, gt_data_dir, pred_data_dir)
+    gt_graph, pred_graph, _ = load_tracking_graphs(
+        config, gt_tracks_path, gt_seg_path, pred_data_dir
+    )
     return build_matcher(config).compute_mapping(gt_graph, pred_graph)

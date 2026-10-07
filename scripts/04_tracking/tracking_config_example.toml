@@ -1,12 +1,17 @@
 # IO
-raw_base_dir = "/path/to/data/"
-input_base_dir = "/path/to/experiments/"
-output_base_dir = "/path/to/experiments/"
-experiment = "experiment_1"
-dataset = "dataset_1"
+# The raw movie: a zarr array (t, c, *spatial) with an "axes" attribute.
+raw_path = "/path/to/data/movie.zarr"
+# One directory per raw movie, the same one segmentation and optical flow wrote to.
+# Runs go to <output_dir>/tracking/<uid>/.
+output_dir = "/path/to/results/movie/"
 
+# uids of the runs to read, under <output_dir>/segmentation/ and <output_dir>/opticalflow/
 seg_result = "seg_result"
 flow_result = "flow_result"
+
+# Optional: a fixed run uid instead of a timestamp. It must not exist yet; to redo a
+# run under the same uid, delete its directory first.
+# exp_uid = "my_run"
 
 # Print graph attributes table
 verbose = false

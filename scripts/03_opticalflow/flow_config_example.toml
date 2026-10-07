@@ -1,8 +1,11 @@
 # IO
-input_base_dir = "/path/to/data/"
-output_base_dir = "/path/to/experiments/opticalflow/"
-experiment = "experiment_1"
-dataset = "dataset_1"
+# The raw movie: a zarr array (t, c, *spatial) with an "axes" attribute.
+raw_path = "/path/to/data/movie.zarr"
+# One directory per raw movie. Runs go to <output_dir>/opticalflow/{2d,3d}/<uid>/.
+output_dir = "/path/to/results/movie/"
+# Optional: a fixed run uid instead of a timestamp, shared by the 2D and 3D flow. It
+# must not exist yet; to redo a run under the same uid, delete its directories first.
+# exp_uid = "my_flow"
 
 rerun_uid = ""
 

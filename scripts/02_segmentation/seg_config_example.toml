@@ -1,16 +1,22 @@
 # IO
-input_base_dir = "/path/to/data/"
-output_base_dir = "/path/to/experiments/segmentation/"
-experiment = "experiment_1"
-dataset = "dataset_1"
+# The raw movie: a zarr array (t, c, *spatial) with an "axes" attribute.
+raw_path = "/path/to/data/movie.zarr"
+# One directory per raw movie. Runs go to <output_dir>/segmentation/<uid>/.
+output_dir = "/path/to/results/movie/"
+# Optional: a fixed run uid instead of a timestamp. It must not exist yet; to redo a
+# run under the same uid, delete its directory first.
+# exp_uid = "my_seg"
 
-overwrite = false
 merge_thresholds = [1.0]
 
 # segmentation parameters
-# seg_method: "cellpose", or a threshold method: "fixed", "otsu", "mean", "li", "triangle", "mad"
+# seg_method: "cellpose", a threshold method ("fixed", "otsu", "mean", "li", "triangle", "mad"),
+# or "file" to use fragments made elsewhere (see fragments_path)
 [seg_params]
 seg_method = "otsu"
+# used when seg_method = "file": an integer label zarr array (t, *spatial), same shape as
+# the raw movie without its channel axis. Per-frame numbering is fine; ids are made unique.
+# fragments_path = "/path/to/labels.zarr"
 spot_sigma = 0.5
 outline_sigma = 0.5
 threshold = 500       # used when seg_method = "fixed"

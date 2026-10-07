@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
 import napari
-import toml
 import zarr
 import dask.array as da
 from typing import Any
@@ -9,6 +8,7 @@ from typing import Any
 from funtracks.import_export import import_from_geff
 from motile_tracker.application_menus import MainApp
 from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
+from mhat.dataset import Dataset, absolute_path
 from mhat.evaluation.evaluate_tracking import (
     read_name_map_and_scale,
     remap_seg_to_track_ids_lazy,
@@ -16,28 +16,35 @@ from mhat.evaluation.evaluate_tracking import (
 from mhat.utils import get_axes_metadata
 
 
-def main(config, ground_truth: bool = False, compute: bool = False):
+def main(
+    run_dir: Path,
+    raw_path: Path | None = None,
+    gt_tracks: Path | None = None,
+    gt_seg: Path | None = None,
+    compute: bool = False,
+):
+    # The output directory is found from where the run sits, so this works on
+    # any machine; raw comes from raw.toml unless --raw overrides it.
+    run_dir = absolute_path(run_dir)
+    if run_dir.name == "config.toml":
+        run_dir = run_dir.parent
+    ds = Dataset.from_run_dir(run_dir, "tracking")
+    raw_cells_zarr_path = raw_path or ds.raw_path
 
-    experiment = config["experiment"]
-    dataset = config["dataset"]
-    exp_uid = config["exp_uid"]
+    if gt_tracks is not None:
+        print("Visualizing ground truth tracks.")
+        track_data_zarr_path = Path(gt_tracks)
+        track_seg_zarr_path = Path(gt_seg) if gt_seg is not None else None
+    else:
+        print("Visualizing predicted tracks.")
+        track_data_zarr_path = run_dir / 'pred_tracks.zarr'
+        track_seg_zarr_path = run_dir / 'pred_seg.zarr'
+    if track_seg_zarr_path is not None and not track_seg_zarr_path.exists():
+        track_seg_zarr_path = None
 
-    # Base directories come from the tracking config that produced this run, so
-    # the viewer works on any machine. run_tracking.py reads these same three
-    # keys and writes a copy of the config next to its output.
-    raw_base_dir = Path(config["raw_base_dir"])
-    output_base_dir = Path(config["output_base_dir"])
-
-    tracking_base_dir = output_base_dir / "tracking"
-
-    raw_cells_zarr_path = Path(raw_base_dir / experiment / f"{dataset}.zarr")
-
-    if not raw_cells_zarr_path.exists():
-        raise FileNotFoundError(f"Raw cells path {raw_cells_zarr_path} does not exist. Exiting.")
-    
     viewer = napari.Viewer()
 
-    if raw_cells_zarr_path.exists():
+    if raw_cells_zarr_path is not None and Path(raw_cells_zarr_path).exists():
         axes = get_axes_metadata(zarr.open(raw_cells_zarr_path, mode='r'))
         scale = [axis["scale"] for axis in axes]
         scale[0] = 1.0  # Set time axis scale to 1.0 for visualization
@@ -47,21 +54,11 @@ def main(config, ground_truth: bool = False, compute: bool = False):
             raw_cells = raw_cells.compute()
         viewer.add_image(raw_cells, name='raw', colormap='gray', blending='additive', scale=scale)
     else:
-        print(f"Warning: Raw cells path {raw_cells_zarr_path} does not exist.")
-        print("Defaulting scale to [1.0, 1.0, 1.0, 1.0]")
-        scale = [1.0, 1.0, 1.0, 1.0]
-
-    # Load tracking data if it exists
-    if ground_truth:
-        print("Visualizing ground truth tracks.")
-        track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_tracks.zarr')
-        track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / 'correct_seg.zarr')
-    else:
-        print("Visualizing predicted tracks.")
-        track_data_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_tracks.zarr')
-        track_seg_zarr_path = Path(tracking_base_dir / experiment / dataset / exp_uid / 'pred_seg.zarr')
-    if not track_seg_zarr_path.exists():
-        track_seg_zarr_path = None
+        # The tracks carry the same axes as the raw movie.
+        _, scale = read_name_map_and_scale(track_data_zarr_path)
+        scale[0] = 1.0
+        print(f"Raw data not found at {raw_cells_zarr_path}; pass --raw to show it.")
+        print(f"Using the tracks' own scale: {scale}")
 
     # Add the MainApp widget first
     widget = MainApp(viewer)
@@ -91,7 +88,7 @@ def main(config, ground_truth: bool = False, compute: bool = False):
 
             # Add tracks to the TracksViewer
             tracks_viewer = TracksViewer.get_instance(viewer)
-            tracks_viewer.tracks_list.add_tracks(tracks, dataset)
+            tracks_viewer.tracks_list.add_tracks(tracks, ds.name)
             print(f"Successfully loaded tracks: {tracks}")
             if tracks_viewer.tracking_layers.tracks_layer is not None:
                 tracks_viewer.tracking_layers.tracks_layer.tail_length = 4
@@ -116,14 +113,24 @@ def main(config, ground_truth: bool = False, compute: bool = False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="View tracking results in napari. Pass the config.toml that "
-                    "run_tracking.py wrote next to the results you want to see."
+        description="View tracking results in napari: one run's predictions, or "
+                    "ground truth over that run's raw movie."
     )
-    parser.add_argument("config", help="path to a tracking run's config.toml")
     parser.add_argument(
-        "--ground-truth",
-        action="store_true",
-        help="show the ground truth tracks instead of the predictions",
+        "run", type=Path,
+        help="a tracking run, <output_dir>/tracking/<uid> (or its config.toml)",
+    )
+    parser.add_argument(
+        "--raw", type=Path, default=None,
+        help="raw movie to show, if the path in raw.toml is not valid on this machine",
+    )
+    parser.add_argument(
+        "--gt-tracks", type=Path, default=None,
+        help="show these ground-truth tracks (geff) instead of the predictions",
+    )
+    parser.add_argument(
+        "--gt-seg", type=Path, default=None,
+        help="ground-truth segmentation to show with --gt-tracks",
     )
     parser.add_argument(
         "--compute",
@@ -131,5 +138,5 @@ if __name__ == '__main__':
         help="load the arrays into memory instead of viewing them lazily",
     )
     args = parser.parse_args()
-    track_config = toml.load(args.config)
-    main(track_config, ground_truth=args.ground_truth, compute=args.compute)
+    main(args.run, raw_path=args.raw, gt_tracks=args.gt_tracks, gt_seg=args.gt_seg,
+         compute=args.compute)

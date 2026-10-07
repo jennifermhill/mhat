@@ -272,14 +272,20 @@ def read_name_map_and_scale(tracks_path: Path):
 
 
 def evaluate_tracking(
-    config, gt_data_dir: Path, pred_data_dir: Path
+    config,
+    gt_tracks_path: Path,
+    gt_seg_path: Path | None,
+    pred_data_dir: Path,
 ):
     """Calculate metrics for linked tracks by comparing to ground truth.
 
     Args:
         config (dict): Evaluation configuration dictionary.
-        gt_data_dir (Path): Path to ground truth data directory.
-        pred_data_dir (Path): Path to predicted data directory.
+        gt_tracks_path (Path): Ground-truth tracks geff.
+        gt_seg_path (Path | None): Ground-truth segmentation, labeled by geff
+            node id, or None.
+        pred_data_dir (Path): Tracking run directory holding
+            ``pred_tracks.zarr`` and, optionally, ``pred_seg.zarr``.
 
     Returns:
         results (dict): Dictionary of metric results.
@@ -288,7 +294,7 @@ def evaluate_tracking(
     # Each store's name map is built from its own metadata, so a GT/pred axis
     # divergence fails loudly here rather than silently mis-mapping one of them
     # against the other's axes.
-    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
+    gt_tracks_path = Path(gt_tracks_path)
     pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
     gt_name_map, gt_own_scale = read_name_map_and_scale(gt_tracks_path)
     pred_name_map, scale = read_name_map_and_scale(pred_tracks_path)
@@ -316,8 +322,6 @@ def evaluate_tracking(
             f"in place -- do not delete it."
         )
 
-    gt_seg_path = gt_data_dir / "correct_seg.zarr"
-    gt_seg_path = gt_seg_path if gt_seg_path.exists() else None
     # Segmentations are loaded by remap_seg_to_track_ids, not funtracks -- see
     # the note there about funtracks scaling the time index.
     gt_tracks = import_from_geff(

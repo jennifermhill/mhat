@@ -1,6 +1,5 @@
 import csv
 import argparse
-import datetime
 from pathlib import Path
 
 import motile
@@ -11,10 +10,9 @@ import zarr
 import geff
 import networkx as nx
 
-from mhat.evaluation.eval_io import check_video_dir
+from mhat.dataset import Dataset, require_dir
 from mhat.opticalflow.utils import open_flow_raw
 from mhat.tracking import create_multihypo_graph, solve_with_motile, utils
-from mhat.tracking.tracks_io import save_tracks_to_csv
 from mhat.utils import get_axes_metadata, seg_chunks
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
@@ -269,62 +267,33 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    raw_base_dir = Path(config["raw_base_dir"])
-    input_base_dir = Path(config["input_base_dir"])
-    output_base_dir = Path(config["output_base_dir"])
-    dataset: str = config["dataset"]
-    experiment: str = config["experiment"]
-    assert raw_base_dir.is_dir()
-    assert input_base_dir.is_dir()
-    assert output_base_dir.is_dir()
-
-    raw_dir = raw_base_dir / experiment / f"{dataset}.zarr"
+    ds = Dataset.from_config(config)
+    raw_dir = ds.require_raw_path()
     print(f"Loading raw data from {raw_dir}")
-    assert raw_dir.is_dir(), f"Raw data directory {raw_dir} is missing"
+    ds.bind_raw()
 
-    seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
+    seg_dir = require_dir(ds.seg_dir(config["seg_result"]), "Segmentation data directory")
     print(f"Loading segmentation data from {seg_dir}")
-    assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
 
-    # Which flow a run requires depends on the data's rank, so read it from the
-    # fragments array before deciding. This is metadata only -- no pixels.
-    data_ndim = zarr.open(seg_dir / "data.zarr")["fragments"].ndim - 1
-
+    # Which flow is required depends on the data's rank (see Dataset.flow_dirs).
     flow_result = config.get("flow_result", None)
-    if flow_result is not None:
-        flow_base = input_base_dir / "opticalflow" / experiment / dataset
-        flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
-        flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
-        if data_ndim == 3:
-            # 3D data must have a 3D flow: nothing else can estimate axial
-            # motion. A 2D flow beside it is optional and, when present,
-            # supplies the better-resolved in-plane components.
-            assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
-            print(f"Loading 3D optical flow data from {flow_dir_3d}")
-            if not flow_dir_2d.is_dir():
-                print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
-                flow_dir_2d = None
-            else:
-                print(f"Loading 2D optical flow data from {flow_dir_2d}")
-        else:
-            # 2D data has no 3D flow to look for, so the 2D one is required.
-            assert flow_dir_2d.is_dir(), (
-                f"2D optical flow data directory {flow_dir_2d} is missing -- "
-                "2D data has no 3D flow to fall back on"
-            )
-            print(f"Loading 2D optical flow data from {flow_dir_2d}")
-            flow_dir_3d = None
-        flow_dirs = {"2d": flow_dir_2d, "3d": flow_dir_3d}
-    else:
-        flow_dirs = {"2d": None, "3d": None}
+    flow_dirs = ds.flow_dirs(flow_result, config["seg_result"])
+    if flow_dirs["3d"] is not None:
+        print(f"Loading 3D optical flow data from {flow_dirs['3d']}")
+    if flow_dirs["2d"] is not None:
+        print(f"Loading 2D optical flow data from {flow_dirs['2d']}")
+    elif flow_dirs["3d"] is not None:
+        print(
+            f"2D optical flow directory {ds.flow_dir(flow_result, '2d')} does not "
+            "exist, using 3D flow only."
+        )
 
     exp_uid = config.get("exp_uid")
     if not exp_uid:
-        exp_uid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        exp_uid = ds.new_uid()
         config["exp_uid"] = exp_uid
 
-    output_dir = output_base_dir / "tracking" / experiment / dataset / exp_uid
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = ds.prepare_run_dir("tracking", exp_uid)
     print(f"Saving results to {output_dir}")
 
     run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir)

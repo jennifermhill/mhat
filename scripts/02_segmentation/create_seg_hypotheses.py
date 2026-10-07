@@ -6,13 +6,13 @@ import numpy as np
 import toml
 import zarr
 import torch
-import datetime
 from scipy.ndimage import label
 # from scipy.ndimage.filters import maximum_filter
 # from scipy.ndimage.morphology import distance_transform_edt
-from skimage.segmentation import watershed
+from skimage.segmentation import relabel_sequential, watershed
 from skimage.filters import gaussian
 
+from mhat.dataset import Dataset
 from mhat.segmentation.agglomerate import (
     WATERZ_CONVENTION,
     agglomerate_frame,
@@ -43,7 +43,28 @@ def generate_fragments(data_zarr: Path, output_root, config):
     output_root['fragments'].attrs["axes"] = axes
 
     seg_method = config["seg_method"]
-    if seg_method == 'cellpose':
+    if seg_method == 'file':
+        # Fragments made elsewhere: any (t, *spatial) integer label array the
+        # same shape as the raw movie. They are relabeled below like every
+        # other method's, so per-frame numbering (1..n each frame) is fine.
+        fragments_path = config["fragments_path"]
+        print(f"Using fragments from {fragments_path}.")
+        external = zarr.open(fragments_path, mode="r")
+        if not isinstance(external, zarr.Array):
+            raise ValueError(
+                f"fragments_path {fragments_path} must be a zarr array, not a group"
+            )
+        if external.shape != (T, *spatial_shape):
+            raise ValueError(
+                f"Fragments at {fragments_path} have shape {external.shape}, but "
+                f"the raw movie needs (t, *spatial) = {(T, *spatial_shape)}"
+            )
+        if not np.issubdtype(external.dtype, np.integer):
+            raise ValueError(
+                f"Fragments at {fragments_path} must be integer labels, "
+                f"got {external.dtype}"
+            )
+    elif seg_method == 'cellpose':
         # Check for cuda availability
         print("Using Cellpose for segmentation.")
         if torch.cuda.is_available():
@@ -60,7 +81,13 @@ def generate_fragments(data_zarr: Path, output_root, config):
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
-        if seg_method == 'cellpose':
+        if seg_method == 'file':
+            # Numbered 1..n before the offset below, whatever the source's
+            # numbering: already-unique ids (e.g. fragments from an earlier
+            # run) would otherwise be shifted again on every frame and grow
+            # without bound. MHAT's own fragments come back with the same ids.
+            labels, _, _ = relabel_sequential(np.asarray(external[tp]))
+        elif seg_method == 'cellpose':
             labels = segment_with_cellpose(frame, gpu=gpu, **cellpose_kwargs)
         else:
             labels = threshold_labeling(
@@ -239,41 +266,31 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    input_base_dir = Path(config["input_base_dir"])
-    output_base_dir = Path(config["output_base_dir"])
-    experiment: str = config["experiment"]
-    dataset: str = config["dataset"]
-    assert input_base_dir.is_dir()
-    assert output_base_dir.is_dir()
-
-    data_dir = input_base_dir / experiment / f"{dataset}.zarr"
+    ds = Dataset.from_config(config)
+    data_dir = ds.require_raw_path()
     print(f"Loading data from {data_dir}")
-    assert data_dir.is_dir()
 
     # Fail on a pre-2026-09-17 (x-first) neighborhood before any work is done.
     ndim = zarr.open(data_dir, "r").ndim - 2  # raw is (t, c, *spatial)
     check_waterz_neighborhood(config["affinity_params"]["neighborhood"], ndim)
 
-    current_datetime = datetime.datetime.now()
-    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+    ds.bind_raw()
+
+    exp_uid = config.get("exp_uid") or ds.new_uid()
     config["exp_uid"] = exp_uid
     # Segmentations from before 2026-09-17 fed waterz the affinity channels in
     # the wrong order and one voxel off; this key marks a run as post-fix.
     config["waterz_convention"] = WATERZ_CONVENTION
 
-    output_dir = output_base_dir / experiment / dataset / exp_uid
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = ds.prepare_run_dir("segmentation", exp_uid)
     print(f"Saving results to {output_dir}")
 
     with open(output_dir / "config.toml", "w") as config_file:
         toml.dump(config, config_file)
 
     output_root = zarr.open(output_dir / "data.zarr", "a")
-    if "fragments" not in output_root or config["overwrite"]:
-        generate_fragments(data_dir, output_root, config["seg_params"])
-
-    if "affinities" not in output_root or config["overwrite"]:
-        generate_fluorescent_affinities(data_dir, output_root, config["affinity_params"])
+    generate_fragments(data_dir, output_root, config["seg_params"])
+    generate_fluorescent_affinities(data_dir, output_root, config["affinity_params"])
 
     threshold = config["merge_thresholds"]
 

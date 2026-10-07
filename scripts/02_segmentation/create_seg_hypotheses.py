@@ -20,6 +20,7 @@ from mhat.segmentation.agglomerate import (
 )
 from mhat.segmentation.threshold_labeling import threshold_labeling
 from mhat.segmentation.cellpose import segment_with_cellpose
+from mhat.segmentation.labels import offset_labels
 from mhat.segmentation.affinities import compute_affinities, compute_fluorescent_affinities
 from mhat.utils import get_axes_metadata, seg_chunks
 
@@ -55,6 +56,7 @@ def generate_fragments(data_zarr: Path, output_root, config):
     else:
         print(f"Using '{seg_method}' threshold segmentation method.")
 
+    max_node_id = 0
     for tp in range(T):
         print(f"Processing frame {tp}")
         frame = raw_data[tp, 0]
@@ -69,12 +71,10 @@ def generate_fragments(data_zarr: Path, output_root, config):
                 threshold=config.get("threshold"),
                 mad_k=config.get("mad_k", 9.0),
             )
-        
-        if tp != 0:
-            labels[labels != 0] += max_node_id
 
-        max_node_id = np.max(labels)
-
+        labels, max_node_id = offset_labels(
+            labels, max_node_id, dtype=output_root['fragments'].dtype
+        )
         output_root['fragments'][tp] = labels
 
 def generate_fluorescent_affinities(data_zarr: Path, output_root, config):

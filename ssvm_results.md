@@ -224,3 +224,156 @@ Superseded (old seg `seg_cp_20260720_fs1_cpm6` / `holdout_fs1_cpm6`): train hand
   740 vs 704 on test.
 
 NC281 bars in both figures are untouched and remain on their pre-fix segmentation.
+
+---
+
+## 2026-10-07: Fluo-C2DL-Huh7 fit (2D, two GT variants)
+
+First SSVM fit on a 2D dataset, and the first on Huh7. Two arms, differing only in
+which ground truth the fit annotates the candidate graph against: the **official**
+CTC GT (`01_cells`, 951 nodes) and the **extended** GT (`01_cells_supp`, the same
+951 CTC nodes plus 289 supplementary point annotations as 10 px discs). Full
+working record in `logs/huh7_ssvm/NOTES.md`.
+
+Run on `ssvm-fit`, which has the fitting code but not `f1_aogm`. Detection F1 is
+therefore derived from the CTC error counts (`Detection FN = fn_nodes + ns_nodes`,
+`TP = GT nodes − FN`, `FP = fp_nodes`), which reproduces the real metric exactly —
+verified against `huh7trk2_norm87_p1000`, scored with `F1AOGMMetrics` on
+`experiments`: 942 TP / 276 FP / 9 FN, F1 0.8686030428769018. `CTCMetrics.AOGM`
+is already the right AOGM. Collector: `logs/huh7_ssvm/collect_huh7.py`.
+
+### Protocol
+
+Graph params are byte-identical to the hand-tuned best run on each split, so only
+the weights differ. `sweep_ssvm_reg.py` over the 19-value `DEFAULT_REGS` grid
+(0.1 → 0.00316) per arm, graph and GT overlaps built once; every run scored
+against **both** GTs; ranked on TRA; the winner transferred once to held-out
+`02_cells` with `solve_many_weights.py`. Nothing was selected on `02_cells`.
+
+Two controls, both passing bit-identically, because `run_tracking.py` on this
+branch builds the candidate graph inline while the SSVM path uses
+`pipeline.build_track_graph`:
+
+- Hand-tuned params re-solved on the pipeline-built graph reproduce
+  `huh7trk2_norm87_p1000` (01) and `huh7final02_norm87` (02) to every digit.
+- The winning learned weights re-solved through `solve_many_weights.py` reproduce
+  the fit's own solve (`huh7ssvm_resolve_check`, 1220 nodes / 1170 edges).
+
+**Curvature is excluded from both fits** (`ablate_curvature = true`). With it in,
+the loss-augmented ILP spans 208834 edge pairs; the first bundle iteration solves
+in 3.8 s only because every weight is still 0, and once curvature carries a weight
+a single Gurobi solve ran past 10 min (confirmed by backtrace inside
+`GRBoptimize`). Free here — `curvature_weight = 0` in the hand-tuned optimum, and
+`plus_curvature` is not SSVM-fittable in isolation anyway.
+
+### The regularizer was the whole story
+
+Selected by the geometric-center-of-plateau rule `--collect` prescribes: official
+arm **r08 (`ssvm_reg` 0.0215, effective 306.07)**, extended arm **r04 (0.0464,
+effective 660.5)**. Both optima are bracketed; no grid extension was needed.
+
+01_cells, official GT:
+
+| `ssvm_reg` | DetF1 | TRA | LNK | SEG | AOGM |
+|---|---|---|---|---|---|
+| hand-tuned | 0.8686 | **0.9655** | 0.9746 | 0.7518 | 376.0 |
+| 0.1 (the old default) | 0.8637 | 0.9508 | 0.8707 | 0.7535 | 535.5 |
+| 0.0316 | 0.8669 | 0.9631 | 0.9652 | 0.7516 | 402.0 |
+| **0.0215 (selected)** | 0.8678 | **0.9653** | **0.9746** | **0.7518** | 378.0 |
+| 0.0100 | 0.8656 | 0.9574 | 0.9670 | 0.7462 | 463.5 |
+| 0.00316 | 0.8652 | 0.9573 | 0.9670 | 0.7462 | 464.5 |
+
+**At `ssvm_reg = 0.1` the fit looks clearly worse than hand-tuning; at the plateau
+it is indistinguishable** — identical LNK, identical SEG, identical Detection FN
+(9), and 2 AOGM errors apart out of 951 GT nodes. The `0.1` in
+`MDA231_ssvm_fit.toml` is not a portable default, and on this dataset it was worth
+~0.015 TRA, roughly ten times the effect of anything else tested here.
+
+### The two arms converge; the GT choice is second-order
+
+In the weakly regularized limit both arms land on the same solution. On the
+official GT, official-arm r08 and extended-arm r08 both give DetF1 0.8678 / TRA
+0.9653 / LNK 0.9746 / AOGM 378.0 / FP 278 / fn_edges 22, differing only in the 4th
+decimal of SEG. **The ~254 real cells the official CTC GT omits — which enter that
+arm's fit as explicit negatives — are worth ~0.001–0.002 TRA.** Which GT you fit
+against matters far less here than what regularizer you use.
+
+Scored on the extended GT, the plateau fit slightly *beats* hand-tuned (TRA 0.9642
+vs 0.9628, DetF1 0.9740 vs 0.9731, AOGM 508 vs 528), so neither arm ends up behind
+by that yardstick.
+
+Note that `sweep_ssvm_reg.py --collect` ranks **both** arms on the official GT:
+`make_eval_config` always writes `dataset = "01_cells"` and has no `gt_data_dir`
+passthrough. The extended arm's own-yardstick ranking needs separate eval configs
+(`logs/huh7_ssvm/eval_arm.sh`).
+
+### Held-out 02_cells — detection transfers, linking does not
+
+One run per arm. Official GT (1618 GT nodes):
+
+| Bar | DetF1 | TRA | DET | LNK | SEG | AOGM | DetFN | TF |
+|---|---|---|---|---|---|---|---|---|
+| hand-tuned (`huh7final02_norm87`) | 0.9067 | **0.9442** | 0.9465 | **0.9281** | 0.7091 | **1034.5** | 72 | **0.9150** |
+| SSVM, arm official (r08) | **0.9068** | 0.9416 | 0.9480 | 0.8981 | 0.7096 | 1081.0 | 71 | 0.8390 |
+| SSVM, arm extended (r04) | 0.9048 | 0.9420 | **0.9486** | 0.8964 | 0.7123 | 1075.0 | **69** | 0.8384 |
+
+Extended GT (1840 GT nodes):
+
+| Bar | DetF1 | TRA | DET | LNK | SEG | AOGM | DetFN | TF |
+|---|---|---|---|---|---|---|---|---|
+| hand-tuned | 0.9653 | 0.9521 | 0.9560 | **0.9249** | 0.7091 | 1009.5 | 87 | **0.9087** |
+| SSVM, arm official (r08) | 0.9648 | 0.9492 | 0.9567 | 0.8974 | 0.7096 | 1070.0 | 87 | 0.8438 |
+| SSVM, arm extended (r04) | **0.9660** | **0.9526** | **0.9609** | 0.8958 | 0.7123 | **998.5** | **79** | 0.8445 |
+
+### Reading
+
+- **Detection F1 is a dead heat out of sample** (0.9068 vs 0.9067), and on the
+  extended GT the extended arm is ahead on DetF1, DET, Detection FN *and* AOGM.
+  Whatever the fit is getting wrong, it is not detection.
+- **The loss is entirely in linking:** LNK 0.928 → 0.898, `fn_edges` 111 → 142,
+  `track_fractions` 0.915 → 0.839. TRA mixes the two and so loses only ~0.003,
+  which understates the effect — this is a case where TRA alone is misleading and
+  `track_fractions` is the honest number.
+- **Mechanism, scale-free.** Absolute weight magnitudes are meaningless between the
+  two (the ILP objective is invariant under uniform positive rescaling), so compare
+  each cost mean to the edge-cost spread. Summed over the three edge costs on
+  `02_cells`:
+
+  | config | edge cost mean | edge cost std | mean/std | frac of edges < 0 | node cost mean |
+  |---|---|---|---|---|---|
+  | hand-tuned | −1074.37 | 1232.60 | **−0.872** | **0.791** | +2416.9 |
+  | SSVM arm official | +0.9192 | 2.6453 | +0.348 | 0.384 | +0.4 |
+  | SSVM arm extended | +0.4269 | 2.1011 | +0.203 | 0.437 | −0.8 |
+
+  Computed over all 27294 cost-carrying edges of the `02_cells` candidate graph by
+  `logs/huh7_ssvm/edge_cost_stats.py` — summing the per-term stds that
+  `report_graph_statistics` prints would be wrong, since the terms are correlated
+  across edges.
+
+  Hand-tuning puts the edge cost mean 0.872 std *below* zero against a strongly
+  positive node cost (the flat `cohesion_constant = 1000`): nodes are expensive,
+  edges nearly free. Both fits put it 0.2–0.35 std *above* zero. The direct
+  reading is the last column: **79.1 % of candidate edges are selection-favorable
+  (negative cost) under hand-tuning, against 38.4 % and 43.7 % under the two
+  fits.** A candidate edge is a net cost to the fitted objective unless it is
+  better than average, so marginal links go unselected.
+- **01_cells hid this because it saturates** (~1220 of 1766 candidates selected; a
+  12-run hand-tuned sweep moved TRA by 0.0005). `02_cells` has 3111 candidates and
+  27294 edges — nearly double — and saturation no longer covers for the weaker edge
+  incentive. A fit that matches on train for this reason should not be assumed to
+  transfer.
+- This is the same diagnosis as the original MDA231 fit: the SSVM is optimizing
+  Hamming distance, where a dropped marginal edge costs 1, while LNK/AOGM/TF weight
+  a missing edge more (FN edge 1.5 in the CTC weights). It is not a convergence
+  failure — the fit is correct on its own objective.
+
+### Not done
+
+- **`ssvm_hamming_weight` was not tried, and it is the direct lever on the above:**
+  up-weighting the edge Hamming cost should pull the edge cost mean negative.
+  `ssvm_standardize` also untried; `sweep_post_ssvm_offsets.py` exists for a related
+  purpose and was not used.
+- Only one point per arm reached `02_cells` — correct protocol, but the linking gap
+  rests on n = 1.
+- Division F1 is meaningless on Huh7 (the GT holds one division), so the fitted
+  `division_weight` is effectively unconstrained.

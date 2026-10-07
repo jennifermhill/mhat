@@ -1,11 +1,19 @@
 # IO
-input_base_dir = "/path/to/experiments/"
-output_base_dir = "/path/to/experiments/"
-experiment = "experiment_1"
-dataset = "dataset_1"
-ctc_gt = "01_GT"
-
+# The output directory the tracking run is in, and the run's uid. Results go to
+# <output_dir>/tracking/<track_result>/evaluation/<label>/, where the label is
+# <eval_name or gt_tracks' parent directory name>_<metrics>_<timestamp>.
+output_dir = "/path/to/results/movie/"
 track_result = "track_result"
+
+# Ground truth. gt_tracks is a geff; for Cell Tracking Challenge ground truth, make it
+# (and gt_seg) with scripts/05_evaluation/convert_ctc_gt.py.
+gt_tracks = "/path/to/gt/official/correct_tracks.zarr"
+# Optional: ground-truth segmentation labeled by geff node id (needed by matcher = "ctc").
+gt_seg = "/path/to/gt/official/correct_seg.zarr"
+# Optional: the CTC SEG folder (man_seg*.tif), for the CTC SEG score.
+# ctc_seg_dir = "/path/to/ctc/01_GT/SEG"
+# Optional: label for this evaluation instead of gt_tracks' parent directory name.
+# eval_name = "official"
 
 # Eval settings
 metrics = ["ctc"]

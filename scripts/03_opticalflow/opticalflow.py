@@ -1,13 +1,13 @@
 import argparse
 import toml
 from pathlib import Path
-import datetime
 
 import dask.array as da
 import numpy as np
 import zarr
 from tqdm import tqdm
 
+from mhat.dataset import Dataset
 from mhat.opticalflow.utils import create_flow_store, frame_average, rename_flow_uid
 from mhat.opticalflow.farneback import compute_farneback_flow_2d, compute_farneback_flow_3d
 from mhat.opticalflow.visualization import generate_flow_frames
@@ -72,29 +72,27 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    input_base_dir = Path(config['input_base_dir'])
-    output_base_dir = Path(config['output_base_dir'])
-    experiment: str = config['experiment']
-    dataset: str = config['dataset']
-    assert input_base_dir.is_dir()
-    assert output_base_dir.is_dir()
-
-    data_dir = input_base_dir / experiment / f"{dataset}.zarr"
+    ds = Dataset.from_config(config)
+    data_dir = ds.require_raw_path()
     print(f"Loading data from {data_dir}")
-    assert data_dir.is_dir()
+    ds.bind_raw()
 
-    current_datetime = datetime.datetime.now()
-    exp_uid = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+    exp_uid = config.get("exp_uid") or ds.new_uid()
     config["exp_uid"] = exp_uid
 
     # Check for rerun uid
     rerun_uid = config.get("rerun_uid", "")
 
+    # The 2D and 3D flow share the uid, and a rerun_uid rename lands on it too:
+    # check every target before computing either, so nothing is refused halfway.
+    for kind in ("2d", "3d"):
+        if config[kind][f"do_{kind}"] or rerun_uid:
+            ds.check_new_run("opticalflow", exp_uid, kind)
+
     if config["2d"]["do_2d"]:
         print("Calculating 2D optical flow...")
 
-        output_dir = output_base_dir / experiment / dataset / "opticalflow_2d" / exp_uid
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = ds.prepare_run_dir("opticalflow", exp_uid, "2d")
         print(f"Saving 2D optical flow results to {output_dir}")
 
         config_filepath = output_dir / "config.toml"
@@ -103,13 +101,12 @@ if __name__ == "__main__":
 
         calculate_flow(config["2d"], data_dir, output_dir, do_3d=False)
     elif rerun_uid:
-        prev_flow_dir = output_base_dir / experiment / dataset / "opticalflow_2d" / rerun_uid
+        prev_flow_dir = ds.flow_dir(rerun_uid, "2d")
         rename_flow_uid(prev_flow_dir, exp_uid)
 
     if config["3d"]["do_3d"]:
         print("Calculating 3D optical flow...")
-        output_dir = output_base_dir / experiment / dataset / "opticalflow_3d" / exp_uid
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = ds.prepare_run_dir("opticalflow", exp_uid, "3d")
         print(f"Saving 3D optical flow results to {output_dir}")
 
         config_filepath = output_dir / "config.toml"
@@ -118,7 +115,7 @@ if __name__ == "__main__":
 
         calculate_flow(config["3d"], data_dir, output_dir, do_3d=True)
     elif rerun_uid:
-        prev_flow_dir = output_base_dir / experiment / dataset / "opticalflow_3d" / rerun_uid
+        prev_flow_dir = ds.flow_dir(rerun_uid, "3d")
         rename_flow_uid(prev_flow_dir, exp_uid)
 
     

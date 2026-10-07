@@ -1,29 +1,26 @@
-import json
-import shutil
 import argparse
+import json
 from pathlib import Path
 
-import toml
 import geff
-import zarr
+import toml
 
+from mhat.dataset import Dataset, absolute_path, require_dir
 from mhat.evaluation.evaluate_tracking import compute_ctc_seg, evaluate_tracking
-from mhat.evaluation.from_ctc_to_geff import from_ctc_to_geff
 from mhat.utils import spatial_axis_names
 
 
 def report_axis_consistency(gt_tracks_path, pred_axes):
     """Report -- and only report -- a GT/prediction axis-name disagreement.
 
-    An existing ``correct_tracks.zarr`` is reused as-is, so one converted under
-    different axes than the current prediction would have its coordinates
-    matched against the wrong axes. Worth saying early and in context.
+    A ground truth converted under different axes than the current prediction
+    would have its coordinates matched against the wrong axes. Worth saying
+    early and in context.
 
-    This deliberately does not act. For the CTC datasets the GT store can be
-    rebuilt from ``01_GT``, but for NC281 and primary_nk_cells the
-    ``correct_tracks.zarr`` store is the ONLY copy of those annotations and
-    cannot be regenerated -- so a disagreement is something to repair in place,
-    never something to resolve by deleting the store.
+    This deliberately does not act. Hand-annotated ground truth (NC281,
+    primary_nk_cells, ...) can be the ONLY copy of those annotations, so a
+    disagreement is something to repair in place, never something to resolve
+    by deleting the store.
     """
     if pred_axes is None:
         return
@@ -42,35 +39,36 @@ def report_axis_consistency(gt_tracks_path, pred_axes):
         )
 
 
-def run_evaluation(config, gt_data_dir, pred_data_dir):
+def gt_paths(config):
+    """The ground-truth paths from the config, each checked to exist if given.
 
-    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
-    pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
-
-    (pred_graph, pred_metadata) = geff.read(pred_tracks_path)
-
-    ctc_gt = config.get("ctc_gt", "01_GT")
-
-    # Check for CTC metrics
-    if "ctc" in config.get("metrics", []):
-        if not gt_tracks_path.is_dir():
-            print(f"Converting GT tracks to geff format at {gt_tracks_path}")
-            axes = pred_metadata.axes
-            from_ctc_to_geff(
-                ctc_path=gt_data_dir / ctc_gt / "TRA",
-                geff_path=gt_tracks_path,
-                segmentation_store=gt_data_dir / "correct_seg.zarr",
-                axes=axes,
-            )
-
-    if gt_tracks_path.is_dir():
-        report_axis_consistency(gt_tracks_path, pred_metadata.axes)
-
-    results = evaluate_tracking(
-        config,
-        gt_data_dir,
-        pred_data_dir,
+    Returns:
+        (gt_tracks, gt_seg, ctc_seg_dir); the last two may be None.
+    """
+    gt_tracks = Path(config["gt_tracks"])
+    if not gt_tracks.is_dir():
+        raise FileNotFoundError(
+            f"Ground-truth tracks {gt_tracks} are missing. For Cell Tracking "
+            f"Challenge ground truth, create them first with "
+            f"scripts/05_evaluation/convert_ctc_gt.py."
+        )
+    gt_seg = config.get("gt_seg")
+    gt_seg = require_dir(Path(gt_seg), "Ground-truth segmentation") if gt_seg else None
+    ctc_seg_dir = config.get("ctc_seg_dir")
+    ctc_seg_dir = (
+        require_dir(Path(ctc_seg_dir), "CTC SEG folder") if ctc_seg_dir else None
     )
+    return gt_tracks, gt_seg, ctc_seg_dir
+
+
+def run_evaluation(config, gt_tracks, gt_seg, ctc_seg_dir, pred_data_dir):
+
+    pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
+    pred_axes = geff.GeffMetadata.read(pred_tracks_path).axes
+
+    report_axis_consistency(gt_tracks, pred_axes)
+
+    results = evaluate_tracking(config, gt_tracks, gt_seg, pred_data_dir)
 
     track_metrics = {}
     for metric in results:
@@ -81,14 +79,13 @@ def run_evaluation(config, gt_data_dir, pred_data_dir):
     # CTC SEG uses the sparse `SEG` ground-truth folder (pixel-accurate,
     # per-slice), not the coarse `TRA` markers used for TRA/DET/LNK matching.
     if "ctc" in config.get("metrics", []):
-        seg_gt_dir = gt_data_dir / ctc_gt / "SEG"
         pred_seg_path = pred_data_dir / "pred_seg.zarr"
-        if seg_gt_dir.is_dir() and pred_seg_path.exists():
-            seg_score = compute_ctc_seg(seg_gt_dir, pred_seg_path)
+        if ctc_seg_dir is not None and pred_seg_path.exists():
+            seg_score = compute_ctc_seg(ctc_seg_dir, pred_seg_path)
             if seg_score is not None:
                 track_metrics.setdefault("CTCMetrics", {})["SEG"] = seg_score
         else:
-            print(f"Skipping SEG: missing {seg_gt_dir} or {pred_seg_path}")
+            print(f"Skipping SEG: no ctc_seg_dir given, or no {pred_seg_path}")
 
     return track_metrics
 
@@ -99,35 +96,24 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    input_base_dir = Path(config["input_base_dir"])
-    output_base_dir = Path(config["output_base_dir"])
-    dataset: str = config["dataset"]
-    experiment: str = config["experiment"]
-    assert input_base_dir.is_dir()
-    assert output_base_dir.is_dir()
+    ds = Dataset.from_config(config)
+    track_uid = config["track_result"]
+    pred_data_dir = require_dir(ds.track_dir(track_uid), "Tracking run")
+    gt_tracks, gt_seg, ctc_seg_dir = gt_paths(config)
 
-    # `gt_data_dir` may be overridden to score against a reduced GT subset
-    # (see src/mhat/tracking/gt_subsets.py); defaults to the usual convention.
-    if config.get("gt_data_dir"):
-        gt_data_dir = Path(config["gt_data_dir"])
-    else:
-        gt_data_dir = input_base_dir / "tracking" / experiment / dataset
-    assert gt_data_dir.is_dir(), f"GT data dir {gt_data_dir} is missing"
+    track_metrics = run_evaluation(
+        config, gt_tracks, gt_seg, ctc_seg_dir, pred_data_dir
+    )
 
-    pred_data_dir = input_base_dir / "tracking" / experiment / dataset / config["track_result"]
-    assert pred_data_dir.is_dir(), f"Pred data dir {pred_data_dir} is missing"
+    # Evaluations live inside the run they score, one directory each, named
+    # after the ground truth and the metrics so none overwrites another.
+    gt_label = config.get("eval_name") or absolute_path(gt_tracks).parent.name
+    metrics = config.get("metrics", ["basic", "track_overlap"])
+    output_dir = ds.new_eval_dir(track_uid, gt_label, metrics)
+    print(f"Saving results to {output_dir}")
 
-    output_dir = output_base_dir / "evaluation" / experiment / dataset / config["track_result"]
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    track_metrics = run_evaluation(config, gt_data_dir, pred_data_dir)
-    tracksfile = output_dir / "track_metrics.json"
-    with open(tracksfile, 'w') as f:
+    with open(output_dir / "track_metrics.json", 'w') as f:
         json.dump(track_metrics, f)
-
-    tracking_config = pred_data_dir / "config.toml"
-    if tracking_config.is_file():
-        shutil.copy2(tracking_config, output_dir / "tracking_config.toml")
 
     # Save the eval config used for this run alongside the results for provenance
     with open(output_dir / "eval_config.toml", "w") as config_file:

@@ -1,10 +1,8 @@
 # IO
-input_base_dir = "/path/to/experiments/"
-output_base_dir = "/path/to/experiments/"
-experiment = "experiment_1"
-dataset = "dataset_1"
-flow_result = "3d"
-exp_uid = "flow_result"
+# The output directory the flow run is in, the run's uid, and which flow to draw.
+output_dir = "/path/to/results/movie/"
+flow_result = "flow_result"
+flow_kind = "3d"
 
 # Metadata
 xy_scale = 0.5

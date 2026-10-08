@@ -21,9 +21,9 @@ def enhance_contrast_AHE(frame):
     return frame
 
 
-def rename_flow_uid(rerun_uid: Path, exp_uid: str):
+def rename_flow_uid(rerun_uid: Path, new_path: Path, exp_uid: str):
     if rerun_uid.exists():
-        new_path = rerun_uid.parent / exp_uid
+        new_path.parent.mkdir(parents=True, exist_ok=True)
         rerun_uid.rename(new_path)
         print(f"Renamed {rerun_uid} to {new_path}")
 

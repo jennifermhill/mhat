@@ -142,14 +142,18 @@ uid (a timestamp unless you set `exp_uid`):
     opticalflow/{2d,3d}/<uid>/     flow.zarr  config.toml
     tracking/<uid>/                pred_tracks.zarr  pred_seg.zarr  config.toml
         evaluation/<label>/            track_metrics.json  eval_config.toml
+    ssvm/<uid>/                    weight fits (learned_weights.toml), laid out like tracking runs
 ```
 
 - Every run saves the config that made it. A tracking run's config names the
   segmentation and flow runs it read (`seg_result`, `flow_result`).
+- A uid can also be a relative path, to group runs inside a stage, e.g.
+  `tracking/sweeps/<sweep_id>/runs/<label>` is the run `sweeps/<sweep_id>/runs/<label>`.
+  Use forward slashes; a run can't sit inside another run.
 - `raw.toml` ties the directory to one raw movie: segmentation, optical flow and
   tracking refuse to run with a different `raw_path`, so results from two movies can
   never be mixed. If the movie moves, or you work on another machine, update its `path`.
-- Evaluations live inside the tracking run they score, one directory each, named
+- Evaluations live inside the tracking (or ssvm) run they score, one directory each, named
   `<ground truth>_<metrics>_<timestamp>`, so evaluating against another ground truth or
   metric set never overwrites an earlier result. No run is ever redone in place: a
   fixed `exp_uid` must be new, so to redo a run use a new uid, or delete the old run

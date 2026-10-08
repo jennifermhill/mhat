@@ -5,7 +5,7 @@ from pathlib import Path
 import geff
 import toml
 
-from mhat.dataset import Dataset, absolute_path, require_dir
+from mhat.dataset import SOLUTION_STAGES, Dataset, absolute_path, require_dir
 from mhat.evaluation.evaluate_tracking import compute_ctc_seg, evaluate_tracking
 from mhat.utils import spatial_axis_names
 
@@ -98,7 +98,16 @@ if __name__ == "__main__":
 
     ds = Dataset.from_config(config)
     track_uid = config["track_result"]
-    pred_data_dir = require_dir(ds.track_dir(track_uid), "Tracking run")
+    # A tracking run, or an SSVM fit (stage "ssvm"), whose solution is scored the
+    # same way and whose evaluations nest inside it.
+    track_stage = config.get("track_stage", "tracking")
+    if track_stage not in SOLUTION_STAGES:
+        raise ValueError(
+            f"track_stage must be one of {SOLUTION_STAGES}, got {track_stage!r}"
+        )
+    pred_data_dir = require_dir(
+        ds.solution_dir(track_uid, track_stage), f"{track_stage} run"
+    )
     gt_tracks, gt_seg, ctc_seg_dir = gt_paths(config)
 
     track_metrics = run_evaluation(
@@ -109,7 +118,7 @@ if __name__ == "__main__":
     # after the ground truth and the metrics so none overwrites another.
     gt_label = config.get("eval_name") or absolute_path(gt_tracks).parent.name
     metrics = config.get("metrics", ["basic", "track_overlap"])
-    output_dir = ds.new_eval_dir(track_uid, gt_label, metrics)
+    output_dir = ds.new_eval_dir(track_uid, gt_label, metrics, track_stage)
     print(f"Saving results to {output_dir}")
 
     with open(output_dir / "track_metrics.json", 'w') as f:

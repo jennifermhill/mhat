@@ -3,7 +3,8 @@
 # <output_dir>/tracking/<track_result>/evaluation/<label>/, where the label is
 # <eval_name or gt_tracks' parent directory name>_<metrics>_<timestamp>.
 output_dir = "/path/to/results/movie/"
-track_result = "track_result"
+track_result = "track_result"   # a uid, or a grouped one such as "sweeps/s1/runs/a"
+# track_stage = "ssvm"          # to score an SSVM fit's solution instead (default "tracking")
 
 # Ground truth. gt_tracks is a geff; for Cell Tracking Challenge ground truth, make it
 # (and gt_seg) with scripts/05_evaluation/convert_ctc_gt.py.

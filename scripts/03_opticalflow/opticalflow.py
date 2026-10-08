@@ -102,7 +102,7 @@ if __name__ == "__main__":
         calculate_flow(config["2d"], data_dir, output_dir, do_3d=False)
     elif rerun_uid:
         prev_flow_dir = ds.flow_dir(rerun_uid, "2d")
-        rename_flow_uid(prev_flow_dir, exp_uid)
+        rename_flow_uid(prev_flow_dir, ds.flow_dir(exp_uid, "2d"), exp_uid)
 
     if config["3d"]["do_3d"]:
         print("Calculating 3D optical flow...")
@@ -116,6 +116,6 @@ if __name__ == "__main__":
         calculate_flow(config["3d"], data_dir, output_dir, do_3d=True)
     elif rerun_uid:
         prev_flow_dir = ds.flow_dir(rerun_uid, "3d")
-        rename_flow_uid(prev_flow_dir, exp_uid)
+        rename_flow_uid(prev_flow_dir, ds.flow_dir(exp_uid, "3d"), exp_uid)
 
     

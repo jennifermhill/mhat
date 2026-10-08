@@ -53,8 +53,8 @@ Cost removed by zeroing its weight+constant (the `ablate_*` flags are dead code 
 - **Train→test transfer is clean** (Full: 0.861→0.858; test TE actually higher, 0.809→0.829).
 
 ## Ablation mechanism (important correction)
-The legacy `ablate_*` flags are **dead code** on this branch (`apply_mean_ablation` in `utils.py` is never
-called). A cost is ablated **only** by setting its weight AND constant to 0, so `add_costs` skips it. The
+The legacy `ablate_*` flags have **no effect at runtime** (`apply_mean_ablation` in `utils.py` was never
+called and was removed 2026-10-08; since the `ssvm-fit` merge the flags only exclude features from SSVM fits). A cost is ablated **only** by setting its weight AND constant to 0, so `add_costs` skips it. The
 first pass mistakenly used `ablate_* = true` with nonzero weights, so `-cohesion`/`-drift`/`-affinities`
 silently ran the full/wrong model (baseline = -cohesion = -drift). Fixed by re-sweeping those conditions
 with proper zeroing. `- Drift` keeps `base_edge_constant=-2000` so edges remain selectable (isolates loss

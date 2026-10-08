@@ -1,0 +1,81 @@
+# Hand-tuned vs SSVM-fit comparison figure -- TRAIN/fit sets.
+# Two datasets, each fit + evaluated on its own train/fit set; primary metric
+# differs per dataset (TRA for MDA231, TE for NC281-sparse train).
+# Rendered by ssvm_vs_handtuned_figure.py.
+#
+# The SSVM bars are the CURRENT BEST fits: stage-1 regularizer-sweep runs from the
+# gt_amount experiment, at the ssvm_reg the calibration selected on this same train
+# split. The grid and its winner are recorded in
+#   experiments/tracking/<experiment>/<dataset>/<regsweep dir>/regsweep_summary.json
+# -- read the choice from there rather than re-deriving an argmax, and note that the
+# PLATEAU RULE (prefer the geometric centre of the contiguous within-0.005 run over the
+# raw argmax) is what picks the value when the grid ends flat.
+#
+# MDA231 was REFIT on 2026-09-30 after the waterz affinity-convention fix and the
+# cellpose 4.0.7 -> 4.2.1.1 change; see the segmentation-parity note below. NC281 is
+# unchanged (regsweep_r11, ssvm_reg 0.0121) and still on its pre-fix segmentation.
+#
+# Companion figure: ssvm_vs_handtuned_test.toml, which shows the held-out test scores.
+# Keep the two consistent -- if one is repointed at new runs, repoint the other.
+
+output_png = "Y:/jennifer/mhat/experiments/evaluation/ssvm_vs_handtuned.png"
+suptitle = ""
+ylabel = "Score (higher is better)"
+dataset_order = ["nc281_train", "mda231"]
+
+# Wong orange #E69F00 for SSVM, Wong reddish purple #CC79A7 for the hand-tuned
+# ("Claude-tuned") model. Must stay identical to ssvm_vs_handtuned_test.toml, which
+# also carries the gray "Z-scored" negative control (test split only, so it
+# has no bar here).
+condition_order = ["hand_tuned", "ssvm"]
+
+[conditions.ssvm]
+label = "SSVM"
+color = "#E69F00"
+
+[conditions.hand_tuned]
+label = "Claude-tuned"
+color = "#CC79A7"
+
+[datasets.mda231]
+name = "MDA231"
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "01_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+#
+# SEGMENTATION PARITY: both bars are seg fs1cpm6_seg_base_wzfix / flow
+# 2026-09-22_14-11-08 -- the regenerated segmentation, i.e. post waterz-convention fix
+# (2026-09-17) and cellpose 4.2.1.1. Do not point one bar back at the older seg without
+# moving the other. (Same rule as the test figure.)
+#
+# Both bars were RE-OPTIMIZED on the regenerated train data by their own protocol, so
+# neither is a stale transfer: the hand-tuned bar is regenF01_baseline (the rtC_base /
+# rtC2_base retune, adhesion_weight -2500; TRA 0.9156), and the SSVM bar is a fresh
+# 13-point regularizer re-calibration (spec
+# scratch_configs/tracking/Fluo-C3DL-MDA231/01_cells/gt_amount_regen_stage1.toml).
+# That sweep put n_labeled at 1864 (was 2023) and the plateau rule selected
+# ssvm_reg = 0.0383 -> effective 71.39, the same ssvm_reg the pre-fix calibration chose.
+#
+# Superseded values, for reference: hand-tuned trk_cp_20260720_fs1_cpm6 TRA 0.9061,
+# SSVM gt_amount/stage1_regsweep/regsweep_r14 TRA 0.9044, both on
+# seg_cp_20260720_fs1_cpm6 / flow 2026-02-17_15-55-00.
+[datasets.mda231.hand_tuned]
+tracking_uid = "regenF01_baseline"
+[datasets.mda231.ssvm]
+tracking_uid = "gt_amount/stage1_regsweep_regen/regsweep_r05"
+
+[datasets.nc281_train]
+name = '$\mathit{Dictyostelium}$'   # literal string; mathtext -> italic tick label
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_train"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+# No parity issue here: the hand-tuned run, the old ssvm_fit and regsweep_r11 all share
+# seg 2026-07-02_10-32-29 / flow 2026-07-02_10-43-07, so only the SSVM bar moves.
+[datasets.nc281_train.hand_tuned]
+tracking_uid = "2026-07-02_10-55-33"
+[datasets.nc281_train.ssvm]
+tracking_uid = "gt_amount/stage1_regsweep/regsweep_r11"

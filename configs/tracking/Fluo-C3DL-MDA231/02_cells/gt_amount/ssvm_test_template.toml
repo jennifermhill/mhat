@@ -1,0 +1,49 @@
+# Held-out-test template for the MDA231 GT-amount sweep (stage 3).
+#
+# scripts/04_tracking/make_gt_amount_test_configs.py copies this file VERBATIM into
+# one config per fit, overwriting only the 14 learned weight/constant keys and the
+# gt_amount_* provenance keys. Nothing here may be tuned against test metrics.
+#
+# Every key in solve_many_weights._graph_key must be present and must match the
+# hand-tuned fs1cpm6 reference (experiments/evaluation/Fluo-C3DL-MDA231/02_cells/
+# fs1cpm6v2_baseline/tracking_config.toml) — solve_many_weights builds ONE candidate
+# graph for the whole batch and aborts if any config disagrees about its key.
+
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "02_cells"
+
+seg_result = "holdout_fs1_cpm6"
+flow_result = "2026-05-29_10-59-37"
+use_lk = false
+
+# Placeholders — every one of these is replaced by the learned value per run.
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.0
+drift_constant = 0.0
+area_weight = 0.0
+area_constant = 0.0
+intensity_weight = 0.0
+intensity_constant = 0.0
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = 0.0
+cohesion_constant = 0.0
+adhesion_weight = 0.0
+adhesion_constant = 0.0
+appear_constant = 0.0
+disappear_constant = 0.0
+
+# Candidate-graph params — must equal the train side's and the hand-tuned reference's.
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 60
+size_threshold = 60
+# No z_flow_conf_threshold / z_flow_min_pass_pixels, matching the fs1cpm6 runs.
+
+# No exp_uid: make_gt_amount_test_configs.py sets it per run from the token.

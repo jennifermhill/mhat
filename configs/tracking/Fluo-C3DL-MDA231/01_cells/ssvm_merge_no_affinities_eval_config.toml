@@ -1,0 +1,8 @@
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
+track_result = "ssvm_merge_ablation/no_affinities"
+metrics = [ "ctc", "track_overlap",]
+matcher = "ctc"
+ctc_gt = "01_GT"

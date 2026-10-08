@@ -1,0 +1,60 @@
+# NC281-sparse-label 02_nuclei_denoised_train SSVM weight-fitting config — LOCAL (Y:).
+# Graph-construction params mirror
+# configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml
+# so the candidate graph is identical to the hand-tuned baseline.
+# Initial weights/constants are 0 — bundle method always starts at w=0 internally.
+
+# IO
+raw_base_dir = "Y:/jennifer/mhat/data/"
+input_base_dir = "Y:/jennifer/mhat/experiments/"
+output_base_dir = "Y:/jennifer/mhat/experiments/"
+experiment = "NC281-sparse-label"
+dataset = "02_nuclei_denoised_train"
+output_name = "ssvm_fit"
+
+seg_result = "2026-07-02_10-32-29"
+flow_result = "2026-07-02_10-43-07"
+use_lk = false
+
+# ILP params (initial values for SSVM; will be overwritten with learned values)
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.0
+drift_constant = 0.0
+area_weight = 0.0
+area_constant = 0.0
+intensity_weight = 0.0
+intensity_constant = 0.0
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = 0.0
+cohesion_constant = 0.0
+adhesion_weight = 0.0
+adhesion_constant = 0.0
+appear_constant = 0.0
+disappear_constant = 0.0
+
+# cand graph creation params (same as 02_nuclei_denoised_train/baseline_config.toml)
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 35
+size_threshold = 0
+
+# Confidence-based Z flow filtering (matches baseline: 1e-7)
+z_flow_conf_threshold = 1e-7
+z_flow_min_pass_pixels = 10
+
+# Ablation flags
+ablate_cohesion_adhesion = false
+ablate_drift = false
+ablate_area = false
+ablate_intensity = false
+ablate_curvature = true  # curvature dominates solve time on NC281-sparse; disabled for fit
+
+# SSVM params
+ssvm_reg = 0.1
+ssvm_max_iter = 100
+ssvm_eps = 1.0e-6
+iogt_threshold = 0.5

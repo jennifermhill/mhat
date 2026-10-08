@@ -27,6 +27,9 @@ PALETTE = {
 
 PLACEHOLDER = "<fill in>"
 
+# uids whose track_metrics.json was absent -> plotted as zeros, flagged visually.
+MISSING = set()
+
 
 def walk_json_path(obj, path):
     cur = obj
@@ -61,7 +64,9 @@ def load_condition_metrics(cond_cfg, dataset_cfg, metric_specs):
         / metrics_filename
     )
     if not metrics_path.is_file():
-        raise FileNotFoundError(f"track_metrics.json not found at {metrics_path}")
+        print(f"warning: metrics missing for uid={tracking_uid}; plotting zeros")
+        MISSING.add(tracking_uid)
+        return {key: 0.0 for key in metric_specs}
     with open(metrics_path) as f:
         track_metrics = json.load(f)
     return {
@@ -88,6 +93,7 @@ def main():
     # Collect per-condition values for each metric, in fixed order.
     labels = []
     colors = []
+    missing_flags = []
     metric_values = {key: [] for key in metric_specs}
     for cond_name in CONDITION_ORDER:
         if cond_name not in conditions:
@@ -100,6 +106,7 @@ def main():
             continue
         labels.append(cond_cfg["label"])
         colors.append(PALETTE[cond_name])
+        missing_flags.append(cond_cfg["tracking_uid"] in MISSING)
         for key, val in values.items():
             metric_values[key].append(val)
 
@@ -115,13 +122,21 @@ def main():
         values = metric_values[key]
         x = np.arange(len(labels))
         bars = ax.bar(x, values, color=colors, edgecolor="black", linewidth=0.5)
+        for bar, miss in zip(bars, missing_flags):
+            if miss:
+                bar.set_hatch("xxx")
+                bar.set_alpha(0.35)
+                ax.text(bar.get_x() + bar.get_width() / 2, 0.02, "no result",
+                        rotation=90, ha="center", va="bottom", fontsize=7, color="#444")
         ax.set_title(spec["display_name"], fontsize=13, fontweight="bold")
         ax.set_xticks(x)
         ax.set_xticklabels(labels, fontsize=9)
         ax.set_ylim(0, 1.0)
         ax.set_ylabel("Score")
         ax.axhline(y=values[0], color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
-        for bar, val in zip(bars, values):
+        for bar, val, miss in zip(bars, values, missing_flags):
+            if miss:
+                continue
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + 0.01,

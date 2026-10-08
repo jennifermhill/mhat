@@ -1,0 +1,98 @@
+# Hand-tuned vs SSVM-fit comparison figure -- TEST sets (held-out).
+# Hand-tuned params / SSVM weights are both fit on the train set, then evaluated on
+# each dataset's held-out test set:
+#   MDA231 -> 02_cells (TRA, CTC matcher); NC281-sparse -> 02_nuclei_denoised_test
+#   (TE, point matcher). Rendered by ssvm_vs_handtuned_figure.py.
+#
+# The SSVM bars are the CURRENT BEST fits: full-GT fits whose weights were learned on
+# the train split at the regularizer calibrated there, then applied to the test split
+# VERBATIM. Selecting the regularizer on train and only then scoring on test keeps this
+# oracle-free.
+#
+# MDA231 was REFIT on 2026-09-30 after the waterz affinity-convention fix and the
+# cellpose 4.0.7 -> 4.2.1.1 change; see the segmentation-parity note below. NC281 is
+# unchanged and still on its pre-fix segmentation.
+
+output_png = "Y:/jennifer/mhat/experiments/evaluation/ssvm_vs_handtuned_test.png"
+suptitle = ""
+ylabel = "Score (higher is better)"
+dataset_order = ["nc281_test", "mda231"]
+
+# Bars left to right, best first (the paper's convention): the hand-tuned
+# ("Claude-tuned") model, SSVM, then the untuned negative control. Colors: Wong reddish purple #CC79A7 for Claude-tuned (the
+# MHAT color in the method-comparison figures), the palette's gray #999999 for the
+# negative control (as for "- All"/"None" in the solver figures), Wong orange #E69F00
+# for SSVM. The blues and the bluish green are kept off this figure because they mean
+# Flow / Momentum / Coh-Adh elsewhere.
+condition_order = ["hand_tuned", "ssvm", "mean_normalized"]
+
+# Negative control: every feature z-scored over the run's own candidate graph,
+# weight +1 (drift, area, intensity: larger is worse) or -1 (cohesion, adhesion:
+# larger is better), every feature constant 0, appear = disappear = 1. Same feature
+# set as the SSVM fits (curvature off). Nothing tuned, so it is run on test only.
+# Code: normalize_features = "zscore" in run_tracking.py (experiments branch);
+# configs: scratch_configs/{tracking,evaluation}/<exp>/<ds>/negctrl_*_config.toml in
+# the mhat-cluster worktree; each eval dir carries normalized_costs.toml.
+[conditions.mean_normalized]
+label = "Z-scored"
+color = "#999999"
+
+[conditions.ssvm]
+label = "SSVM"
+color = "#E69F00"
+
+[conditions.hand_tuned]
+label = "Claude-tuned"
+color = "#CC79A7"
+
+[datasets.mda231]
+name = "MDA231"
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "02_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+#
+# SEGMENTATION PARITY: both bars are seg fs1cpm6_seg_base_wzfix / flow
+# 2026-09-22_14-13-30 -- the regenerated segmentation, i.e. post waterz-convention fix
+# (2026-09-17) and cellpose 4.2.1.1. Do not point one bar back at the older seg without
+# moving the other. Every candidate-graph parameter of the SSVM run is asserted equal to
+# regenF02_baseline's, so the two bars differ only in the ILP weights.
+#
+# Superseded values, for reference: hand-tuned holdout_fs1_cpm6 TRA 0.9369, SSVM
+# gt_amount/stage2_solves/gtm_full_n033_s0 TRA 0.9359, both on seg holdout_fs1_cpm6 /
+# flow 2026-05-29_10-59-37.
+# Negative control on the same seg/flow and candidate graph (graph cache shared).
+[datasets.mda231.mean_normalized]
+tracking_uid = "negctrl_test"
+[datasets.mda231.hand_tuned]
+tracking_uid = "regenF02_baseline"
+# Weights learned on 01_cells by the 2026-09-30 regularizer re-calibration
+# (gt_amount/stage1_regsweep_regen/regsweep_r05, ssvm_reg 0.0383, train TRA 0.9099) and
+# applied here verbatim. Solve config:
+# scratch_configs/tracking/Fluo-C3DL-MDA231/02_cells/ssvm_regen_test_config.toml
+[datasets.mda231.ssvm]
+tracking_uid = "gt_amount/stage3_solves_regen/regsweep_r05"
+
+[datasets.nc281_test]
+name = '$\mathit{Dictyostelium}$'   # literal string; mathtext -> italic tick label
+experiment = "NC281-sparse-label"
+dataset_dir = "02_nuclei_denoised_test"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+# No parity issue here: test_full, the old ssvm_test and the new full-GT solve all
+# share seg 2026-07-08_14-40-36 / flow 2026-07-08_14-46-03, so only the SSVM bar moves.
+# PARITY CAVEAT: the negative control is on the fixed-convention seg
+# 2026-07-08_14-40-36_wzfix (same flow), while the other two bars are still on the
+# pre-fix 2026-07-08_14-40-36. The hand-tuned params moved TE by 0.0008 across that
+# change (test_full 0.8290 -> wzfix_test_full 0.8282). Repoint all three at _wzfix
+# once the NC281 SSVM refit exists.
+[datasets.nc281_test.mean_normalized]
+tracking_uid = "negctrl_test"
+[datasets.nc281_test.hand_tuned]
+tracking_uid = "test_full"
+# Current best: as for MDA231, the calibrated-regularizer full-GT fit, replacing the
+# old ssvm_reg = 0.1 run (TE 0.7209).
+[datasets.nc281_test.ssvm]
+tracking_uid = "gt_amount/stage2_solves/gt2_full_n167_s0"

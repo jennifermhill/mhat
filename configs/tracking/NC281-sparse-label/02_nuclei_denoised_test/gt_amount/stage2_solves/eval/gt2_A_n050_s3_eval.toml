@@ -1,0 +1,8 @@
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "NC281-sparse-label"
+dataset = "02_nuclei_denoised_test"
+track_result = "gt_amount/stage2_solves/gt2_A_n050_s3"
+metrics = [ "basic", "track_overlap",]
+matcher = "point"
+match_threshold = 10

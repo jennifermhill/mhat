@@ -1,0 +1,218 @@
+# GT-amount learning curve on Fluo-C3DL-MDA231 — how much ground truth does the
+# SSVM fit actually need, and does it matter how the annotation budget is spent?
+#
+# Second, independent dataset for the experiment first run on NC281-sparse-label
+# (configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/gt_amount/). The
+# scientific design, ground rules and arm definitions are unchanged; what differs is
+# the scale (33 train tracks / 364 GT nodes vs 167 / ~2740) and the metric family
+# (CTC instead of point-matched overlap).
+#
+# Driver: scripts/04_tracking/run_gt_amount_experiment.py
+#
+# TRAIN / TEST is absolute here (see CLAUDE.md): everything is fit and selected on
+# 01_cells; 02_cells is scored once, for weights already chosen.
+
+# --- experiment layout -------------------------------------------------------
+# Nested subsets: within a seed, 4 ⊂ 8 ⊂ 12 ⊂ 16 ⊂ 24 ⊂ all.
+# The full-GT size is derived from the data, NOT listed here. This GT has zero
+# divisions, so import_from_geff's renumbering leaves 33 tracks; `include_full`
+# appends that true count and drops any listed size at or above it.
+sizes = [24, 16, 12, 8, 4]
+include_full = true
+# Ten seeds rather than NC281's five: a 4-track subset is ~44 GT nodes, so the low
+# end of this curve is far noisier than NC281's. If it is still unreadable, add
+# seeds, not sizes — extra sizes buy resolution the variance would swamp.
+seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+# Two annotation protocols, three arms:
+#   sparser GT over the whole field of view (parameterized by `sizes`)
+#     "A" = delete unannotated candidates from the fit graph (a true ignore).
+#     "B" = mark them gt_selected=None, motile's documented sparse-GT API
+#           (a soft negative).
+#   a smaller densely-annotated region (parameterized by `crop_target_gt_nodes`)
+#     "C" = annotate everything in a box; fit only on candidates wholly inside it.
+# A and B keep the competing hypotheses around each annotated cell, but label ZERO
+# candidates that overlap no annotated object at all — an annotator working sparsely
+# cannot call those false positives. C supervises them normally. That difference in
+# which negatives exist, not how many, is what the sweep exists to measure.
+# Compare the arms at equal `n_gt_nodes_annotated`, NOT at equal track count.
+arms = ["A", "B", "C"]
+mask_overlap_criterion = "any"
+gt_subsets_dirname = "gt_amount/gt_subsets"
+run_name_prefix = "gtm"
+
+# --- where the runs are grouped ----------------------------------------------
+regsweep_subdir = "gt_amount/stage1_regsweep"   # sweep_ssvm_reg.py (stage 1)
+runs_subdir = "gt_amount/stage2_fits"           # train fits (stage 2)
+test_runs_subdir = "gt_amount/stage2_solves"    # test solves (stage 3)
+
+# --- arm C: dense crops ------------------------------------------------------
+# Budget mode: each crop grows outward from its seeded centre until it holds about
+# this many annotated GT nodes. "match_sizes" derives one budget per entry in `sizes`
+# so arm C's points land on top of arm A/B's on the shared x-axis. Budgets are a mean
+# over seeds and are pinned in gt_crops/crop_budgets.json on first resolve, so do NOT
+# narrow --seeds in the fan-out; that would re-resolve them into a different token
+# namespace.
+#
+# Not an oracle: the search counts only the GT inside the box it is considering — the
+# annotator's own completed work — never the GT outside, and the box's POSITION comes
+# from the seed alone. Only its size adapts.
+#
+# WATCH THE TOP RUNG. "match_sizes" on sizes[0] = 24 of 33 tracks resolves to ~73% of
+# all 364 GT nodes, i.e. a box covering most of a 512x512 field. Crop centres are
+# drawn uniformly and then CLAMPED into [0, extent - size], so large boxes collide:
+# measured on this field, 10 seeds give 10 distinct boxes below ~0.35 volume
+# fraction, 9 at 0.40-0.50 and only 7 at 0.60+. After --materialize-only, count the
+# distinct crop boxes per rung; if the top rung has collided, re-materialize with an
+# explicit crop_target_gt_nodes list that drops it (arms A/B keep all five sizes).
+crop_target_gt_nodes = "match_sizes"
+crop_growth_step = 0.05
+# Which axes shrink. ("y", "x") keeps all 12 frames and all 30 z-slices — an
+# annotator choosing a smaller field of view — so track lengths, and therefore the
+# link supervision per annotated cell, are unchanged.
+crop_axes = ["y", "x"]
+# "contained" = a candidate is used only if its whole bounding box is inside the
+# crop. Paired with "a GT object is annotated iff it intersects the crop", this makes
+# it impossible for a candidate to be labeled gt_selected=0 because of a cell the
+# annotator never annotated. Do not change without re-running verify_crop_no_oracle.py.
+crop_membership = "contained"
+gt_crops_dirname = "gt_amount/gt_crops"
+
+# IO
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
+
+seg_result = "seg_cp_20260720_fs1_cpm6"
+flow_result = "2026-02-17_15-55-00"
+use_lk = false
+
+# GROUND TRUTH LABEL SPACE — load-bearing, do not remove.
+# gt_subsets.py and gt_crops.py both require correct_seg.zarr to be labeled with geff
+# NODE IDS. The stock MDA231 GT, written by from_ctc_to_geff, is labeled with CTC
+# TRACK IDS instead (33 distinct labels, max 51, against 364 node ids) and declares
+# related_objects.label_prop = "track_id". Against that GT the subset LUT silently
+# drops every node id above 51 and the crop path keeps an unrelated set of nodes.
+# scripts/04_tracking/make_nodeid_gt.py writes a node-id-labeled twin of the same
+# voxels; it is verified to produce a byte-identical remapped gt_seg, so the fit sees
+# exactly the same ground truth. The original 01_cells GT is untouched, and stage-1
+# eval configs still score against it.
+gt_data_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/Fluo-C3DL-MDA231/01_cells/gt_amount/gt_nodeid"
+
+# ILP params (initial values for SSVM; will be overwritten with learned values)
+drift_distance = [0.0, 3.0, 6.0]
+drift_weight = 0.0
+drift_constant = 0.0
+area_weight = 0.0
+area_constant = 0.0
+intensity_weight = 0.0
+intensity_constant = 0.0
+curvature_weight = 0.0
+curvature_constant = 0.0
+cohesion_weight = 0.0
+cohesion_constant = 0.0
+adhesion_weight = 0.0
+adhesion_constant = 0.0
+appear_constant = 0.0
+disappear_constant = 0.0
+
+# cand graph creation params — identical to every fs1cpm6 tracking run on this
+# dataset, including the hand-tuned reference the curve is drawn against.
+# merges = false / divisions = false is also a hard requirement: gt_subsets.remove_nodes
+# raises NotImplementedError on hyperedges.
+max_children = 3
+merges = false
+divisions = false
+min_merge_cost = 0.0
+max_merge_cost = 1.0
+max_edge_distance = 60
+size_threshold = 60
+# No z_flow_conf_threshold / z_flow_min_pass_pixels — the fs1cpm6 tracking runs omit
+# them, and solve_many_weights keys the shared graph on their exact values.
+
+# Ablation flags
+ablate_cohesion_adhesion = false
+ablate_drift = false
+ablate_area = false
+ablate_intensity = false
+# CURVATURE ABLATED — load-bearing, and not merely a solve-time convenience here.
+# CurvatureCost acts on EdgePairs, which are their own motile Variable, and the SSVM
+# mask is built only over NodeSelected and EdgeSelected. Every edge-pair column
+# therefore enters SoftMarginLoss unmasked with ground_truth = 0 — read by the loss
+# as "GT never selects this" — which is exactly the arm-B pathology this sweep exists
+# to measure, applied globally to the variables encoding track continuation. Left on,
+# it would dilute the A-vs-B comparison in all three arms. Corroboration: the earlier
+# MDA231 refit learns curvature_constant = +0.132 (a flat penalty on every
+# consecutive-edge pair) and fails at linking (LNK 0.560, fn_edges 231) at DET 0.909.
+# The hand-tuned reference also runs curvature_weight = 0.0, so this keeps the two
+# comparable rather than comparing two different cost sets.
+ablate_curvature = true
+
+# --- how the sweep is scored -------------------------------------------------
+# CTC, not point-matched. "basic" is deliberately absent: BasicMetrics declares
+# valid_matching_types = ["one-to-one"] while MDA231's CTC matching is many-to-one
+# (ns_nodes 7-8 in existing runs), and matching_type is derived per run — so
+# ["basic","ctc"] would succeed on some runs and TypeError on others.
+# match_threshold is deliberately absent too: CTCMatcher() takes no arguments and
+# evaluate_tracking forwards threshold= whenever the key is present.
+eval_metrics = ["ctc", "track_overlap"]
+eval_matcher = "ctc"
+ctc_gt = "01_GT"        # train side (stage 1)
+test_ctc_gt = "02_GT"   # test side (stage 3) — without this, SEG is silently skipped
+# Rank the stage-1 regularizer grid on the same metric the curve reports.
+selection_metric = "TRA"
+test_dataset = "02_cells"
+test_template = "configs/tracking/Fluo-C3DL-MDA231/02_cells/gt_amount/ssvm_test_template.toml"
+
+# --- SSVM params -------------------------------------------------------------
+# ssvm_reg is superseded per-run by ssvm_reg_effective_target once stage 1 has run;
+# kept as the value the graph-construction path reads before the fit.
+ssvm_reg = 0.1
+# Stage 1, pass 1 (broad): 13 points, third-decade spacing, four decades 10.0 .. 0.001
+# (r00..r12). Wider than NC281's grid on purpose — the transfer is ambiguous. If the
+# *effective* regularizer transfers the answer is 131.61/n_labeled; if ssvm_reg itself
+# transfers it is 0.0121. Both land comfortably interior.
+# Stage 1, pass 2 (fine) APPENDS six twelfth-decade points inside the pass-1 winner's
+# bracket (r13..r18).
+#
+# ORDER IS LOAD-BEARING. Run dirs are regsweep_r{list index}; extend by APPENDING
+# only. Inserting a value silently repoints completed runs at other regularizers.
+ssvm_reg_sweep = [
+  10.0, 4.64, 2.154, 1.0, 0.464, 0.215, 0.1,
+  0.0464, 0.0215, 0.01, 0.00464, 0.00215, 0.001,   # r00..r12  pass 1 (broad)
+  # Pass 2 (fine), appended 2026-08-06. Pass 1 won at r07 = 0.0464 (TRA 0.9038),
+  # interior and bracketed by 0.0215 (0.9027) and 0.1 (0.8944), so the bracket to
+  # refine is [0.0215, 0.1]. Third-decade is exactly four twelfth-decade steps, so
+  # its endpoints are already on the lattice and only the 6 interior points are new:
+  # 0.0464 * 1.2115^{+1,+2,+3} then 0.0464 / 1.2115^{+1,+2,+3}.
+  0.0562, 0.0681, 0.0825, 0.0383, 0.0316, 0.0261,  # r13..r18  pass 2 (fine)
+]
+# STAGE 1 RESULT (2026-08-06, 19 points, train TRA against the complete train GT).
+#
+# Pass 1 won at 0.0464 (TRA 0.9038). Pass 2 won at 0.0681 (TRA 0.9044) — an
+# improvement of 0.0006, i.e. BELOW the 0.005 threshold declared before the sweep ran,
+# so the plateau rule applies and the argmax is NOT taken.
+#
+# Plateau = the contiguous run within 0.005 of the best, which is [0.0215, 0.0825] and
+# is bracketed on both sides (0.0100 -> 0.8973, 0.1000 -> 0.8944 both fall outside):
+#   0.0215  0.0261  0.0316  0.0383  0.0464  0.0562  0.0681  0.0825
+#   0.9027  0.9025  0.9025  0.9041  0.9038  0.9038  0.9044  0.9016
+# Its geometric centre is 0.04214. The nearest MEASURED point is 0.0383 (TRA 0.9041,
+# and marginally closer in log space than 0.0464), so that is the chosen value —
+# snapping to a measured point rather than the raw centre buys a consistency check:
+# the stage-2 full-GT run is fit at exactly this regularizer and should reproduce
+# regsweep_r16's learned weights.
+#
+#   ssvm_reg = 0.0383 at n_labeled = 2023  ->  effective 77.48
+#
+# All 19 fits converged (max 51 iterations against ssvm_max_iter = 100).
+#
+# For the record, the NC281 transfer was informative but not exact: the "effective reg
+# transfers" hypothesis predicted ssvm_reg 0.0651 and the "ssvm_reg transfers"
+# hypothesis predicted 0.0121. The plateau contains the former and excludes the
+# latter, so the effective-regularizer framing is the better model of the two.
+ssvm_reg_effective_target = 77.48
+ssvm_max_iter = 100
+ssvm_eps = 1.0e-6
+iogt_threshold = 0.5

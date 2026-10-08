@@ -1,0 +1,9 @@
+# Eval config for ssvm_no_volume (auto-generated). CTC matcher -- matcher="ctc" is
+# mandatory; omitting it silently yields wrong/low CTC metrics.
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
+track_result = "ssvm_no_volume"
+metrics = ["ctc"]
+matcher = "ctc"

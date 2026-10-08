@@ -9,7 +9,9 @@ seg_result = "2026-04-01_11-08-44"
 flow_result = "2026-04-01_11-18-35"
 use_lk = false
 
-# ILP params - NC281-sparse-label B2R1 best (TE=0.827, TF=0.838)
+# ILP params - NC281-sparse-label baseline (exp_uid: 2026-04-29_11-36-23_R1)
+# B2R1 from nc281_sparse_optimization_log: size_threshold=0 + drift_weight=100.
+# Used as the baseline in seg_ablation/scripts/05_evaluation/merge_ablation.toml.
 drift_distance = [ 0.0, 3.0, 6.0,]
 drift_weight = 100.0
 drift_constant = -2000.0
@@ -19,10 +21,10 @@ intensity_weight = 0.0
 intensity_constant = 0.0
 curvature_weight = 0.0
 curvature_constant = 0.0
-cohesion_weight = -500
-cohesion_constant = 450
-adhesion_weight = -100
-adhesion_constant = 50
+cohesion_weight = -500.0
+cohesion_constant = 450.0
+adhesion_weight = -100.0
+adhesion_constant = 50.0
 appear_constant = 50.0
 disappear_constant = 50.0
 
@@ -33,8 +35,6 @@ divisions = false
 min_merge_cost = 0.0
 max_merge_cost = 1.0
 max_edge_distance = 35
-
-# fragments smaller than size_threshold will be ignored
 size_threshold = 0
 
 # Ablation flags
@@ -42,3 +42,4 @@ ablate_cohesion_adhesion = false
 ablate_drift = false
 ablate_area = false
 ablate_intensity = false
+ablate_curvature = false

@@ -1,0 +1,18 @@
+# TRAIN-side eval, scored against ONLY the annotated GT subset.
+# Use target_effectiveness; precision and purity are meaningless here
+# (unannotated objects are counted as false positives).
+#
+# WITHIN-arm decisions only — do NOT compare arms on this number.
+# Sparse arms keep whole tracks; a crop truncates the tracks that leave
+# its box, and shorter tracks are easier to cover, so arm C's train TE
+# runs optimistic. Cross-arm comparison belongs on the held-out test
+# split, where the GT is dense and identical for every arm.
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "NC281-sparse-label"
+dataset = "02_nuclei_denoised_train"
+track_result = "gt_amount/stage2_fits/gt2_full_n167_s0"
+gt_data_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/tracking/NC281-sparse-label/02_nuclei_denoised_train/gt_amount/gt_subsets/n167_s0"
+metrics = [ "basic", "track_overlap",]
+matcher = "point"
+match_threshold = 10

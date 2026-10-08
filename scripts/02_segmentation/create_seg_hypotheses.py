@@ -210,7 +210,9 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params, neighborho
     The affinities are handed to waterz as stored, so ``neighborhood`` must be
     waterz's own channel order (``agglomerate_frame`` checks it). It falls
     back to the neighborhood recorded on the affinities array by
-    ``generate_fluorescent_affinities``.
+    ``generate_fluorescent_affinities``. ``waterz_params`` (the config's
+    ``[waterz_params]`` table, e.g. ``scoring_function``) is passed through to
+    ``waterz.agglomerate`` unchanged.
     """
     affinities = output_root["affinities"][:].astype(np.float32)
     fragments = output_root["fragments"][:]
@@ -221,6 +223,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params, neighborho
     spatial_shape = fragments.shape[1:]
     if neighborhood is None:
         neighborhood = output_root["affinities"].attrs.get("neighborhood")
+    waterz_params = dict(waterz_params or {})
 
     output_root.create_dataset(
         "segmentations", shape=(T, *spatial_shape),

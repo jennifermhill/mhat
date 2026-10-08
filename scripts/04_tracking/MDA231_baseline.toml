@@ -1,7 +1,7 @@
 # IO
-raw_base_dir = "C:/Users/hillj/Documents/mhat/data/"
-input_base_dir = "C:/Users/hillj/Documents/mhat/experiments/"
-output_base_dir = "C:/Users/hillj/Documents/mhat/experiments/"
+raw_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/data/"
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
 experiment = "Fluo-C3DL-MDA231"
 dataset = "01_cells"
 

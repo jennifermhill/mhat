@@ -1,0 +1,64 @@
+# SSVM-fit solver ablation plot input (MDA231 01_cells).
+#
+# Same structure/labels/colors as solver_ablation.toml, but every tracking_uid
+# points at an SSVM-fit run (weights learned via fit_weights_ssvm.py, not hand
+# tuned). Start from the full 4-cost SSVM model (drift/area/intensity/coh-adh;
+# curvature excluded, matching the hand-tuned full) and ablate one cost at a
+# time. Drive with:
+#   conda run -n mhat2 --no-capture-output \
+#     python scripts/05_evaluation/solver_figure.py \
+#     scripts/05_evaluation/ssvm_solver_ablation.toml --dataset mda231
+
+[mda231]
+experiment = "Fluo-C3DL-MDA231"
+dataset_dir = "01_cells"
+eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/solver_ablation_results_mda231_ssvm.png"
+suptitle = "Fluo-C3DL-MDA231 Solver Ablation (SSVM-fit)"
+reference = "first"
+condition_order = ["baseline", "no_intensity", "no_volume", "no_drift", "no_cohesion", "no_all"]
+
+[mda231.metrics.TRA]
+display_name = "TRA"
+json_path = ["CTCMetrics", "TRA"]
+reduction = "scalar"
+
+[mda231.metrics.DET]
+display_name = "DET"
+json_path = ["CTCMetrics", "DET"]
+reduction = "scalar"
+
+[mda231.metrics.LNK]
+display_name = "LNK"
+json_path = ["CTCMetrics", "LNK"]
+reduction = "scalar"
+
+[mda231.conditions.baseline]
+label = "Baseline"
+color = "#0072B2"
+tracking_uid = "ssvm_full"
+
+[mda231.conditions.no_intensity]
+label = "- Intensity"
+color = "#56B4E9"
+tracking_uid = "ssvm_no_intensity"
+
+[mda231.conditions.no_volume]
+label = "- Volume"
+color = "#E69F00"
+tracking_uid = "ssvm_no_volume"
+
+[mda231.conditions.no_drift]
+label = "- Drift"
+color = "#009E73"
+tracking_uid = "ssvm_no_drift"
+
+[mda231.conditions.no_cohesion]
+label = "- Coh/Adh"
+color = "#CC79A7"
+tracking_uid = "ssvm_no_cohesion"
+
+[mda231.conditions.no_all]
+label = "- All"
+color = "#999999"
+tracking_uid = "ssvm_no_all"

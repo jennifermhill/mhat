@@ -116,7 +116,7 @@ def main():
             (x, y, c), miss = load_pt(add, cond)
             add_pts.append((cond["label"], x, y, c, miss))
 
-    # Colour scale over conditions that actually returned a result.
+    # Color scale over conditions that actually returned a result.
     present = ([full[2]] if not full_miss else []) + ([none[2]] if not none_miss else []) \
         + [p[3] for p in abl_pts if not p[4]] + [p[3] for p in add_pts if not p[4]]
     vmin, vmax = min(present), max(present)

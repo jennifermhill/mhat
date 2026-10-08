@@ -1,0 +1,7 @@
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C3DL-MDA231"
+dataset = "01_cells"
+track_result = "ssvm_plus_curvature_reg1.0e-02"
+metrics = [ "ctc",]
+matcher = "ctc"

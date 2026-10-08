@@ -1,0 +1,9 @@
+# ssvm_reg = 0.0215; scored against the COMPLETE train GT.
+input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+experiment = "Fluo-C2DL-Huh7"
+dataset = "01_cells"
+track_result = "ssvm_official/regsweep_r08"
+metrics = [ "ctc", "track_overlap",]
+matcher = "ctc"
+ctc_gt = "01_GT"

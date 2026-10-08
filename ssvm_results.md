@@ -2,6 +2,19 @@
 
 Per-condition TRA / DET / LNK before and after the post-hoc constant offset sweep, all on Fluo-C3DL-MDA231 / 01_cells with seg `2026-04-03_11-09-49`, flow `2026-02-17_15-55-00`. CTC matcher (>50% IoU). All SSVM rows use motile / structsvm `scale-features-and-costs` branch.
 
+> **2026-10-08: the alternative fitting code is removed, and its figures are orphaned.**
+> `fit_weights_standardized`, `TolerantBundleMethod` and `fit_weights_hamming_weighted`
+> were deleted from `scripts/04_tracking/fit_weights_ssvm.py` while pruning `ssvm-fit`
+> before merging it into `experiments`. A config that still sets `ssvm_standardize` or
+> `ssvm_hamming_weight` now raises instead of fitting. The results below that came from
+> that code (the per-feature standardization row and the
+> `ssvm_plus_curvature_std` run, the 2026-07-17 Hamming-weight sweep
+> `ssvm_hamming_w{0p1,1,10,100}`, and the plots made from them, e.g.
+> `figures/hamming_*.png`) are orphaned: no code in the repo can regenerate them. That
+> is fine because none of them is in the paper. To rerun them, recover the functions
+> from git history; the Hamming sweep additionally needs the `hamming-costs-weight`
+> branch of structsvm, which the pinned version does not include.
+
 ## 2026-05-15 update: ilpy fix resolves the underlying convergence bug
 
 After updating ilpy to a version containing a fix for the structsvm QP, **stock motile `Solver.fit_weights()` (no standardization, no tolerant termination, no post-hoc offset) actually converges**. ε decreases monotonically from above:
@@ -20,11 +33,13 @@ After updating ilpy to a version containing a fix for the structsvm QP, **stock 
 
 This is the **un-tuned result of fitting with SSVM** — no post-hoc offset, no standardization workarounds, no regularizer tuning (used the original default `ssvm_reg = 0.1`). All the per-feature std / tolerant termination / graph normalization / dual-offset workarounds documented below were chasing symptoms of the ilpy bug. With it fixed, they're obsolete for getting *a* working SSVM fit, though the post-hoc offset workflow may still help close the remaining gap to hand-tuned (TRA: 0.797 → 0.881).
 
-Code state as of this update: `fit_weights_ssvm.py` uses stock `solver.fit_weights()`; `MDA231_ssvm_fit.toml` has `ssvm_reg = 0.1`. The `fit_weights_standardized` / `TolerantBundleMethod` helpers are still in the file but unused.
+Code state as of this update: `fit_weights_ssvm.py` uses stock `solver.fit_weights()`; `MDA231_ssvm_fit.toml` has `ssvm_reg = 0.1`. The `fit_weights_standardized` / `TolerantBundleMethod` helpers are still in the file but unused (removed 2026-10-08; see the note at the top).
 
 ---
 
 ## 2026-07-17: Hamming-cost margin weight sweep
+
+*Orphaned 2026-10-08: the fitting code was removed and these results can't be regenerated; not used in the paper (see the note at the top).*
 
 Swept a scalar `weight` on the SSVM Hamming margin (new `weight` param on `structsvm.HammingCosts`, on the `hamming-costs-weight` branch of the in-repo `structsvm` clone; driven from config key `ssvm_hamming_weight` via `fit_weights_hamming_weighted` in `fit_weights_ssvm.py`). Four points on MDA231 / `01_cells`, all with `ssvm_reg = 0.1`, `ssvm_max_iter = 100`, `iogt_threshold = 0.5`, no post-hoc offset, no standardization. CTC matcher.
 
@@ -371,8 +386,9 @@ Extended GT (1840 GT nodes):
 
 - **`ssvm_hamming_weight` was not tried, and it is the direct lever on the above:**
   up-weighting the edge Hamming cost should pull the edge cost mean negative.
-  `ssvm_standardize` also untried; `sweep_post_ssvm_offsets.py` exists for a related
-  purpose and was not used.
+  `ssvm_standardize` also untried; `sweep_post_ssvm_offsets.py` existed for a related
+  purpose and was not used (removed 2026-10-08). Since 2026-10-08 both options need
+  their code recovered from git history first (see the note at the top).
 - Only one point per arm reached `02_cells` — correct protocol, but the linking gap
   rests on n = 1.
 - Division F1 is meaningless on Huh7 (the GT holds one division), so the fitted

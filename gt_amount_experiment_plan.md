@@ -385,7 +385,7 @@ xticks  = []          # crop budgets are measured, so fixed track ticks no longe
 ```
 
 The multi-condition `arm|label` form is only needed when comparing sweeps via
-`merge_gt_amount_csvs.py`.
+`merge_gt_amount_csvs.py` (removed 2026-10-08; recover it from git history if needed).
 
 x = annotated GT nodes, y = TE, one line per arm, mean over 5 seeds ± SEM, seed points
 scattered, empty-solution runs drawn as open markers at 0 and **excluded from the mean**.
@@ -528,7 +528,6 @@ regularization.
 | `scripts/04_tracking/solve_many_weights.py` | batched test solves on one shared graph |
 | `scripts/05_evaluation/run_evals.py` | batched evaluation |
 | `scripts/05_evaluation/collect_gt_amount.py` | results → CSV |
-| `scripts/05_evaluation/merge_gt_amount_csvs.py` | combine sweeps for one figure |
 | `scripts/07_plotting/gt_amount_curve.py` | learning curve, one or many metrics |
 | `src/mhat/tracking/gt_subsets.py` | track sampling, graph surgery, masked-GT materialization, run-token parsing |
 | `src/mhat/tracking/gt_crops.py` | crop-box sampling, candidate bboxes, cropped-GT materialization |

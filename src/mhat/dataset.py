@@ -12,10 +12,15 @@ uid::
         opticalflow/{2d,3d}/<uid>/     flow.zarr  config.toml
         tracking/<uid>/                pred_tracks.zarr  pred_seg.zarr  config.toml
             evaluation/<label>/            track_metrics.json  eval_config.toml
+        ssvm/<uid>/                    weight fits, laid out like tracking runs
 
 A run is a directory holding a ``config.toml``. Each tracking run's config
 records the uids of the segmentation and flow runs it read (``seg_result``,
-``flow_result``); evaluations live inside the tracking run they score.
+``flow_result``); evaluations live inside the tracking (or ssvm) run they score.
+
+A uid is a directory name or a relative path with forward slashes, so runs can
+be grouped inside a stage, e.g. ``tracking/sweeps/<sweep_id>/runs/<label>``.
+Listing a stage's runs shows only the ungrouped ones.
 
 ``Dataset`` locates things and guards the raw binding and existing runs. It
 never deletes or overwrites data.
@@ -34,7 +39,10 @@ from mhat.utils import get_axes_metadata
 
 RAW_RECORD = "raw.toml"
 FLOW_KINDS = ("2d", "3d")
-RUN_STAGES = ("segmentation", "opticalflow", "tracking")
+RUN_STAGES = ("segmentation", "opticalflow", "tracking", "ssvm")
+# Stages whose runs are tracking solutions: evaluations nest inside them.
+SOLUTION_STAGES = ("tracking", "ssvm")
+Stage = Literal["segmentation", "opticalflow", "tracking", "ssvm"]
 
 # IO keys from the old layout (results keyed by experiment/dataset under base
 # directories). A stage config still carrying them was written for that layout.
@@ -68,6 +76,28 @@ def absolute_path(path: str | Path) -> Path:
 def same_path(a: str | Path, b: str | Path) -> bool:
     """Whether two paths name the same location (case-insensitive on Windows)."""
     return os.path.normcase(absolute_path(a)) == os.path.normcase(absolute_path(b))
+
+
+def check_uid(uid: str) -> str:
+    """Return ``uid`` if it names a run inside its stage directory, else raise.
+
+    A uid is one directory name or a relative path of them, separated by
+    forward slashes so the configs that record it read the same on every OS.
+    ``..``, ``.``, empty parts and absolute paths are refused: they would place
+    the run outside its stage directory, possibly in another output directory.
+    """
+    parts = uid.split("/") if isinstance(uid, str) else None
+    if (
+        not parts
+        or "\\" in uid
+        or ":" in uid
+        or any(part in ("", ".", "..") for part in parts)
+    ):
+        raise ValueError(
+            f"Invalid run uid {uid!r}: use a directory name, or a relative path "
+            f"of them separated by '/' (e.g. 'sweeps/s1/runs/a'), without '..'"
+        )
+    return uid
 
 
 @dataclass(frozen=True)
@@ -111,38 +141,56 @@ class Dataset:
     def from_run_dir(
         cls,
         run_dir: str | Path,
-        stage: Literal["segmentation", "opticalflow", "tracking"],
+        stage: Stage | tuple[Stage, ...],
     ) -> "Dataset":
         """The Dataset a run belongs to, found from where the run sits.
 
-        Works on any machine, whatever paths the run's saved config holds.
-        ``raw_path`` comes from ``raw.toml`` and is ``None`` if there is none.
+        The output directory is the nearest folder above the run holding a
+        ``raw.toml`` (every stage that writes runs records one), so grouped runs
+        such as ``tracking/sweeps/<id>/runs/<label>`` are found too. Works on
+        any machine, whatever paths the run's saved config holds; ``raw_path``
+        is the recorded one.
 
         Args:
             run_dir: The run's directory, or its ``config.toml``.
-            stage: The stage that made the run.
+            stage: The stage that made the run, or a tuple of acceptable stages
+                (e.g. ``SOLUTION_STAGES`` for a viewer of tracking solutions).
 
         Raises:
-            ValueError: If ``run_dir`` is not a ``stage`` run in this layout.
+            ValueError: If ``run_dir`` is not inside an output directory, or is
+                not a run of ``stage`` there.
         """
         run_dir = absolute_path(run_dir)
         if run_dir.name == "config.toml":
             run_dir = run_dir.parent
-        if stage == "opticalflow":
-            stage_dir = run_dir.parent.parent
-            in_layout = run_dir.parent.name in FLOW_KINDS
-        else:
-            stage_dir = run_dir.parent
-            in_layout = True
-        if not in_layout or stage_dir.name != stage:
-            kind = "<2d|3d>/" if stage == "opticalflow" else ""
+        stages = (stage,) if isinstance(stage, str) else tuple(stage)
+
+        output_dir = next(
+            (d for d in run_dir.parents if (d / RAW_RECORD).is_file()), None
+        )
+        if output_dir is None:
             raise ValueError(
-                f"{run_dir} is not a {stage} run directory "
-                f"(<output_dir>/{stage}/{kind}<uid>)"
+                f"{run_dir} is not inside an output directory (no {RAW_RECORD} "
+                f"in any folder above it)"
             )
-        dataset = cls(output_dir=stage_dir.parent)
-        recorded = dataset.recorded_raw_path()
-        return cls(output_dir=dataset.output_dir, raw_path=recorded)
+        parts = run_dir.relative_to(output_dir).parts
+        found = parts[0]
+        n_prefix = 2 if found == "opticalflow" else 1
+        if (
+            found not in stages
+            or len(parts) <= n_prefix
+            or (found == "opticalflow" and parts[1] not in FLOW_KINDS)
+        ):
+            layouts = " or ".join(
+                f"<output_dir>/{s}/{'<2d|3d>/' if s == 'opticalflow' else ''}<uid>"
+                for s in stages
+            )
+            raise ValueError(
+                f"{run_dir} is not a {' or '.join(stages)} run directory in "
+                f"{output_dir} ({layouts})"
+            )
+        dataset = cls(output_dir=output_dir)
+        return cls(output_dir=output_dir, raw_path=dataset.recorded_raw_path())
 
     @property
     def name(self) -> str:
@@ -204,15 +252,23 @@ class Dataset:
     # --- run directories ---
 
     def seg_dir(self, uid: str) -> Path:
-        return self.output_dir / "segmentation" / uid
+        return self.output_dir / "segmentation" / check_uid(uid)
 
     def flow_dir(self, uid: str, kind: Literal["2d", "3d"]) -> Path:
         if kind not in FLOW_KINDS:
             raise ValueError(f"kind must be one of {FLOW_KINDS}, got {kind!r}")
-        return self.output_dir / "opticalflow" / kind / uid
+        return self.output_dir / "opticalflow" / kind / check_uid(uid)
 
     def track_dir(self, uid: str) -> Path:
-        return self.output_dir / "tracking" / uid
+        return self.output_dir / "tracking" / check_uid(uid)
+
+    def solution_dir(
+        self, uid: str, stage: Literal["tracking", "ssvm"] = "tracking"
+    ) -> Path:
+        """A tracking solution's run directory: a tracking run or an ssvm fit."""
+        if stage not in SOLUTION_STAGES:
+            raise ValueError(f"stage must be one of {SOLUTION_STAGES}, got {stage!r}")
+        return self.output_dir / stage / check_uid(uid)
 
     def flow_dirs(
         self, flow_uid: str | None, seg_uid: str
@@ -248,7 +304,7 @@ class Dataset:
 
     def run_dir(
         self,
-        stage: Literal["segmentation", "opticalflow", "tracking"],
+        stage: Stage,
         uid: str,
         kind: Literal["2d", "3d"] | None = None,
     ) -> Path:
@@ -257,11 +313,11 @@ class Dataset:
             return self.flow_dir(uid, kind)
         if stage not in RUN_STAGES:
             raise ValueError(f"stage must be one of {RUN_STAGES}, got {stage!r}")
-        return self.output_dir / stage / uid
+        return self.output_dir / stage / check_uid(uid)
 
     def check_new_run(
         self,
-        stage: Literal["segmentation", "opticalflow", "tracking"],
+        stage: Stage,
         uid: str,
         kind: Literal["2d", "3d"] | None = None,
     ) -> Path:
@@ -269,11 +325,13 @@ class Dataset:
 
         Everything inside a run directory -- downstream runs' inputs,
         evaluations, plots or movies made from it -- is attributed to that
-        run's result, so a run is never redone in place. Redoing one means a
-        new uid, or deleting the old run directory first.
+        run's result, so a run is never redone in place, and a grouped uid
+        never places a run inside another run. Redoing one means a new uid, or
+        deleting the old run directory first.
 
         Raises:
-            FileExistsError: If the run directory exists and is not empty.
+            FileExistsError: If the run directory exists and is not empty, or
+                lies inside another run.
         """
         run_dir = self.run_dir(stage, uid, kind)
         if run_dir.is_dir() and any(run_dir.iterdir()):
@@ -282,11 +340,18 @@ class Dataset:
                 f"delete that directory first (including anything saved in it) "
                 f"to redo the run under the same uid."
             )
+        n_groups = len(uid.split("/")) - 1
+        for group in list(run_dir.parents)[:n_groups]:
+            if (group / "config.toml").is_file():
+                raise FileExistsError(
+                    f"{stage} run {run_dir} would lie inside the run {group}; "
+                    f"group runs in folders that are not runs themselves."
+                )
         return run_dir
 
     def prepare_run_dir(
         self,
-        stage: Literal["segmentation", "opticalflow", "tracking"],
+        stage: Stage,
         uid: str,
         kind: Literal["2d", "3d"] | None = None,
     ) -> Path:
@@ -296,9 +361,13 @@ class Dataset:
         return run_dir
 
     def new_eval_dir(
-        self, track_uid: str, gt_label: str, metrics: list[str]
+        self,
+        track_uid: str,
+        gt_label: str,
+        metrics: list[str],
+        stage: Literal["tracking", "ssvm"] = "tracking",
     ) -> Path:
-        """Create a new evaluation directory inside a tracking run.
+        """Create a new evaluation directory inside a tracking (or ssvm) run.
 
         Named ``<gt_label>_<metrics>_<timestamp>``, with the metric names sorted
         and joined by ``+``, so evaluations against different ground truths or
@@ -308,7 +377,7 @@ class Dataset:
             FileExistsError: If that name is taken (same label, same second).
         """
         label = f"{gt_label}_{'+'.join(sorted(metrics))}_{self.new_uid()}"
-        eval_dir = self.track_dir(track_uid) / "evaluation" / label
+        eval_dir = self.solution_dir(track_uid, stage) / "evaluation" / label
         eval_dir.mkdir(parents=True, exist_ok=False)
         return eval_dir
 
@@ -321,13 +390,13 @@ class Dataset:
 
     def runs(
         self,
-        stage: Literal["segmentation", "opticalflow", "tracking"],
+        stage: Stage,
         kind: Literal["2d", "3d"] | None = None,
     ) -> list[str]:
-        """Uids of a stage's runs, oldest first (for timestamp uids).
+        """Uids of a stage's ungrouped runs, oldest first (for timestamp uids).
 
         A run is a subdirectory holding a ``config.toml``; anything else in the
-        stage directory (sweeps, caches) is left out.
+        stage directory (groups such as ``sweeps/``, caches) is left out.
         """
         if stage not in RUN_STAGES:
             raise ValueError(f"stage must be one of {RUN_STAGES}, got {stage!r}")
@@ -339,17 +408,21 @@ class Dataset:
             parent = self.output_dir / stage
         return _config_subdirs(parent)
 
-    def evals(self, track_uid: str) -> list[str]:
-        """Labels of a tracking run's evaluations, oldest first within a label."""
-        parent = self.track_dir(track_uid) / "evaluation"
+    def evals(
+        self, track_uid: str, stage: Literal["tracking", "ssvm"] = "tracking"
+    ) -> list[str]:
+        """Labels of a run's evaluations, oldest first within a label."""
+        parent = self.solution_dir(track_uid, stage) / "evaluation"
         if not parent.is_dir():
             return []
         return sorted(entry.name for entry in os.scandir(parent) if entry.is_dir())
 
-    def inputs_of(self, track_uid: str) -> tuple[str, str | None]:
-        """The ``(seg_uid, flow_uid)`` a tracking run read; ``flow_uid`` is
-        ``None`` for a run without optical flow."""
-        config = toml.load(self.track_dir(track_uid) / "config.toml")
+    def inputs_of(
+        self, track_uid: str, stage: Literal["tracking", "ssvm"] = "tracking"
+    ) -> tuple[str, str | None]:
+        """The ``(seg_uid, flow_uid)`` a tracking (or ssvm) run read;
+        ``flow_uid`` is ``None`` for a run without optical flow."""
+        config = toml.load(self.solution_dir(track_uid, stage) / "config.toml")
         return config["seg_result"], config.get("flow_result")
 
 

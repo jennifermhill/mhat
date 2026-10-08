@@ -7,6 +7,9 @@
   whenever the shapes match.
 - Existing runs: tracking into one would leave its evaluations (and any plots
   saved there) attributed to a result they did not come from.
+- Grouped runs: a viewer anchored on the wrong folder would show another
+  movie's raw; a uid with ``..`` or nested in a run would put results where
+  they are attributed to something else.
 """
 
 import numpy as np
@@ -72,3 +75,30 @@ def test_existing_tracking_run_is_never_reused(tmp_path):
     with pytest.raises(FileExistsError):
         ds.prepare_run_dir("tracking", "run")
     assert len(ds.evals("run")) == 1  # refused, and nothing removed
+
+
+# A group named like a stage would fool an anchor that looks for the stage name.
+@pytest.mark.parametrize("uid", ["run", "sweeps/tracking/runs/a"])
+def test_run_dir_finds_its_output_dir(tmp_path, uid):
+    raw = tmp_path / "raw.zarr"
+    zarr.open(raw, mode="w", shape=(2, 1, 4, 4), dtype=np.uint8)
+    ds = Dataset(tmp_path / "out", raw)
+    ds.bind_raw()
+    run_dir = ds.prepare_run_dir("tracking", uid)
+
+    found = Dataset.from_run_dir(run_dir, ("tracking", "ssvm"))
+    assert found.output_dir == ds.output_dir
+    assert found.raw_path == raw
+
+
+@pytest.mark.parametrize("uid", ["../run", "a/../../run", "/run", r"a\b", "a//b"])
+def test_uid_outside_stage_dir_is_refused(tmp_path, uid):
+    with pytest.raises(ValueError, match="uid"):
+        Dataset(output_dir=tmp_path).prepare_run_dir("tracking", uid)
+
+
+def test_run_inside_a_run_is_refused(tmp_path):
+    ds = Dataset(output_dir=tmp_path)
+    (ds.prepare_run_dir("tracking", "run") / "config.toml").touch()
+    with pytest.raises(FileExistsError, match="inside the run"):
+        ds.prepare_run_dir("tracking", "run/inner")

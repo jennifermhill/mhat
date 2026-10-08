@@ -8,7 +8,7 @@ from typing import Any
 from funtracks.import_export import import_from_geff
 from motile_tracker.application_menus import MainApp
 from motile_tracker.data_views.views_coordinator.tracks_viewer import TracksViewer
-from mhat.dataset import Dataset, absolute_path
+from mhat.dataset import SOLUTION_STAGES, Dataset, absolute_path
 from mhat.evaluation.evaluate_tracking import (
     read_name_map_and_scale,
     remap_seg_to_track_ids_lazy,
@@ -28,7 +28,7 @@ def main(
     run_dir = absolute_path(run_dir)
     if run_dir.name == "config.toml":
         run_dir = run_dir.parent
-    ds = Dataset.from_run_dir(run_dir, "tracking")
+    ds = Dataset.from_run_dir(run_dir, SOLUTION_STAGES)
     raw_cells_zarr_path = raw_path or ds.raw_path
 
     if gt_tracks is not None:
@@ -118,7 +118,8 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "run", type=Path,
-        help="a tracking run, <output_dir>/tracking/<uid> (or its config.toml)",
+        help="a tracking run, <output_dir>/tracking/<uid>, or an SSVM fit, "
+             "<output_dir>/ssvm/<uid> (or its config.toml)",
     )
     parser.add_argument(
         "--raw", type=Path, default=None,

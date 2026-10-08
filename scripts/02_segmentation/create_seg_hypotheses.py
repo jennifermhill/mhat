@@ -204,15 +204,49 @@ def generate_fluorescent_affinities(data_zarr: Path, output_root, config):
 
 #     return fragments
 
+# waterz scoring functions selectable by name in the config's [waterz_params]
+# table. Anything else is refused: an unknown name used to fall back to the
+# default score silently, so a misspelled or custom scoring function produced a
+# plausible segmentation from the wrong criterion.
+SCORING_FUNCTIONS = {
+    None: "OneMinus<MeanAffinity<RegionGraphType, ScoreValue>>",
+    "random": "Random<RegionGraphType>",
+    "symmetric": (
+        "Divide<"
+        "Subtract<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>,"
+        "Add<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>"
+        ">"
+    ),
+}
+
+
+def scoring_function_expr(waterz_params):
+    """The waterz expression for the config's ``scoring_function``.
+
+    Omitted means the default mean-affinity score.
+
+    Raises:
+        ValueError: If ``scoring_function`` names anything else.
+    """
+    name = dict(waterz_params or {}).get("scoring_function")
+    if name not in SCORING_FUNCTIONS:
+        known = sorted(k for k in SCORING_FUNCTIONS if k is not None)
+        raise ValueError(
+            f"Unknown waterz scoring_function {name!r}. Supported: {known}, or "
+            f"omit it for the default mean-affinity score."
+        )
+    return SCORING_FUNCTIONS[name]
+
+
 def get_segmentation(output_root, thresholds, outfile, waterz_params, neighborhood=None):
     """Agglomerate the fragments frame by frame and record the merge history.
 
     The affinities are handed to waterz as stored, so ``neighborhood`` must be
     waterz's own channel order (``agglomerate_frame`` checks it). It falls
     back to the neighborhood recorded on the affinities array by
-    ``generate_fluorescent_affinities``. ``waterz_params`` (the config's
-    ``[waterz_params]`` table, e.g. ``scoring_function``) is passed through to
-    ``waterz.agglomerate`` unchanged.
+    ``generate_fluorescent_affinities``. ``waterz_params`` is the config's
+    ``[waterz_params]`` table; only its ``scoring_function`` is read (see
+    ``scoring_function_expr``, which refuses unknown names).
     """
     affinities = output_root["affinities"][:].astype(np.float32)
     fragments = output_root["fragments"][:]
@@ -223,7 +257,7 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params, neighborho
     spatial_shape = fragments.shape[1:]
     if neighborhood is None:
         neighborhood = output_root["affinities"].attrs.get("neighborhood")
-    waterz_params = dict(waterz_params or {})
+    score_func = scoring_function_expr(waterz_params)
 
     output_root.create_dataset(
         "segmentations", shape=(T, *spatial_shape),
@@ -237,20 +271,6 @@ def get_segmentation(output_root, thresholds, outfile, waterz_params, neighborho
     
     for t in range(T):
         print(f"Processing timepoint {t}")
-
-        score_func = waterz_params.get("scoring_function", None)
-        if score_func == "random":
-            score_func = "Random<RegionGraphType>"
-        elif score_func == "symmetric":
-            score_func = (
-                "Divide<"
-                "Subtract<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>,"
-                "Add<MaxSize<RegionGraphType>, MinSize<RegionGraphType>>"
-                ">"
-            )
-        else:
-            score_func = "OneMinus<MeanAffinity<RegionGraphType, ScoreValue>>"
-        
 
         segmentation, merge_history = agglomerate_frame(
             affs=affinities[t],
@@ -290,6 +310,8 @@ if __name__ == "__main__":
     # Fail on a pre-2026-09-17 (x-first) neighborhood before any work is done.
     ndim = zarr.open(data_dir, "r").ndim - 2  # raw is (t, c, *spatial)
     check_waterz_neighborhood(config["affinity_params"]["neighborhood"], ndim)
+    # Same for the scoring function, so a bad name fails before fragments.
+    scoring_function_expr(config.get("waterz_params"))
 
     ds.bind_raw()
 

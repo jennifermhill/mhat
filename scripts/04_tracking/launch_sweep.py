@@ -23,6 +23,12 @@ each run this script:
      during interpreter shutdown *after* writing valid output,
   4. records everything in ``<sweep>/manifest.toml``.
 
+Each launch also keeps the spec exactly as launched, in
+``<sweep>/specs/<timestamp>.toml`` (one copy per launch, never overwritten), and
+each manifest run names the copy it was launched from (``spec_copy``). So the
+spec under ``scratch_configs/`` is only a draft: editing or deleting it later
+loses nothing, and nothing needs moving into the output tree.
+
 Everything (configs, logs, manifest) is written under the shared filesystem, not
 node-local scratch, so the compute nodes can read it.
 
@@ -105,6 +111,7 @@ import re
 import shlex
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import toml
@@ -384,6 +391,34 @@ def build_configs(spec, sweep_dir, uids, repo=REPO):
     return records
 
 
+def read_spec(spec_path):
+    """The spec's bytes and its parsed contents, from a single read, so the copy
+    kept in the sweep is exactly the spec that was launched."""
+    raw = Path(spec_path).read_bytes()
+    return raw, toml.loads(raw.decode("utf-8"))
+
+
+def save_spec_copy(raw_spec, sweep_dir):
+    """Keep the spec as launched, byte for byte, in ``<sweep_dir>/specs/``.
+
+    Named ``<timestamp>.toml``, one copy per launch, so a sweep launched in rounds
+    (``--only``, ``--retry``) keeps every version. Never overwrites. Returns the
+    path relative to the sweep, which the manifest records per run as
+    ``spec_copy``.
+    """
+    spec_dir = Path(sweep_dir) / "specs"
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    name, n = f"{stamp}.toml", 2
+    while True:
+        try:
+            with open(spec_dir / name, "xb") as handle:
+                handle.write(raw_spec)
+            return f"specs/{name}"
+        except FileExistsError:
+            name, n = f"{stamp}_{n}.toml", n + 1
+
+
 def bsub(
     job_name, slots, walltime, queue, log_stem, inner,
     dep_job=None, dry_run=False, gpu=None, raw_dep=False,
@@ -452,7 +487,7 @@ def launch(
     ``eval_job_id``). Validation failures raise ``SystemExit`` with the reason,
     exactly as the command line does.
     """
-    spec = toml.load(spec_path)
+    raw_spec, spec = read_spec(spec_path)
     validate_spec(spec, allow_protected=allow_protected)
 
     lsf = spec.get("lsf", {})
@@ -488,6 +523,11 @@ def launch(
     records = build_configs(spec, sweep_dir, uids, repo)
     print(f"Wrote {len(records)} track + eval configs to {sweep_dir}")
     selected = [record for record in records if record["label"] in selected_labels]
+    if not dry_run:
+        spec_copy = save_spec_copy(raw_spec, sweep_dir)
+        print(f"Kept the spec as {sweep_dir / spec_copy}")
+        for record in selected:
+            record["spec_copy"] = spec_copy
 
     for record in selected:
         label = record["label"]
@@ -510,16 +550,16 @@ def launch(
         record["eval_job_id"] = eval_job or ""
 
     if not dry_run:
-        # Preserve job ids from earlier partial submissions (repeated --only),
-        # unless the label was retried under a new run name since.
+        # Preserve job ids and spec copies from earlier partial submissions
+        # (repeated --only), unless the label was retried under a new run name since.
         for record in records:
             old = previous_runs.get(record["label"], {})
             if old.get("exp_uid") == record["exp_uid"]:
-                for key in ("track_job_id", "eval_job_id"):
+                for key in ("track_job_id", "eval_job_id", "spec_copy"):
                     if not record.get(key) and old.get(key):
                         record[key] = old[key]
-            record.setdefault("track_job_id", "")
-            record.setdefault("eval_job_id", "")
+            for key in ("track_job_id", "eval_job_id", "spec_copy"):
+                record.setdefault(key, "")
 
         eval_stub = spec["eval"]
         manifest = {

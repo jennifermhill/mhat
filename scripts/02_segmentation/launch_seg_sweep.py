@@ -14,7 +14,9 @@ all of them, writes the comparison table.
 The sweep lives in ``<output_dir>/segmentation/sweeps/<sweep_id>/``, and so do
 its runs: run ``<label>`` is the segmentation run ``sweeps/<sweep_id>/runs/<label>``
 (a tracking config reads it with that ``seg_result``). As with tracking sweeps, a
-selected label whose run directory exists is refused unless ``--retry``.
+selected label whose run directory exists is refused unless ``--retry``, and
+each launch keeps the spec as launched in ``<sweep>/specs/<timestamp>.toml``
+(``spec_copy`` in each manifest run).
 
 Spec TOML::
 
@@ -67,6 +69,8 @@ from launch_sweep import (  # noqa: E402
     bsub,
     check_no_old_keys,
     check_no_windows_paths,
+    read_spec,
+    save_spec_copy,
 )
 
 RUN_STAGE = "segmentation"
@@ -200,7 +204,7 @@ def main():
     )
     args = parser.parse_args()
 
-    spec = toml.load(args.spec)
+    raw_spec, spec = read_spec(args.spec)
     validate_spec(spec)
 
     lsf = spec.get("lsf", {})
@@ -237,6 +241,11 @@ def main():
     records = build_configs(spec, sweep_dir, uids)
     print(f"Wrote {len(records)} seg configs to {sweep_dir / 'seg_configs'}")
     selected = [record for record in records if record["label"] in selected_labels]
+    if not args.dry_run:
+        spec_copy = save_spec_copy(raw_spec, sweep_dir)
+        print(f"Kept the spec as {sweep_dir / spec_copy}")
+        for record in selected:
+            record["spec_copy"] = spec_copy
 
     det_jobs = []          # this invocation's det jobs, for the collect gate
     for record in selected:
@@ -275,11 +284,11 @@ def main():
         print(f"\n(dry run) {len(selected)} runs; nothing submitted, no manifest.")
         return
 
-    # Preserve job ids from earlier partial submissions (repeated --only),
-    # unless the label was retried under a new run name since.
+    # Preserve job ids and spec copies from earlier partial submissions
+    # (repeated --only), unless the label was retried under a new run name since.
     for record in records:
         old = previous_runs.get(record["label"], {})
-        for key in ("seg_job_id", "det_job_id"):
+        for key in ("seg_job_id", "det_job_id", "spec_copy"):
             if not record.get(key):
                 same_run = old.get("exp_uid") == record["exp_uid"]
                 record[key] = old.get(key, "") if same_run else ""

@@ -9,7 +9,8 @@ Every re-eval is a new eval nested inside the run it scores, named
 ``<reeval_id>_<metrics>_<timestamp>`` (``eval_name = <reeval_id>``), so nothing
 earlier is overwritten. The re-eval's configs, logs and manifest live in
 ``<output_dir>/<stage>/sweeps/<reeval_id>/``, beside the tracking sweeps, so a
-re-eval id can never reuse a sweep's.
+re-eval id can never reuse a sweep's. Each launch keeps the spec as launched in
+``specs/<timestamp>.toml`` there (``spec_copy`` in each manifest run).
 
 A re-eval is described by a spec TOML::
 
@@ -75,6 +76,8 @@ from launch_sweep import (  # noqa: E402
     bsub,
     check_no_old_keys,
     check_no_windows_paths,
+    read_spec,
+    save_spec_copy,
 )
 
 # Prune each run to the CTC-evaluated lineages before scoring it. Only used when
@@ -226,7 +229,7 @@ def main():
     parser.add_argument("--only", nargs="+", default=None, help="subset of uids to submit")
     args = parser.parse_args()
 
-    spec = toml.load(args.spec)
+    raw_spec, spec = read_spec(args.spec)
     validate_spec(spec)
 
     lsf = spec.get("lsf", {})
@@ -265,6 +268,11 @@ def main():
         if unknown:
             raise SystemExit(f"unknown uids: {unknown}")
         selected = [record for record in records if record["label"] in args.only]
+    if not args.dry_run:
+        spec_copy = save_spec_copy(raw_spec, reeval_dir)
+        print(f"Kept the spec as {reeval_dir / spec_copy}")
+        for record in selected:
+            record["spec_copy"] = spec_copy
 
     prune = spec.get("prune_to_ctc_seeds", False)
     suffix = spec.get("prune_suffix", "_ctcseeded")
@@ -305,10 +313,12 @@ def main():
         print(f"\n(dry run) {len(selected)} runs; no jobs submitted, no manifest written.")
         return
 
-    # Preserve job ids from earlier partial submissions (repeated --only).
+    # Preserve job ids and spec copies from earlier partial submissions
+    # (repeated --only).
     earlier = {run["label"]: run for run in (previous or {}).get("runs", [])}
+    keys = ("eval_job_id", "prune_job_id") if prune else ("eval_job_id",)
     for record in records:
-        for key in ("eval_job_id", "prune_job_id") if prune else ("eval_job_id",):
+        for key in (*keys, "spec_copy"):
             if not record.get(key):
                 record[key] = earlier.get(record["label"], {}).get(key, "")
 

@@ -1,8 +1,12 @@
 """Run evaluate_tracks.py over many eval configs in one process.
 
-Same per-run behavior as evaluate_tracks.py — including the `gt_data_dir`
-override — but pays the import cost once instead of once per config. A run that
-fails is reported and skipped rather than aborting the batch.
+Same per-run behavior as evaluate_tracks.py (each eval nests inside its run,
+diagnostics included) but pays the import cost once instead of once per config.
+A run that fails is reported and skipped rather than aborting the batch.
+
+``--skip-existing`` skips a run that already holds an eval of the same name and
+metric set (``<eval_name or GT label>_<metrics>_<timestamp>``, found the way
+``collect_sweep.py`` finds it).
 
 Usage:
     python scripts/05_evaluation/run_evals.py --config-dir <dir-of-eval-tomls>
@@ -14,13 +18,17 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import shutil
 import traceback
 from pathlib import Path
 
 import toml
 
-from evaluate_tracks import run_evaluation
+from collect_sweep import find_eval
+from evaluate_tracks import evaluate
+
+from mhat.dataset import Dataset, absolute_path
+
+DEFAULT_METRICS = ["basic", "track_overlap"]
 
 
 def main() -> None:
@@ -45,39 +53,26 @@ def main() -> None:
         if args.only and track_result not in set(args.only):
             continue
 
-        input_base_dir = Path(config["input_base_dir"])
-        output_base_dir = Path(config["output_base_dir"])
-        experiment = config["experiment"]
-        dataset = config["dataset"]
-
-        if config.get("gt_data_dir"):
-            gt_data_dir = Path(config["gt_data_dir"])
-        else:
-            gt_data_dir = input_base_dir / "tracking" / experiment / dataset
-        pred_data_dir = input_base_dir / "tracking" / experiment / dataset / track_result
-        output_dir = output_base_dir / "evaluation" / experiment / dataset / track_result
-
-        if args.skip_existing and (output_dir / "track_metrics.json").is_file():
-            print(f"{track_result}: metrics already present, skipping")
-            continue
+        ds = Dataset.from_config(config)
+        run_dir = ds.solution_dir(track_result, config.get("track_stage", "tracking"))
+        if args.skip_existing:
+            label = config.get("eval_name") or absolute_path(config["gt_tracks"]).parent.name
+            existing = find_eval(run_dir, label, config.get("metrics", DEFAULT_METRICS))
+            if existing is not None:
+                print(f"{track_result}: already evaluated ({existing.name}), skipping")
+                continue
         # The run directory exists as soon as a config is written, so check for the
         # prediction itself — an empty solution leaves the directory but no geff.
-        if not (pred_data_dir / "pred_tracks.zarr").is_dir():
-            print(f"{track_result}: no pred_tracks.zarr in {pred_data_dir}, skipping")
+        if not (run_dir / "pred_tracks.zarr").is_dir():
+            print(f"{track_result}: no pred_tracks.zarr in {run_dir}, skipping")
             failures.append((track_result, "no prediction (empty solution?)"))
             continue
 
         print(f"\n=== {track_result} ===")
         try:
-            output_dir.mkdir(parents=True, exist_ok=True)
-            track_metrics = run_evaluation(config, gt_data_dir, pred_data_dir)
-            with open(output_dir / "track_metrics.json", "w") as f:
-                json.dump(track_metrics, f)
-            shutil.copy2(path, output_dir / "eval_config.toml")
-            tracking_config = pred_data_dir / "config.toml"
-            if tracking_config.is_file():
-                shutil.copy2(tracking_config, output_dir / "tracking_config.toml")
-            overlap = track_metrics.get("TrackOverlapMetrics", {})
+            eval_dir = evaluate(config)
+            with open(eval_dir / "track_metrics.json") as f:
+                overlap = json.load(f).get("TrackOverlapMetrics", {})
             if overlap:
                 print(
                     f"  TE={overlap.get('target_effectiveness'):.4f} "

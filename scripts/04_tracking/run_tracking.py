@@ -33,13 +33,18 @@ from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 # verbose, exp_uid and use_lk are deliberately absent. Getting this boundary
 # wrong silently reuses a stale graph, so the resolved key and cache path are
 # logged on every run, hit or miss.
+#
+# The cache lives in <output_dir>/graph_cache/: uids identify runs only within
+# one output directory (MDA231 01_cells and 02_cells share a seg uid). The key
+# also carries each input run's config.toml mtime, because a run may be redone
+# under the same uid after its directory is deleted, and its uid alone would
+# then return a graph built from the old fragments or flow.
 # ---------------------------------------------------------------------------
 
-GRAPH_CACHE_VERSION = 1
+GRAPH_CACHE_VERSION = 2
+GRAPH_CACHE_SUBDIR = "graph_cache"
 
 GRAPH_CACHE_KEYS = [
-    "experiment",
-    "dataset",
     "seg_result",
     "flow_result",
     "max_timepoints",
@@ -52,13 +57,38 @@ GRAPH_CACHE_KEYS = [
 ]
 
 
-def graph_cache_key(config, include_drift_distance):
+def input_fingerprint(seg_dir, flow_dirs):
+    """When each input run was made: its config.toml mtime, in whole seconds
+    (copies and renames keep it; sub-second precision may not survive a copy)."""
+    inputs = {"seg": seg_dir, **{f"flow_{k}": v for k, v in flow_dirs.items()}}
+    return {
+        name: int((Path(run_dir) / "config.toml").stat().st_mtime)
+        for name, run_dir in sorted(inputs.items())
+        if run_dir is not None
+    }
+
+
+def uses_drift_distance(flow_dirs):
+    """Whether ``drift_distance`` reaches the graph, so belongs in the cache key.
+
+    ``build_candidate_graph`` prefers ``add_flow_dist_attr`` whenever *either*
+    flow exists, and falls back to the ``drift_distance`` parameter only when
+    neither does. Keep this in step with that branch: including the parameter
+    when it is unused only costs a rebuild, but leaving it out when it is used
+    would hand back a graph whose ``drift_dist`` came from another drift vector.
+    """
+    return flow_dirs["3d"] is None and flow_dirs["2d"] is None
+
+
+def graph_cache_key(config, include_drift_distance, fingerprint):
     """The graph-affecting subset of a tracking config, as a JSON-able dict.
 
-    ``include_drift_distance`` is set only when no 3D flow exists: with flow,
-    ``add_flow_dist_attr`` wins and ``drift_distance`` never touches the graph.
+    ``include_drift_distance`` is set only when there is no flow at all: with
+    2D or 3D flow, ``add_flow_dist_attr`` wins over the ``drift_distance``
+    parameter and it never touches the graph.
+    ``fingerprint`` is ``input_fingerprint`` of the runs the graph is built from.
     """
-    key = {"_version": GRAPH_CACHE_VERSION}
+    key = {"_version": GRAPH_CACHE_VERSION, "inputs": fingerprint}
     for name in GRAPH_CACHE_KEYS:
         key[name] = config.get(name)
     # These two carry legacy aliases; resolve them the same way the builder does
@@ -70,12 +100,12 @@ def graph_cache_key(config, include_drift_distance):
     return key
 
 
-def graph_cache_paths(config, cache_dir, include_drift_distance):
+def graph_cache_paths(config, cache_dir, include_drift_distance, fingerprint):
     """Resolve ``(key, pickle path, sidecar json path)`` for this config."""
-    key = graph_cache_key(config, include_drift_distance)
+    key = graph_cache_key(config, include_drift_distance, fingerprint)
     blob = json.dumps(key, sort_keys=True, default=str)
     digest = hashlib.sha256(blob.encode()).hexdigest()[:16]
-    base = Path(cache_dir) / config["experiment"] / config["dataset"]
+    base = Path(cache_dir)
     return key, base / f"{digest}.pkl", base / f"{digest}.json"
 
 
@@ -327,7 +357,12 @@ def build_candidate_graph(config, raw_dir, seg_dir, flow_dirs):
 
 
 def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bool = False,
-                 use_graph_cache: bool = True, force_save_graph: bool = False):
+                 cache_dir: Path | None = None, force_save_graph: bool = False):
+    """Build the candidate graph (or load it from ``cache_dir``), solve, write.
+
+    ``cache_dir`` is the output directory's graph cache, or None to build the
+    graph fresh and not save it.
+    """
 
     seg_zarr_path = seg_dir / "data.zarr"
     output_seg_path = output_dir / "pred_seg.zarr"
@@ -340,20 +375,18 @@ def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bo
 
     seg_group = "fragments"
 
-    # With 3D flow, add_flow_dist_attr wins over the drift_distance parameter, so
-    # drift_distance only belongs in the cache key when there is no 3D flow.
-    has_3d_flow = flow_dirs["3d"] is not None
-
-    cache_dir = config.get("graph_cache_dir", None)
     pkl_path = json_path = None
-    if cache_dir is not None and use_graph_cache:
-        key, pkl_path, json_path = graph_cache_paths(config, cache_dir, not has_3d_flow)
+    if cache_dir is not None:
+        key, pkl_path, json_path = graph_cache_paths(
+            config,
+            cache_dir,
+            uses_drift_distance(flow_dirs),
+            input_fingerprint(seg_dir, flow_dirs),
+        )
         print(f"Graph cache key: {json.dumps(key, sort_keys=True, default=str)}")
         print(f"Graph cache path: {pkl_path}")
-    elif cache_dir is not None:
-        print("Graph cache disabled for this run (--no-graph-cache); building fresh.")
     else:
-        print("No graph_cache_dir configured; building the candidate graph.")
+        print("Graph cache off (graph_cache unset or --no-graph-cache); building.")
 
     bundle = None
     if pkl_path is not None and pkl_path.is_file() and not force_save_graph:
@@ -491,13 +524,18 @@ if __name__ == "__main__":
     parser.add_argument("--stats-only", action="store_true",
                         help="Build candidate graph and print attribute statistics, then exit.")
     parser.add_argument("--no-graph-cache", action="store_true",
-                        help="Ignore graph_cache_dir entirely: build the graph fresh and do not save it.")
+                        help="Ignore graph_cache: build the graph fresh and do not save it.")
     parser.add_argument("--save-graph", action="store_true",
                         help="Rebuild the candidate graph and overwrite any existing cache entry.")
     args = parser.parse_args()
     config = toml.load(args.config)
 
     ds = Dataset.from_config(config)
+    if "graph_cache_dir" in config:
+        raise ValueError(
+            "graph_cache_dir is gone: the cache now lives in "
+            "<output_dir>/graph_cache/. Set graph_cache = true instead."
+        )
     raw_dir = ds.require_raw_path()
     print(f"Loading raw data from {raw_dir}")
     ds.bind_raw()
@@ -526,5 +564,9 @@ if __name__ == "__main__":
     output_dir = ds.prepare_run_dir("tracking", exp_uid)
     print(f"Saving results to {output_dir}")
 
-    run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only=args.stats_only,
-                 use_graph_cache=not args.no_graph_cache, force_save_graph=args.save_graph)
+    use_cache = config.get("graph_cache", False) and not args.no_graph_cache
+    run_tracking(
+        config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only=args.stats_only,
+        cache_dir=ds.output_dir / GRAPH_CACHE_SUBDIR if use_cache else None,
+        force_save_graph=args.save_graph,
+    )

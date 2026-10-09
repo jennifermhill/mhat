@@ -1,10 +1,14 @@
 """Collect GT-amount sweep results into a single CSV.
 
-Joins three things per run token:
-  - test-set metrics   experiments/evaluation/<exp>/<test_dataset>/<token>/track_metrics.json
-  - fit bookkeeping    experiments/tracking/<exp>/<train_dataset>/<token>/fit_summary.json
-  - learned weights    .../<token>/learned_weights.toml
-  - SSVM convergence   .../<token>/fit_weights_ssvm_*.log  (iteration count, final eps)
+Joins, per run token of the fits sweep (``<output_dir>/ssvm/sweeps/<fits_id>/runs/``):
+
+  - metrics            the eval named after the scored sweep, found by exact name:
+                       ``--side test`` (default) the held-out solve in
+                       ``<test output_dir>/tracking/sweeps/<solves_id>/runs/<token>``,
+                       ``--side train`` the fit itself, scored on the GT it was fit on
+  - fit bookkeeping    <fit>/fit_summary.json
+  - learned weights    <fit>/learned_weights.toml
+  - SSVM convergence   <fit>/fit_weights_ssvm_*.log  (iteration count, final eps)
 
 Two status columns, because they can disagree:
 
@@ -20,9 +24,11 @@ failures only if the TEST solve is empty too. Runs with no usable result keep an
 explicit status alongside a 0.0 score, so a degenerate fit is never silently plotted
 as a genuine score of zero.
 
+The CSV goes into the scored sweep's folder (``gt_amount_results.csv``) unless
+``--output`` says otherwise.
+
 Usage:
-    python scripts/05_evaluation/collect_gt_amount.py \
-        configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/gt_amount/gt_amount.toml
+    python scripts/05_evaluation/collect_gt_amount.py <gt_amount_config.toml> [--side train]
 """
 
 from __future__ import annotations
@@ -35,7 +41,17 @@ from pathlib import Path
 
 import toml
 
-from mhat.tracking.gt_subsets import iter_run_dirs, parse_run_token, run_dir
+from collect_sweep import find_eval
+
+from mhat.tracking.gt_subsets import (
+    check_gt_amount_config,
+    iter_sweep_runs,
+    parse_run_token,
+    sweep_dir,
+    sweep_id,
+)
+
+DEFAULT_EVAL_METRICS = ["basic", "track_overlap"]
 
 METRIC_FIELDS = [
     ("target_effectiveness", ["TrackOverlapMetrics", "target_effectiveness"]),
@@ -164,34 +180,33 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", help="the GT-amount sweep config (train side)")
     parser.add_argument(
-        "--eval-dataset",
-        "--test-dataset",
-        dest="eval_dataset",
-        default="02_nuclei_denoised_test",
-        help="dataset whose evaluation/ results to collect; use the train dataset to "
-        "gather the train-side (annotated-subset) scores used for model selection",
+        "--side", choices=("test", "train"), default="test",
+        help="test: the held-out solves' scores (the curve); train: each fit scored "
+        "on the GT it was fit on, used for model selection",
     )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
     config = toml.load(args.config)
+    check_gt_amount_config(config)
     prefix = config.get("run_name_prefix", "gta")
+    metrics_set = config.get("eval_metrics", DEFAULT_EVAL_METRICS)
 
-    input_base_dir = Path(config["input_base_dir"])
-    experiment = config["experiment"]
-    train_root = input_base_dir / "tracking" / experiment / config["dataset"]
-    output_base_dir = Path(config["output_base_dir"])
-    eval_root = output_base_dir / "evaluation" / experiment / args.eval_dataset
-
-    # Fits are read from the train dataset, metrics from whichever dataset was
-    # scored — which may be the train one (3a) or the test one (3b), and the two
-    # sides can be grouped under different subdirectories.
-    runs_subdir = config.get("runs_subdir", "")
-    test_runs_subdir = config.get("test_runs_subdir", "")
-    eval_subdir = runs_subdir if args.eval_dataset == config["dataset"] else test_runs_subdir
+    # Fits are read from the train side; metrics from whichever sweep was scored:
+    # the fits themselves (3a) or the held-out solves on the test movie (3b).
+    fits = sweep_id(config, "fits_id")
+    fits_dir = sweep_dir(config["output_dir"], "ssvm", fits)
+    if args.side == "train":
+        scored_dir, scored_id = fits_dir, fits
+    else:
+        if not config.get("test_template"):
+            raise SystemExit("--side test needs test_template in the config")
+        test_output_dir = toml.load(config["test_template"])["output_dir"]
+        scored_id = sweep_id(config, "solves_id")
+        scored_dir = sweep_dir(test_output_dir, "tracking", scored_id)
 
     rows = []
-    for fit_dir in iter_run_dirs(train_root, runs_subdir):
+    for fit_dir in iter_sweep_runs(config["output_dir"], "ssvm", fits):
         parsed = parse_run_token(fit_dir.name, prefix)
         if not parsed:
             continue
@@ -249,8 +264,10 @@ def main() -> None:
         # only drawn as a failure if it is empty on the dataset being plotted.
         row["train_status"] = row["status"]
 
-        metrics_path = run_dir(eval_root, eval_subdir, token) / "track_metrics.json"
-        if metrics_path.is_file():
+        scored_run = scored_dir / "runs" / token
+        found = find_eval(scored_run, scored_id, metrics_set)
+        metrics_path = found / "track_metrics.json" if found else None
+        if metrics_path is not None:
             metrics = json.loads(metrics_path.read_text())
             for name, path in METRIC_FIELDS:
                 row[name] = walk_json_path(metrics, path)
@@ -260,22 +277,16 @@ def main() -> None:
             if row["status"] in ("ok", "empty_solution"):
                 # Distinguish "the weights gave an empty solution on the test set"
                 # (a real, reportable outcome) from "this run was never evaluated".
-                test_pred = (
-                    run_dir(
-                        input_base_dir / "tracking" / experiment / args.eval_dataset,
-                        eval_subdir,
-                        token,
-                    )
-                    / "pred_tracks.zarr"
-                )
-                row["status"] = "missing" if test_pred.is_dir() else "empty_solution_test"
+                scored_pred = scored_run / "pred_tracks.zarr"
+                empty = "empty_solution_test" if args.side == "test" else "empty_solution"
+                row["status"] = "missing" if scored_pred.is_dir() else empty
             for name, _ in METRIC_FIELDS:
                 row[name] = 0.0 if name in SCORE_FIELDS else None
 
         rows.append(row)
 
     if not rows:
-        print(f"No runs matching {prefix}_* found under {train_root / runs_subdir}")
+        print(f"No runs matching {prefix}_* found under {fits_dir / 'runs'}")
         return
 
     fieldnames = (
@@ -288,7 +299,7 @@ def main() -> None:
     )
     rows.sort(key=lambda r: (r["arm"], -int(r["n_tracks"]), r["seed"]))
 
-    out_path = args.output or (eval_root / "gt_amount_results.csv")
+    out_path = args.output or (scored_dir / "gt_amount_results.csv")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -307,7 +318,7 @@ def main() -> None:
     # tracks while a crop truncates the ones leaving its box, and TE rewards short
     # tracks. Warn exactly where the mistake would be made — a CSV that mixes
     # protocols and is about to become one figure.
-    if args.eval_dataset == config["dataset"]:
+    if args.side == "train":
         kinds = {row.get("kind") for row in rows if row.get("kind")}
         if {"crop", "tracks"} <= kinds:
             # ASCII only: this goes to a Windows console under cp1252, where an

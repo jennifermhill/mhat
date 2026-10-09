@@ -7,8 +7,8 @@ for how the three candidate pools it reports differ.
 
     conda run -n mhat-cluster --no-capture-output python -u \\
         scripts/05_evaluation/seg_detectability.py \\
-        --seg-dir  .../segmentation/Fluo-N3DL-DRO/01_nuclei_short/<uid> \\
-        --gt-tra   .../tracking/Fluo-N3DL-DRO/01_nuclei/01_GT/TRA
+        --seg-dir  .../Fluo-N3DL-DRO/01_nuclei_short/segmentation/<uid> \\
+        --gt-tra   .../Fluo-N3DL-DRO/01_nuclei/gt/ctc/01_GT/TRA
 
 ``--size-threshold`` / ``--min-cost`` / ``--max-cost`` must mirror the *tracking*
 config the segmentation is destined for, since they define the pool the solver

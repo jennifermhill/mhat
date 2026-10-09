@@ -9,9 +9,13 @@ Solving does not mutate the graph and each iteration gets a fresh motile.Solver,
 so results are identical to the per-config path — verify that on a couple of
 tokens before trusting the batch.
 
+Each config's run is a tracking run at ``<output_dir>/tracking/<exp_uid>``
+(``exp_uid`` defaults to the config's file stem; a grouped uid such as
+``sweeps/<id>/runs/<token>`` is fine). An existing run is never redone: with
+``--skip-existing`` a finished one is skipped, otherwise it is reported.
+
 Usage:
-    python scripts/04_tracking/solve_many_weights.py \
-        configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/*.toml
+    python scripts/04_tracking/solve_many_weights.py <dir>/*.toml
     python scripts/04_tracking/solve_many_weights.py --config-dir <dir> [--only TOKEN ...]
 """
 
@@ -26,7 +30,7 @@ import toml
 
 from mhat.tracking.pipeline import (
     build_track_graph,
-    resolve_input_dirs,
+    resolve_inputs,
     write_tracking_outputs,
 )
 from mhat.tracking.solve_with_motile import solve_with_motile
@@ -35,16 +39,13 @@ from mhat.tracking.solve_with_motile import solve_with_motile
 def _graph_key(config) -> tuple:
     """Configs sharing this key share a candidate graph."""
     return (
-        config["experiment"],
-        config["dataset"],
+        config["output_dir"],
         config["seg_result"],
         config.get("flow_result"),
-        config.get("use_lk", False),
         config["size_threshold"],
         config["max_edge_distance"],
         config["max_children"],
         config["divisions"],
-        config["merges"],
         config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
         config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
         config.get("z_flow_conf_threshold"),
@@ -71,6 +72,14 @@ def main() -> None:
         parser.error("no configs given")
 
     configs = [(p, toml.load(p)) for p in sorted(set(paths))]
+    # run_tracking.py z-scores the cost parameters for normalize_features; this
+    # loop calls the solver directly and does not, so it would silently solve
+    # with the raw weights. Refuse until the two share their post-graph path.
+    zscored = [p.name for p, c in configs if c.get("normalize_features") is not None]
+    if zscored:
+        parser.error(
+            f"normalize_features is not supported here (use run_tracking.py): {zscored}"
+        )
 
     keys = {_graph_key(c) for _, c in configs}
     if len(keys) != 1:
@@ -80,9 +89,8 @@ def main() -> None:
         )
 
     first = configs[0][1]
-    raw_dir, seg_dir, flow_dirs, _gt = resolve_input_dirs(first)
-    output_base_dir = Path(first["output_base_dir"])
-    dataset_out = output_base_dir / "tracking" / first["experiment"] / first["dataset"]
+    ds, raw_dir, seg_dir, flow_dirs, _gt_tracks, _gt_seg = resolve_inputs(first)
+    ds.bind_raw()
 
     print(f"Building the shared candidate graph once for {len(configs)} configs...")
     track_graph, fragments, merge_history, exclusion_sets, scale, axes = build_track_graph(
@@ -94,12 +102,17 @@ def main() -> None:
     failures = []
     for path, config in configs:
         exp_uid = config.get("exp_uid") or path.stem
-        out_dir = dataset_out / exp_uid
-        if args.skip_existing and (out_dir / "pred_tracks.zarr").is_dir():
+        config["exp_uid"] = exp_uid
+        if args.skip_existing and (ds.track_dir(exp_uid) / "pred_tracks.zarr").is_dir():
             print(f"{exp_uid}: already present, skipping")
             continue
         print(f"\n=== {exp_uid} ===")
-        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            out_dir = ds.prepare_run_dir("tracking", exp_uid)
+        except FileExistsError as error:
+            print(f"  {error}")
+            failures.append((exp_uid, "run directory exists"))
+            continue
         with open(out_dir / "config.toml", "w") as f:
             toml.dump(config, f)
         try:

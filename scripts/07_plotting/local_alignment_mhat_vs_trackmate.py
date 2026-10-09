@@ -44,15 +44,16 @@ from scipy.spatial import cKDTree
 
 # Tracking results and raw data (defaults from the notebook).
 MHAT_RESULT = Path(
-    "Y:/jennifer/mhat/experiments/tracking/InterfaceTransferMirrorB1-DB/02_nuclei/2026-07-09_20-20-45"
+    "Y:/jennifer/mhat/experiments/InterfaceTransferMirrorB1-DB/02_nuclei/tracking/2026-07-09_20-20-45"
 )
 TRACKMATE_RESULT = Path(
-    "Y:/jennifer/mhat/experiments/tracking/InterfaceTransferMirrorB1-DB/02_nuclei/trackmate"
+    "Y:/jennifer/mhat/experiments/InterfaceTransferMirrorB1-DB/02_nuclei/tracking/trackmate"
 )
 RAW_NUCLEI_ZARR = Path(
     "Y:/jennifer/mhat/data/InterfaceTransferMirrorB1-DB/02_nuclei.zarr"
 )
-DEFAULT_OUTPUT = MHAT_RESULT.parent / "local_alignment_mhat_vs_trackmate.png"
+# <output_dir>/figures/, two levels up from a run in tracking/.
+DEFAULT_OUTPUT = MHAT_RESULT.parents[1] / "figures" / "local_alignment_mhat_vs_trackmate.png"
 
 DEFAULT_K = 4  # number of nearest cells (by world distance) to average over
 

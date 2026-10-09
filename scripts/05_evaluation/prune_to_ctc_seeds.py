@@ -4,12 +4,13 @@ For Fluo-N3DL-DRO / TRIC / TRIF the Cell Tracking Benchmark scores only the
 cells seeded by the first frame of the gold reference, and counts every other
 tracked cell as an error. This reads that one frame, matches each marker to a
 predicted object, keeps everything descended from those objects, and writes the
-result as a sibling tracking result that ``evaluate_tracks.py`` can be pointed
-at unchanged.
+result as a new tracking run beside the source, ``<track_result><suffix>``, that
+``evaluate_tracks.py`` can be pointed at unchanged. Its ``config.toml`` is the
+source run's, plus ``pruned_from``.
 
-Takes the same eval config as ``evaluate_tracks.py`` -- it needs
-``input_base_dir``, ``experiment``, ``dataset``, ``track_result`` and
-``ctc_gt``:
+Takes the same eval config as ``evaluate_tracks.py`` -- it needs ``output_dir``,
+``track_result`` (``track_stage`` if not ``"tracking"``) and ``ctc_tra_dir``, the
+CTC ``TRA`` marker folder:
 
     python scripts/05_evaluation/prune_to_ctc_seeds.py <eval_config.toml> --dry-run
     python scripts/05_evaluation/prune_to_ctc_seeds.py <eval_config.toml>
@@ -25,6 +26,7 @@ from pathlib import Path
 
 import toml
 
+from mhat.dataset import Dataset, require_dir
 from mhat.evaluation.ctc_seed_prune import format_report, prune_to_ctc_seeds
 
 
@@ -53,21 +55,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    input_base_dir = Path(config["input_base_dir"])
-    experiment = config["experiment"]
-    dataset = config["dataset"]
+    ds = Dataset.from_config(config)
+    stage = config.get("track_stage", "tracking")
     track_result = args.track_result or config["track_result"]
-    ctc_gt = config.get("ctc_gt", "01_GT")
-
-    data_dir = input_base_dir / "tracking" / experiment / dataset
-    pred_dir = data_dir / track_result
-    assert pred_dir.is_dir(), f"Pred data dir {pred_dir} is missing"
-
-    tra_dir = data_dir / ctc_gt / "TRA"
-    assert tra_dir.is_dir(), f"CTC TRA dir {tra_dir} is missing"
+    pred_dir = require_dir(ds.solution_dir(track_result, stage), "Source run")
+    tra_dir = require_dir(Path(config["ctc_tra_dir"]), "CTC TRA folder")
 
     out_name = f"{track_result}{args.suffix}"
-    out_dir = data_dir / out_name
+    out_dir = ds.check_new_run(stage, out_name)
 
     print(f"Source:  {pred_dir}")
     print(f"Markers: {tra_dir} (first frame only)")
@@ -78,8 +73,16 @@ if __name__ == "__main__":
     print(format_report(report))
 
     if not args.dry_run:
+        # The pruned run is a run of its own: say where it came from.
+        config_path = out_dir / "config.toml"
+        run_config = toml.load(config_path) if config_path.is_file() else {}
+        run_config["exp_uid"] = out_name
+        run_config["pruned_from"] = track_result
+        with open(config_path, "w") as handle:
+            toml.dump(run_config, handle)
+
         print()
         print("To evaluate the pruned result, in the eval config set:")
         print(f'    track_result = "{out_name}"')
-        print(f'    seg_track_result = "{track_result}"')
+        print(f'    seg_track_result = "{Path(track_result).name}"')
         print("    # SEG must stay on the unpruned run")

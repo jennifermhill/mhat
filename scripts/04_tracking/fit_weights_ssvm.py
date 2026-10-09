@@ -7,9 +7,14 @@ structsvm's bundle method. Writes a learned-weights TOML and runs a final
 solve with the learned weights so downstream evaluation can compare against
 the hand-tuned baseline.
 
-Note: GT must already be in geff format at <gt_data_dir>/correct_tracks.zarr.
-Run evaluate_tracks.py once on any prior tracking output to trigger the
-CTC→geff conversion if not yet present.
+A fit is a run of the ``ssvm`` stage: it is written to
+``<output_dir>/ssvm/<exp_uid>/`` (a timestamp unless ``exp_uid`` is set, and never
+an existing run), laid out like a tracking run plus ``learned_weights.toml``, so
+``evaluate_tracks.py`` scores it with ``track_stage = "ssvm"``.
+
+The config takes ``raw_path``, ``output_dir``, ``seg_result``, ``flow_result`` as
+for tracking, plus ``gt_tracks`` and ``gt_seg``: the GT geff and its node-id
+labeled segmentation (``convert_ctc_gt.py`` makes both for CTC ground truth).
 """
 
 from __future__ import annotations
@@ -17,7 +22,6 @@ from __future__ import annotations
 import argparse
 import datetime
 import logging
-from pathlib import Path
 
 import motile
 import toml
@@ -27,7 +31,7 @@ from mhat.tracking.gt_annotation import annotate_gt_on_candidate_graph
 from mhat.tracking.pipeline import (  # noqa: F401 -- load_gt is re-exported for the sweep scripts
     build_track_graph,
     load_gt,
-    resolve_input_dirs,
+    resolve_inputs,
     write_tracking_outputs,
 )
 from mhat.tracking.solve_with_motile import add_costs, report_solver_backend
@@ -108,7 +112,7 @@ def write_learned_config(input_config, solver, learned_path):
     return learned_config
 
 
-def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
+def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_tracks, gt_seg, output_dir):
     configure_logging(output_dir)
 
     # Persist input config (pre-fit) for reproducibility
@@ -128,7 +132,7 @@ def fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir):
               "cohesion/adhesion costs will be skipped.")
 
     print("Loading GT...")
-    gt_graph, gt_seg = load_gt(gt_data_dir, scale)
+    gt_graph, gt_seg = load_gt(gt_tracks, gt_seg, scale)
 
     print("Annotating GT on candidate graph...")
     stats = annotate_gt_on_candidate_graph(
@@ -293,19 +297,18 @@ if __name__ == "__main__":
     parser.add_argument("config")
     args = parser.parse_args()
     config = toml.load(args.config)
+    if "output_name" in config:
+        raise ValueError(
+            "output_name is gone: a fit is written to <output_dir>/ssvm/<exp_uid>/ "
+            "(set exp_uid to name it)."
+        )
 
-    output_base_dir = Path(config["output_base_dir"])
-    dataset = config["dataset"]
-    experiment = config["experiment"]
-    assert output_base_dir.is_dir()
-
-    raw_dir, seg_dir, flow_dirs, gt_data_dir = resolve_input_dirs(config)
+    ds, raw_dir, seg_dir, flow_dirs, gt_tracks, gt_seg = resolve_inputs(config)
+    ds.bind_raw()
 
     if not config.get("exp_uid"):
-        config["exp_uid"] = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-    output_dir = output_base_dir / "tracking" / experiment / dataset / config.get("output_name", "ssvm_fit")
-    output_dir.mkdir(parents=True, exist_ok=True)
+        config["exp_uid"] = ds.new_uid()
+    output_dir = ds.prepare_run_dir("ssvm", config["exp_uid"])
     print(f"Saving fit results to {output_dir}")
 
-    fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_data_dir, output_dir)
+    fit_and_solve(config, raw_dir, seg_dir, flow_dirs, gt_tracks, gt_seg, output_dir)

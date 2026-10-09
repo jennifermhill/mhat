@@ -1,9 +1,12 @@
 """Build a git-ignored configs/ archive of the tracking/seg/flow configs referenced
 by merge_ablation.toml, solver_ablation.toml and solver_addition.toml.
 
-The archive mirrors experiments/ and uses human-readable, condition-based names so
-any condition can be re-run on future code. Run UIDs in the TOMLs are unchanged;
-each config file is a verbatim copy of the run's saved config.
+The archive is keyed by experiment/dataset (``configs/tracking/<exp>/<ds>/...``,
+named from each spec table's ``output_dir``) and uses human-readable,
+condition-based names so any condition can be re-run on future code. Each config
+file is a verbatim copy of a run's saved ``config.toml``: the condition's run
+(``<output_dir>/<run>``, see scripts/07_plotting/plot_spec.py), and the
+segmentation and flow runs it read (its ``seg_result`` / ``flow_result``).
 
 Naming (tracking): one file per unique referenced tracking_uid, named by its
 condition (first reference wins, in merge -> solver_ablation -> solver_addition
@@ -15,43 +18,61 @@ Also prints a (toml, experiment, dataset, condition) -> archive path mapping, us
 to add `config` pointers to the TOMLs (build_config_archive.py --print-map).
 
 Usage: python scripts/build_config_archive.py [--print-map]
+           [--specs-dir DIR] [--out-root DIR] [--only TABLE ...]
+
+``--specs-dir`` / ``--out-root`` let it run on converted specs and write somewhere
+other than configs/ (configs/ is the tracked archive: only with Jennifer's go-ahead).
 """
 import argparse
 import os
 import shutil
 from collections import OrderedDict
+from pathlib import Path
 
 import toml
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EVAL = os.path.join(REPO, "experiments", "evaluation")
-SEG = os.path.join(REPO, "experiments", "segmentation")
-FLOW = os.path.join(REPO, "experiments", "opticalflow")
-CONFIGS = os.path.join(REPO, "configs")
 
 TOMLS = OrderedDict([
-    ("merge", "configs/evaluation/merge_ablation.toml"),
-    ("solver_ablation", "configs/evaluation/solver_ablation.toml"),
-    ("solver_addition", "configs/evaluation/solver_addition.toml"),
+    ("merge", "merge_ablation.toml"),
+    ("solver_ablation", "solver_ablation.toml"),
+    ("solver_addition", "solver_addition.toml"),
 ])
 GROUP = {"merge": "merge", "solver_ablation": "solver", "solver_addition": "solver"}
+PLACEHOLDER = "<fill in>"
 
 
-def parse_refs():
-    """Return list of dicts: {toml, exp, ds, cond, uid, seg_uid}."""
+def parse_refs(specs_dir, only=None):
+    """Return list of dicts: {toml, exp, ds, cond, uid, output_dir, run, seg_uid}.
+
+    ``uid`` is the condition's run (a path relative to ``output_dir``); ``exp`` /
+    ``ds`` are the last two parts of ``output_dir``; ``seg_uid`` comes from the
+    run's own config (its ``seg_result``).
+    """
     refs = []
-    for ttype, rel in TOMLS.items():
-        cfg = toml.load(os.path.join(REPO, rel))
-        for d in cfg.values():
+    for ttype, name in TOMLS.items():
+        cfg = toml.load(os.path.join(specs_dir, name))
+        for table_name, d in cfg.items():
             if not isinstance(d, dict) or "conditions" not in d:
                 continue
-            exp, ds = d["experiment"], d["dataset_dir"]
+            if only and table_name not in only:
+                continue
+            if "output_dir" not in d:
+                raise SystemExit(
+                    f"{name} [{table_name}] has no output_dir: convert the spec first "
+                    "(scripts/convert_figure_specs.py)"
+                )
+            output_dir = Path(d["output_dir"])
+            exp, ds = output_dir.parts[-2], output_dir.parts[-1]
             for cond, cc in d["conditions"].items():
-                uid = cc.get("tracking_uid", "")
-                if not uid or uid == "<fill in>":
+                run = cc.get("run", "")
+                if not run or run == PLACEHOLDER:
                     continue
+                run_config = toml.load(output_dir / run / "config.toml")
                 refs.append({"toml": ttype, "exp": exp, "ds": ds, "cond": cond,
-                             "uid": uid, "seg_uid": cc.get("seg_uid")})
+                             "uid": run, "output_dir": output_dir,
+                             "run_config": run_config,
+                             "seg_uid": run_config.get("seg_result")})
     return refs
 
 
@@ -85,8 +106,8 @@ def copy_verbatim(src, dst):
     assert open(src, "rb").read() == open(dst, "rb").read(), f"copy mismatch {dst}"
 
 
-def build():
-    refs = parse_refs()
+def build(specs_dir, out_root, only=None):
+    refs = parse_refs(specs_dir, only)
     track_names = name_tracking(refs)
     cond_to_path = {}  # (toml,exp,ds,cond) -> config relpath
 
@@ -95,37 +116,39 @@ def build():
     for r in refs:
         key = (r["exp"], r["ds"], r["uid"])
         base = track_names[key]
-        rel = f"configs/tracking/{r['exp']}/{r['ds']}/{base}_config.toml"
-        cond_to_path[(r["toml"], r["exp"], r["ds"], r["cond"])] = rel
+        rel = f"tracking/{r['exp']}/{r['ds']}/{base}_config.toml"
+        cond_to_path[(r["toml"], r["exp"], r["ds"], r["cond"])] = f"configs/{rel}"
         if key in seen:
             continue
         seen.add(key)
-        src = os.path.join(EVAL, r["exp"], r["ds"], r["uid"], "tracking_config.toml")
-        copy_verbatim(src, os.path.join(REPO, rel))
+        src = r["output_dir"] / r["uid"] / "config.toml"
+        copy_verbatim(src, os.path.join(out_root, rel))
 
     # ---- segmentation (roles from the merge conditions) ----
-    seg_role = {}  # (exp,ds,seg_uid) -> role
+    seg_role = {}  # (exp,ds,seg_uid) -> (role, output_dir)
     for r in refs:
         if r["toml"] == "merge" and r["seg_uid"]:
             role = {"baseline": "baseline", "no_cohesion": "baseline",
                     "no_affinities": "no_affinities", "no_merges": "no_merges"}.get(r["cond"])
             if role:
-                seg_role[(r["exp"], r["ds"], r["seg_uid"])] = role
-    for (exp, ds, seg_uid), role in seg_role.items():
-        src = os.path.join(SEG, exp, ds, seg_uid, "config.toml")
-        copy_verbatim(src, os.path.join(CONFIGS, "segmentation", exp, ds, f"{role}_config.toml"))
+                seg_role[(r["exp"], r["ds"], r["seg_uid"])] = (role, r["output_dir"])
+    for (exp, ds, seg_uid), (role, output_dir) in seg_role.items():
+        src = output_dir / "segmentation" / seg_uid / "config.toml"
+        copy_verbatim(src, os.path.join(out_root, "segmentation", exp, ds, f"{role}_config.toml"))
 
     # ---- optical flow (one per dataset; 2d + 3d) ----
-    flows = {}  # (exp,ds) -> flow_uid (read from each dataset's tracking config)
+    flows = {}  # (exp,ds) -> (flow_uid, output_dir), from each run's own config
     for r in refs:
-        tc = toml.load(os.path.join(EVAL, r["exp"], r["ds"], r["uid"], "tracking_config.toml"))
-        if tc.get("flow_result"):
-            flows[(r["exp"], r["ds"])] = tc["flow_result"]
-    for (exp, ds), flow_uid in flows.items():
-        for sub in ("opticalflow_2d", "opticalflow_3d"):
-            src = os.path.join(FLOW, exp, ds, sub, flow_uid, "config.toml")
-            if os.path.isfile(src):
-                copy_verbatim(src, os.path.join(CONFIGS, "opticalflow", exp, ds, sub, "flow_config.toml"))
+        if r["run_config"].get("flow_result"):
+            flows[(r["exp"], r["ds"])] = (r["run_config"]["flow_result"], r["output_dir"])
+    # The archive keeps its opticalflow_{2d,3d} names; the runs live in
+    # <output_dir>/opticalflow/{2d,3d}/.
+    for (exp, ds), (flow_uid, output_dir) in flows.items():
+        for kind in ("2d", "3d"):
+            src = output_dir / "opticalflow" / kind / flow_uid / "config.toml"
+            if src.is_file():
+                copy_verbatim(src, os.path.join(out_root, "opticalflow", exp, ds,
+                                                f"opticalflow_{kind}", "flow_config.toml"))
 
     return cond_to_path
 
@@ -133,8 +156,13 @@ def build():
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--print-map", action="store_true", help="print condition->config mapping as JSON")
+    ap.add_argument("--specs-dir", default=os.path.join(REPO, "configs", "evaluation"),
+                    help="where the (converted) figure specs are")
+    ap.add_argument("--out-root", default=os.path.join(REPO, "configs"),
+                    help="archive root to write (default: the tracked configs/)")
+    ap.add_argument("--only", nargs="+", default=None, help="only these spec tables")
     args = ap.parse_args()
-    cond_to_path = build()
+    cond_to_path = build(args.specs_dir, args.out_root, args.only)
     if args.print_map:
         import json
         print(json.dumps({f"{t}|{e}|{d}|{c}": p for (t, e, d, c), p in cond_to_path.items()}, indent=2))

@@ -29,7 +29,7 @@ from mhat.tracking.gt_annotation import (
     build_node_to_fragments,
     compute_gt_overlaps,
 )
-from mhat.tracking.pipeline import build_track_graph, load_gt, resolve_input_dirs
+from mhat.tracking.pipeline import build_track_graph, load_gt, resolve_inputs
 
 
 def build_matched_cand_seg(track_graph, fragments, merge_history, nodes=None):
@@ -73,18 +73,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = toml.load(args.config)
 
-    # Same directory resolution as fit_weights_ssvm.py, including the
-    # rank-dependent flow policy (2D data needs only a 2D flow) and the
-    # `gt_data_dir` override. The old Lucas-Kanade branch (`use_lk`) is gone:
-    # the fit never supported it and LK flow is dead code.
-    raw_dir, seg_dir, flow_dirs, gt_data_dir = resolve_input_dirs(config)
+    # Same input resolution as fit_weights_ssvm.py: raw, seg and flow from the
+    # output directory (rank-dependent flow policy included), GT from gt_tracks /
+    # gt_seg. Nothing is written.
+    _ds, raw_dir, seg_dir, flow_dirs, gt_tracks, gt_seg = resolve_inputs(config)
 
     track_graph, fragments, merge_history, _exclusion_sets, scale, _axes = build_track_graph(
         config, raw_dir, seg_dir, flow_dirs
     )
 
     print("Loading GT...")
-    gt_graph, gt_seg = load_gt(gt_data_dir, scale)
+    gt_graph, gt_seg = load_gt(gt_tracks, gt_seg, scale)
 
     print("Annotating GT on candidate graph...")
     keep_labels = None

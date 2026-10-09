@@ -69,48 +69,78 @@ def subset_dirname(n_tracks: int, seed: int) -> str:
     return f"n{n_tracks:03d}_s{seed}"
 
 
-# --- where runs live under a dataset directory ------------------------------
+# --- where GT-amount runs live --------------------------------------------------
 #
-# A sweep's runs can either sit directly under ``<base>/tracking/<exp>/<dataset>/``
-# (the original flat layout, and still the default) or be grouped in a
-# subdirectory, e.g. ``gt_amount/stage2_fits/``. Grouping keeps a 60-run sweep from
-# burying the handful of ordinary runs that share the dataset directory.
-#
-# Run *tokens* stay flat either way — they are dict keys, log-file stems and the
-# CSV ``run`` column, and `parse_run_token` matches a single directory name. Only
-# the path to a run and the ``exp_uid`` / ``track_result`` that addresses it carry
-# the subdirectory. Both are consumed as ``<root> / <value>``, so a POSIX relative
-# path works unchanged in every script that resolves one.
+# Every group of runs is a sweep of the output directory (see ``mhat.dataset``):
+# the stage-1 regularizer fits and the stage-2 fits under ``ssvm/sweeps/<id>/runs/``
+# of the train movie, the held-out solves under ``tracking/sweeps/<id>/runs/`` of
+# the test movie. Run *tokens* (``gta_A_n050_s0``, ``regsweep_r08``) are the run
+# names -- dict keys, log-file stems, the CSV ``run`` column -- and
+# `parse_run_token` matches one. The reduced GT lives in ``<output_dir>/gt/``.
+
+#: Config keys naming each sweep, and their defaults.
+SWEEP_ID_KEYS = {
+    "regsweep_id": "regsweep",
+    "fits_id": "gt_amount_fits",
+    "solves_id": "gt_amount_solves",
+}
+#: Keys of the old results layout, and what replaced each.
+OLD_GT_AMOUNT_KEYS = {
+    "runs_subdir": "fits_id",
+    "test_runs_subdir": "solves_id",
+    "regsweep_subdir": "regsweep_id",
+    "gt_subsets_dirname": "gt_subsets_name",
+    "gt_crops_dirname": "gt_crops_name",
+    "test_dataset": "the output_dir of test_template",
+    "ctc_gt": "ctc_seg_dir",
+    "test_ctc_gt": "test_ctc_seg_dir",
+    "gt_data_dir": "gt_tracks / gt_seg",
+}
 
 
-def run_dir(root: Path, subdir: str, token: str) -> Path:
-    """Directory for one run under a dataset root, with or without grouping."""
-    return root / subdir / token if subdir else root / token
+def check_gt_amount_config(config: dict) -> None:
+    """Refuse a GT-amount config written for the old results layout."""
+    old = {key: new for key, new in OLD_GT_AMOUNT_KEYS.items() if key in config}
+    if old:
+        raise ValueError(
+            "GT-amount config uses keys of the old results layout: "
+            + ", ".join(f"{key} (now {new})" for key, new in old.items())
+        )
+    for key in SWEEP_ID_KEYS:
+        if "/" in str(config.get(key, "")):
+            raise ValueError(f"{key} names a sweep: a single name, got {config[key]!r}")
 
 
-def run_ref(subdir: str, token: str) -> str:
-    """The ``exp_uid`` / ``track_result`` that addresses `token` from a dataset root.
-
-    Forward slashes, so the value is identical on Windows and on the cluster — the
-    configs are written on one and read on the other.
-    """
-    return f"{subdir}/{token}" if subdir else token
+def sweep_id(config: dict, key: str) -> str:
+    """The id of one of the experiment's sweeps (``regsweep_id``, ``fits_id``, ``solves_id``)."""
+    return config.get(key, SWEEP_ID_KEYS[key])
 
 
-def iter_run_dirs(root: Path, subdir: str = ""):
-    """Yield the run directories of a sweep, sorted, or nothing if none exist yet.
+def sweep_dir(output_dir, stage: str, sweep: str) -> Path:
+    """A sweep's directory: ``<output_dir>/<stage>/sweeps/<sweep>``."""
+    return Path(output_dir) / stage / "sweeps" / sweep
 
-    Callers filter by `token_regex` / `parse_run_token` on ``.name``, so this must
-    stay one level deep: the grouping directory holds runs, not more groups.
-    """
-    base = root / subdir if subdir else root
-    if not base.is_dir():
-        return
-    yield from sorted(p for p in base.iterdir() if p.is_dir())
+
+def sweep_run_uid(sweep: str, token: str) -> str:
+    """The uid of run ``token`` of a sweep (forward slashes on every OS)."""
+    return f"sweeps/{sweep}/runs/{token}"
+
+
+def iter_sweep_runs(output_dir, stage: str, sweep: str):
+    """Yield a sweep's run directories, sorted, or nothing if none exist yet."""
+    runs = sweep_dir(output_dir, stage, sweep) / "runs"
+    if runs.is_dir():
+        yield from sorted(p for p in runs.iterdir() if p.is_dir())
+
+
+def gt_variant_root(output_dir, config: dict, kind: str) -> Path:
+    """Where reduced GT of one kind goes: ``<output_dir>/gt/<gt_<kind>_name or kind>``,
+    ``kind`` being ``"subsets"`` or ``"crops"``."""
+    return Path(output_dir) / "gt" / config.get(f"gt_{kind}_name", kind)
 
 
 def run_token(arm: str, size, seed: int, prefix: str = "gta") -> str:
-    """Canonical run name, used as fit output_name, test exp_uid and eval track_result.
+    """Canonical run name: the fit's and the held-out solve's run name in their sweeps.
 
     `size` is either the track count (int -> ``n050``) or an already-formed size
     token (str, e.g. ``gt_crops.fraction_token(0.25)`` -> ``f250``). Two annotation
@@ -332,7 +362,8 @@ def source_axis_kwargs(gt_tracks_path: Path, scale) -> dict:
 
 
 def materialize_masked_gt(
-    gt_data_dir: Path,
+    gt_tracks: Path,
+    gt_seg: Path,
     out_dir: Path,
     kept_track_ids,
     ft_graph,
@@ -345,13 +376,13 @@ def materialize_masked_gt(
 ) -> dict:
     """Write a reduced copy of the GT (geff graph + label volume) to `out_dir`.
 
-    The result is a drop-in ``gt_data_dir``: it holds ``correct_tracks.zarr`` and
-    ``correct_seg.zarr`` exactly like the full GT, so ``load_gt`` and
-    ``evaluate_tracks.py`` can be pointed straight at it. This is what the
-    follow-on hand-tuning phase scores against.
+    It holds ``correct_tracks.zarr`` and ``correct_seg.zarr`` like the full GT, so
+    a config's ``gt_tracks`` / ``gt_seg`` (for ``load_gt`` and ``evaluate_tracks.py``)
+    can point straight at them. This is what the follow-on hand-tuning phase and
+    the train-side scores use.
 
     Args:
-        gt_data_dir: directory holding the full ``correct_tracks.zarr`` / ``correct_seg.zarr``.
+        gt_tracks, gt_seg: the full GT (geff, and its node-id labeled volume).
         out_dir: destination directory (created).
         kept_track_ids: track labels to keep, in the funtracks-renumbered space.
         ft_graph: the funtracks graph from ``load_gt`` (node ids == geff node ids).
@@ -361,8 +392,7 @@ def materialize_masked_gt(
         The contents written to ``subset.json``.
     """
     kept_track_ids = {int(x) for x in kept_track_ids}
-    gt_tracks_path = Path(gt_data_dir) / "correct_tracks.zarr"
-    gt_seg_path = Path(gt_data_dir) / "correct_seg.zarr"
+    gt_tracks_path, gt_seg_path = Path(gt_tracks), Path(gt_seg)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -421,7 +451,7 @@ def materialize_masked_gt(
         "n_tracks": int(n_tracks),
         "n_tracks_total": int(n_tracks_total),
         "overlap_criterion": overlap_criterion,
-        "source_gt_dir": str(gt_data_dir),
+        "source_gt_tracks": str(gt_tracks_path),
         "source_node_ids_md5": _hash_node_ids(gt_tracks_path),
         "kept_track_ids": sorted(kept_track_ids),
         "kept_raw_track_ids": sorted(

@@ -11,11 +11,14 @@ Each run gets a GPU job for ``create_seg_hypotheses.py`` and a dependent CPU job
 for ``scripts/05_evaluation/seg_detectability.py``. A final collect job, gated on
 all of them, writes the comparison table.
 
+The sweep lives in ``<output_dir>/segmentation/sweeps/<sweep_id>/``, and so do
+its runs: run ``<label>`` is the segmentation run ``sweeps/<sweep_id>/runs/<label>``
+(a tracking config reads it with that ``seg_result``). As with tracking sweeps, a
+selected label whose run directory exists is refused unless ``--retry``.
+
 Spec TOML::
 
     sweep_id   = "droseg1"
-    experiment = "Fluo-N3DL-DRO"
-    dataset    = "01_nuclei_short"
 
     [lsf]
     env = "mhat-cluster"
@@ -28,7 +31,7 @@ Spec TOML::
     gt_tra = ".../01_GT/TRA"
     baseline = "aniso_none_cp0" # run label the collect step diffs against
 
-    [base]                      # a complete seg config, minus exp_uid
+    [base]                      # a complete seg config (raw_path, output_dir, ...), minus exp_uid
     ...
 
     [[runs]]
@@ -59,7 +62,14 @@ import toml
 REPO = Path(__file__).resolve().parents[2]
 
 sys.path.insert(0, str(REPO / "scripts" / "04_tracking"))
-from launch_sweep import bsub, check_no_windows_paths  # noqa: E402
+from launch_sweep import (  # noqa: E402
+    assign_uids,
+    bsub,
+    check_no_old_keys,
+    check_no_windows_paths,
+)
+
+RUN_STAGE = "segmentation"
 
 SEG_INNER = (
     "conda run -n {env} --no-capture-output "
@@ -83,7 +93,7 @@ COLLECT_INNER = (
 # Structural keys that decide *what* is being segmented rather than how. An
 # override here means the runs are no longer comparable, which is the one thing
 # a sweep must guarantee.
-PROTECTED = {"experiment", "dataset", "input_base_dir", "output_base_dir", "exp_uid"}
+PROTECTED = {"raw_path", "output_dir", "exp_uid"}
 
 
 def set_dotted(config, path, value):
@@ -95,9 +105,16 @@ def set_dotted(config, path, value):
 
 
 def validate_spec(spec):
-    for key in ("sweep_id", "experiment", "dataset", "base", "runs"):
+    for key in ("sweep_id", "base", "runs"):
         if key not in spec:
             raise SystemExit(f"spec is missing required key {key!r}")
+    check_no_old_keys(spec, "the spec")
+    check_no_old_keys(spec["base"], "[base]")
+    for key in ("raw_path", "output_dir"):
+        if key not in spec["base"]:
+            raise SystemExit(f"[base] is missing {key!r}")
+    if "exp_uid" in spec["base"]:
+        raise SystemExit("[base] must not set exp_uid -- it is generated per run")
     check_no_windows_paths(spec["base"], "[base]")
 
     det = spec.get("detectability", {})
@@ -142,7 +159,7 @@ def validate_spec(spec):
         raise SystemExit(f"[detectability] baseline {baseline!r} is not a run label")
 
 
-def build_configs(spec, sweep_dir):
+def build_configs(spec, sweep_dir, uids):
     config_dir = sweep_dir / "seg_configs"
     config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -150,12 +167,7 @@ def build_configs(spec, sweep_dir):
     for run in spec["runs"]:
         label = run["label"]
         config = copy.deepcopy(spec["base"])
-        config["experiment"] = spec["experiment"]
-        config["dataset"] = spec["dataset"]
-        # The uid is the label, not a timestamp: a rerun of one condition then
-        # lands back in the same directory instead of silently forking a second
-        # copy of the same parameters.
-        config["exp_uid"] = f"{spec['sweep_id']}_{label}"
+        config["exp_uid"] = uids[label]
         for path, value in run.get("overrides", {}).items():
             set_dotted(config, path, value)
 
@@ -163,10 +175,7 @@ def build_configs(spec, sweep_dir):
         with open(config_path, "w") as handle:
             toml.dump(config, handle)
 
-        seg_dir = (
-            Path(spec["base"]["output_base_dir"])
-            / spec["experiment"] / spec["dataset"] / config["exp_uid"]
-        )
+        seg_dir = Path(spec["base"]["output_dir"]) / RUN_STAGE / config["exp_uid"]
         records.append({
             "label": label,
             "exp_uid": config["exp_uid"],
@@ -184,6 +193,11 @@ def main():
     parser.add_argument("spec")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only", nargs="+", default=None)
+    parser.add_argument(
+        "--retry", action="store_true",
+        help="give selected labels whose run directory already exists a new run name "
+        "(runs/<label>_r2, ...) instead of refusing",
+    )
     args = parser.parse_args()
 
     spec = toml.load(args.spec)
@@ -200,23 +214,29 @@ def main():
     det_walltime = lsf.get("det_walltime", "1:00")
 
     det = spec["detectability"]
-    sweep_dir = (
-        Path(spec["base"]["output_base_dir"])
-        / spec["experiment"] / spec["dataset"] / "sweeps" / spec["sweep_id"]
+    sweep_dir = Path(spec["base"]["output_dir"]) / RUN_STAGE / "sweeps" / spec["sweep_id"]
+    manifest_path = sweep_dir / "manifest.toml"
+    previous_runs = (
+        {r["label"]: r for r in toml.load(manifest_path).get("runs", [])}
+        if manifest_path.is_file() else {}
     )
-    log_dir = sweep_dir / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    records = build_configs(spec, sweep_dir)
-    print(f"Wrote {len(records)} seg configs to {sweep_dir / 'seg_configs'}")
-
-    selected = records
+    labels = [run["label"] for run in spec["runs"]]
     if args.only:
-        known = {record["label"] for record in records}
-        unknown = [label for label in args.only if label not in known]
+        unknown = [label for label in args.only if label not in labels]
         if unknown:
             raise SystemExit(f"unknown labels: {unknown}")
-        selected = [record for record in records if record["label"] in args.only]
+    selected_labels = set(args.only) if args.only else set(labels)
+    uids = assign_uids(
+        spec, selected_labels,
+        {label: run.get("exp_uid") for label, run in previous_runs.items()},
+        args.retry, stage=RUN_STAGE,
+    )
+
+    log_dir = sweep_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    records = build_configs(spec, sweep_dir, uids)
+    print(f"Wrote {len(records)} seg configs to {sweep_dir / 'seg_configs'}")
+    selected = [record for record in records if record["label"] in selected_labels]
 
     det_jobs = []          # this invocation's det jobs, for the collect gate
     for record in selected:
@@ -255,22 +275,19 @@ def main():
         print(f"\n(dry run) {len(selected)} runs; nothing submitted, no manifest.")
         return
 
-    manifest_path = sweep_dir / "manifest.toml"
-    if manifest_path.is_file():
-        previous = {r["label"]: r for r in toml.load(manifest_path).get("runs", [])}
-        for record in records:
-            for key in ("seg_job_id", "det_job_id"):
-                if not record.get(key):
-                    record[key] = previous.get(record["label"], {}).get(key, "")
-    else:
-        for record in records:
-            record.setdefault("seg_job_id", "")
-            record.setdefault("det_job_id", "")
+    # Preserve job ids from earlier partial submissions (repeated --only),
+    # unless the label was retried under a new run name since.
+    for record in records:
+        old = previous_runs.get(record["label"], {})
+        for key in ("seg_job_id", "det_job_id"):
+            if not record.get(key):
+                same_run = old.get("exp_uid") == record["exp_uid"]
+                record[key] = old.get(key, "") if same_run else ""
 
     manifest = {
         "sweep_id": spec["sweep_id"],
-        "experiment": spec["experiment"],
-        "dataset": spec["dataset"],
+        "output_dir": spec["base"]["output_dir"],
+        "stage": RUN_STAGE,
         "spec": str(Path(args.spec).resolve()),
         "sweep_dir": str(sweep_dir),
         "baseline": det.get("baseline", ""),

@@ -151,7 +151,8 @@ def main():
     ))
     lines = [
         f"Segmentation sweep: {manifest['sweep_id']}",
-        f"{manifest['experiment']} / {manifest['dataset']}",
+        # The dataset is named by its output directory: <experiment>/<dataset>.
+        "/".join(Path(manifest["output_dir"]).parts[-2:]),
         "",
         f"{'run':<24}{'overmrg':>9}{'srP90':>8}{'collided':>9}{'off_med':>9}"
         f"{'recall':>8}{'miss':>6}{'+':>5}{'-':>5}",

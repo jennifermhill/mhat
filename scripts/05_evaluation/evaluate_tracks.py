@@ -193,12 +193,8 @@ def run_evaluation(config, gt_tracks, gt_seg, ctc_seg_dir, pred_data_dir):
     return track_metrics, matched
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config")
-    args = parser.parse_args()
-    config = toml.load(args.config)
-
+def evaluate(config):
+    """Evaluate one tracking (or ssvm) run as the config says; return the eval dir."""
     ds = Dataset.from_config(config)
     track_uid = config["track_result"]
     # A tracking run, or an SSVM fit (stage "ssvm"), whose solution is scored the
@@ -232,4 +228,15 @@ if __name__ == "__main__":
         toml.dump(config, config_file)
 
     # FN edge / FN node / GT drift diagnostics, reusing the matching computed above
-    run_diagnostics(config, gt_tracks.parent, pred_data_dir, output_dir, matched=matched)
+    run_diagnostics(
+        config, ds, track_stage, track_uid, gt_tracks, gt_seg, output_dir,
+        matched=matched,
+    )
+    return output_dir
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config")
+    args = parser.parse_args()
+    evaluate(toml.load(args.config))

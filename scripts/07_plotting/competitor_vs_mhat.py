@@ -18,9 +18,7 @@ Config schema (TOML) -- see configs/evaluation/trackmate_vs_mhat.toml:
     output_png    = "..."
     title         = "..."
     ylabel        = "Score (higher is better)"
-    experiment    = "NC281-sparse-label"
-    dataset_dir   = "02_nuclei_denoised_train"
-    eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+    output_dir    = ".../experiments/NC281-sparse-label/02_nuclei_denoised_train"
 
     metric_order = ["target_effectiveness", "track_fractions", "track_purity"]
     [metrics.target_effectiveness]
@@ -29,20 +27,24 @@ Config schema (TOML) -- see configs/evaluation/trackmate_vs_mhat.toml:
 
     method_order = ["mhat", "trackmate"]
     [methods.mhat]
-    label        = "MHAT"
-    color        = "#CC79A7"
-    tracking_uid = "2026-07-02_10-55-33"
+    label = "MHAT"
+    color = "#CC79A7"
+    run   = "tracking/2026-07-02_10-55-33"     # a competitor's result is a run too,
+    eval  = "manual_basic+track_overlap_..."   # e.g. "tracking/trackmate"
+
+Each method names its run and exact eval (see plot_spec.py).
 
 Usage:
     python competitor_vs_mhat.py configs/evaluation/trackmate_vs_mhat.toml [--output foo.png]
 """
 import argparse
-import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+
+import plot_spec
 
 
 def walk_json_path(obj, path):
@@ -55,20 +57,12 @@ def walk_json_path(obj, path):
     return cur
 
 
-def load_metric(cfg, uid, json_path):
-    """Return the metric value for one (method, metric), or None if missing."""
-    path = (
-        Path(cfg["eval_base_dir"])
-        / cfg["experiment"]
-        / cfg["dataset_dir"]
-        / uid
-        / "track_metrics.json"
-    )
-    if not path.is_file():
-        print(f"warning: metrics missing for {uid} ({path})")
+def load_metric(cfg, method, json_path):
+    """Return the metric value for one (method, metric), or None for a placeholder.
+    A named eval that is missing raises."""
+    track_metrics = plot_spec.load_metrics(cfg, method)
+    if track_metrics is None:
         return None
-    with open(path) as f:
-        track_metrics = json.load(f)
     return float(walk_json_path(track_metrics, json_path))
 
 
@@ -89,7 +83,7 @@ def main():
     for metric_key in metric_keys:
         json_path = metrics[metric_key]["json_path"]
         for mk in method_keys:
-            values[mk].append(load_metric(cfg, methods[mk]["tracking_uid"], json_path))
+            values[mk].append(load_metric(cfg, methods[mk], json_path))
 
     x = np.arange(len(metric_keys))
     n = len(method_keys)
@@ -127,7 +121,7 @@ def main():
     ax.set_axisbelow(True)
 
     fig.tight_layout()
-    output_path = Path(args.output or cfg["output_png"])
+    output_path = plot_spec.figure_path(cfg, f"{Path(args.config).stem}.png", args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     print(f"Saved {output_path}")

@@ -26,26 +26,30 @@ Config schema (TOML) -- see configs/evaluation/ssvm_vs_handtuned.toml:
 
     [datasets.mda231]
     name        = "MDA231"
-    experiment  = "Fluo-C3DL-MDA231"
-    dataset_dir = "01_cells"
-    eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+    output_dir  = ".../experiments/Fluo-C3DL-MDA231/01_cells"
     json_path   = ["CTCMetrics", "TRA"]
     reduction   = "scalar"      # or "mean"
     [datasets.mda231.hand_tuned]
-    tracking_uid = "2026-05-15_10-55-56"
+    run  = "tracking/sweeps/regenF01/runs/baseline"
+    eval = "ctc_ctc_2026-09-22_16-18-15"
     [datasets.mda231.ssvm]
-    tracking_uid = "ssvm_refit"
+    run  = "ssvm/sweeps/stage1_regsweep_regen/runs/regsweep_r05"
+    eval = "ctc_ctc_..."
+
+Each condition names its run and exact eval (see plot_spec.py); a placeholder
+bar is drawn hatched as "no result", a named eval that is missing raises.
 
 Usage:
     python scripts/07_plotting/ssvm_vs_handtuned_figure.py configs/evaluation/ssvm_vs_handtuned.toml [--output foo.png]
 """
 import argparse
-import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+
+import plot_spec
 
 
 def walk_json_path(obj, path):
@@ -67,21 +71,10 @@ def reduce_value(value, reduction):
 
 
 def load_metric(ds_cfg, cond_cfg):
-    """Return the metric value for one (dataset, condition), or None if missing."""
-    uid = cond_cfg["tracking_uid"]
-    metrics_filename = cond_cfg.get("metrics_filename", ds_cfg.get("metrics_filename", "track_metrics.json"))
-    path = (
-        Path(ds_cfg["eval_base_dir"])
-        / ds_cfg["experiment"]
-        / ds_cfg["dataset_dir"]
-        / uid
-        / metrics_filename
-    )
-    if not path.is_file():
-        print(f"warning: metrics missing for {ds_cfg['experiment']}/{ds_cfg['dataset_dir']}/{uid} ({path})")
+    """Return the metric value for one (dataset, condition), or None for a placeholder."""
+    track_metrics = plot_spec.load_metrics(ds_cfg, cond_cfg)
+    if track_metrics is None:
         return None
-    with open(path) as f:
-        track_metrics = json.load(f)
     return reduce_value(walk_json_path(track_metrics, ds_cfg["json_path"]), ds_cfg.get("reduction", "scalar"))
 
 

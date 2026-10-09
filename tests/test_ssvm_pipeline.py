@@ -153,7 +153,9 @@ def test_outputs_round_trip_as_ground_truth(on_disk_scene, tracking_config, tmp_
     gt_dir.mkdir()
     shutil.copytree(out_dir / "pred_tracks.zarr", gt_dir / "correct_tracks.zarr")
     shutil.copytree(out_dir / "pred_seg.zarr", gt_dir / "correct_seg.zarr")
-    gt_graph, gt_seg = pipeline.load_gt(gt_dir, scale)
+    gt_graph, gt_seg = pipeline.load_gt(
+        gt_dir / "correct_tracks.zarr", gt_dir / "correct_seg.zarr", scale
+    )
     assert gt_graph.number_of_nodes() == solution.number_of_nodes()
     assert gt_seg.shape == fragments.shape
     for _, data in gt_graph.nodes(data=True):
@@ -180,46 +182,9 @@ def test_load_gt_refuses_a_rank_mismatch(on_disk_scene, tracking_config, tmp_pat
     (gt_dir / "pred_tracks.zarr").rename(gt_dir / "correct_tracks.zarr")
     (gt_dir / "pred_seg.zarr").rename(gt_dir / "correct_seg.zarr")
     with pytest.raises(AssertionError, match="not the same rank"):
-        pipeline.load_gt(gt_dir, [1.0] * (6 - ndim))
-
-
-@pytest.mark.parametrize("has_2d,has_3d", [(True, True), (True, False), (False, True)])
-def test_flow_policy_follows_the_data_rank(tmp_path, ndim, synthetic_fragments, has_2d, has_3d):
-    """3D data needs a 3D flow and takes the 2D one if present; 2D needs the 2D one."""
-    input_base = tmp_path
-    seg_dir = input_base / "segmentation" / "exp" / "ds" / "seg0"
-    seg_dir.mkdir(parents=True)
-    zarr.open(seg_dir / "data.zarr", mode="a").create_dataset(
-        "fragments", data=synthetic_fragments
-    )
-    flow_base = input_base / "opticalflow" / "exp" / "ds"
-    if has_2d:
-        (flow_base / "opticalflow_2d" / "flow0").mkdir(parents=True)
-    if has_3d:
-        (flow_base / "opticalflow_3d" / "flow0").mkdir(parents=True)
-    config = {
-        "input_base_dir": str(input_base), "experiment": "exp", "dataset": "ds",
-        "flow_result": "flow0",
-    }
-
-    if ndim == 3 and not has_3d:
-        with pytest.raises(AssertionError, match="3D optical flow"):
-            pipeline.resolve_flow_dirs(config, seg_dir)
-        return
-    if ndim == 2 and not has_2d:
-        with pytest.raises(AssertionError, match="2D optical flow"):
-            pipeline.resolve_flow_dirs(config, seg_dir)
-        return
-
-    flow_dirs = pipeline.resolve_flow_dirs(config, seg_dir)
-    if ndim == 3:
-        assert flow_dirs["3d"] == flow_base / "opticalflow_3d" / "flow0"
-        assert flow_dirs["2d"] == (flow_base / "opticalflow_2d" / "flow0" if has_2d else None)
-    else:
-        assert flow_dirs["2d"] == flow_base / "opticalflow_2d" / "flow0"
-        assert flow_dirs["3d"] is None, "2D data must never be handed a 3D flow"
-
-    assert pipeline.resolve_flow_dirs({**config, "flow_result": None}, seg_dir) == NO_FLOW
+        pipeline.load_gt(
+            gt_dir / "correct_tracks.zarr", gt_dir / "correct_seg.zarr", [1.0] * (6 - ndim)
+        )
 
 
 def test_crop_geometry_follows_the_volume_rank(

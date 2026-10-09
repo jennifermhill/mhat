@@ -46,7 +46,7 @@ from mhat.evaluation._report import Report
 from mhat.evaluation.fn_analysis import spatial_axis_names
 
 RESULT_DIR = Path(
-    "Y:/jennifer/mhat/experiments/tracking/primary_nk_cells/01_cells/nkgraph_size120"
+    "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells/tracking/sweeps/nkgraph/runs/size120"
 )
 TRACKS_ZARR = RESULT_DIR / "pred_tracks.zarr"
 

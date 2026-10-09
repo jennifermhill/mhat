@@ -16,8 +16,14 @@ tracks graph are dropped from both layers.
 Each GT point is drawn only in its own timepoint, and copied onto the nearby z
 slices (see ``--z-spread``) so it stays visible while scrolling through z.
 
+It takes an evaluation directory (``<run>/evaluation/<label>/``) and matches the
+way that evaluation did, from the ``eval_config.toml`` saved there. The run and
+its raw movie are found from where the eval sits; ``--raw``, ``--gt-tracks`` and
+``--gt-seg`` cover paths that differ on this machine, or an eval saved before the
+output-layout migration, whose config names no GT paths.
+
 Usage:
-    conda run -n mhat2 --no-capture-output python scripts/05_evaluation/view_matched_seg_napari.py scripts/05_evaluation/eval_config.toml
+    python scripts/05_evaluation/view_matched_seg_napari.py <output_dir>/tracking/<uid>/evaluation/<label>
 """
 import argparse
 from pathlib import Path
@@ -30,7 +36,7 @@ import toml
 import zarr
 from napari.utils.colormaps import DirectLabelColormap
 
-from mhat.evaluation.diagnostics import load_run_config
+from mhat.dataset import SOLUTION_STAGES, Dataset, absolute_path, require_dir
 from mhat.evaluation.evaluate_tracking import match_tracking
 
 GT_COLOR = "yellow"
@@ -143,24 +149,10 @@ def gt_points(matched, start_frame, end_frame):
     return np.array(all_points), np.array(fn_points)
 
 
-def find_raw(bases, experiment, dataset):
-    """The raw zarr for this dataset, or None if it isn't reachable from here.
-
-    The tracking config's ``raw_base_dir`` often points at the cluster, so the
-    sibling ``data`` directory of ``input_base_dir`` is tried as well.
-    """
-    for base in bases:
-        if not base:
-            continue
-        path = Path(base) / experiment / f"{dataset}.zarr"
-        if path.exists():
-            return path
-    return None
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("config", help="Evaluation config (same one evaluate_tracks.py uses)")
+    parser.add_argument("eval_dir", type=Path,
+                        help="an evaluation directory, <run>/evaluation/<label>")
     parser.add_argument("-s", "--start-frame", type=int, default=0)
     parser.add_argument("-e", "--end-frame", type=int, default=None)
     parser.add_argument("--point-size", type=float, default=6.0,
@@ -174,36 +166,42 @@ if __name__ == "__main__":
                         help="Override the config's match_threshold for this view only "
                              "(point matcher; world units). The config file is not modified.")
     parser.add_argument("--no-raw", action="store_true", help="Skip the raw image layer.")
-    parser.add_argument("--raw-base-dir", default=None,
-                        help="Where to look for <experiment>/<dataset>.zarr. Defaults to "
-                             "the configs' raw_base_dir, then input_base_dir's sibling "
-                             "'data' directory.")
+    parser.add_argument("--raw", type=Path, default=None,
+                        help="The raw movie, if not at the path in the run's raw.toml.")
+    parser.add_argument("--gt-tracks", type=Path, default=None,
+                        help="GT tracks, if not at the eval config's gt_tracks.")
+    parser.add_argument("--gt-seg", type=Path, default=None,
+                        help="GT segmentation, if not at the eval config's gt_seg.")
     args = parser.parse_args()
-    config = toml.load(args.config)
+    eval_dir = absolute_path(args.eval_dir)
+    config = toml.load(require_dir(eval_dir, "Evaluation directory") / "eval_config.toml")
 
     if args.match_threshold is not None:
         config["match_threshold"] = args.match_threshold
         if "threshold" in config:  # this key wins in build_matcher, keep them in sync
             config["threshold"] = args.match_threshold
 
-    input_base_dir = Path(config["input_base_dir"])
-    experiment = config["experiment"]
-    dataset = config["dataset"]
-    track_result = config["track_result"]
-
-    gt_data_dir = input_base_dir / "tracking" / experiment / dataset
-    pred_data_dir = gt_data_dir / track_result
+    # <run>/evaluation/<label>: the run is two levels up.
+    pred_data_dir = eval_dir.parent.parent
+    ds = Dataset.from_run_dir(pred_data_dir, SOLUTION_STAGES)
+    gt_tracks = args.gt_tracks or config.get("gt_tracks")
+    if gt_tracks is None:
+        raise SystemExit(
+            f"{eval_dir}/eval_config.toml names no gt_tracks (saved before the "
+            "output-layout migration); pass --gt-tracks (and --gt-seg for the ctc matcher)."
+        )
+    gt_seg = args.gt_seg or config.get("gt_seg")
     pred_seg_path = pred_data_dir / "pred_seg.zarr"
     pred_tracks_path = pred_data_dir / "pred_tracks.zarr"
     if not pred_seg_path.exists():
         raise SystemExit(f"No predicted segmentation at {pred_seg_path} - nothing to split.")
 
-    run_config = load_run_config(pred_data_dir)
     start, end = args.start_frame, args.end_frame
 
-    print(f"Matching {experiment}/{dataset}/{track_result} "
-          f"(matcher={config.get('matcher', 'point')})...")
-    matched = match_tracking(config, gt_data_dir, pred_data_dir)
+    print(f"Matching {pred_data_dir} (matcher={config.get('matcher', 'point')})...")
+    matched = match_tracking(
+        config, Path(gt_tracks), Path(gt_seg) if gt_seg else None, pred_data_dir
+    )
 
     matched_nodes = {
         pred for pred in (matched.get_gt_pred_match(n)
@@ -235,10 +233,8 @@ if __name__ == "__main__":
 
     viewer = napari.Viewer()
 
-    raw_bases = [args.raw_base_dir, config.get("raw_base_dir"),
-                 run_config.get("raw_base_dir"), input_base_dir.parent / "data"]
-    raw_path = None if args.no_raw else find_raw(raw_bases, experiment, dataset)
-    if raw_path is not None:
+    raw_path = None if args.no_raw else (args.raw or ds.raw_path)
+    if raw_path is not None and Path(raw_path).exists():
         raw = da.from_zarr(str(raw_path))[start:end]
         if raw.ndim == seg.ndim + 1:  # (t, c, z, y, x) -> first channel
             raw = raw[:, 0]

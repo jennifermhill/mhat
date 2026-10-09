@@ -1,18 +1,23 @@
 """Generate and submit a coordinate-wise parameter sweep to LSF.
 
 A sweep is described by a single spec TOML (see ``scratch_configs/sweeps/``). The spec
-holds one ``[base]`` tracking config, one ``[eval]`` stub, optional
-``[conditions.<name>]`` tables, and a list of ``[[runs]]``, each naming a
-``label``, the ``condition`` it belongs to, and a small ``[runs.overrides]``
-table. Parameters are layered ``base`` -> ``conditions[condition]`` ->
-``overrides``, so a condition states once which costs it zeroes and each run only
-states the one or two values it is sweeping. For each run this script:
+holds a ``sweep_id``, one ``[base]`` tracking config (with ``raw_path``,
+``output_dir``, ``seg_result``, ...), one ``[eval]`` stub (GT paths, ``metrics``,
+``matcher``), optional ``[conditions.<name>]`` tables, and a list of ``[[runs]]``,
+each naming a ``label``, the ``condition`` it belongs to, and a small
+``[runs.overrides]`` table. Parameters are layered ``base`` ->
+``conditions[condition]`` -> ``overrides``, so a condition states once which costs
+it zeroes and each run only states the one or two values it is sweeping.
+
+The sweep lives in ``<output_dir>/tracking/sweeps/<sweep_id>/``, and so do its
+runs: run ``<label>`` is the tracking run ``sweeps/<sweep_id>/runs/<label>``. For
+each run this script:
 
   1. writes ``<sweep>/track_configs/<label>.toml`` = the layered config, with
-     ``exp_uid = "<sweep_id>_<label>"`` (``run_tracking.py`` honours an explicit
-     ``exp_uid`` instead of minting a timestamp),
-  2. writes ``<sweep>/eval_configs/<label>.toml`` = eval stub with
-     ``track_result`` pointing at that ``exp_uid``,
+     that ``exp_uid``,
+  2. writes ``<sweep>/eval_configs/<label>.toml`` = eval stub plus
+     ``output_dir``, ``track_result`` (that run) and ``eval_name = <sweep_id>``,
+     which is how ``collect_sweep.py`` finds the eval inside the run,
   3. submits the tracking job, then the eval job gated on ``ended(<track job>)``
      -- ``ended()`` rather than ``done()`` because tracking sometimes exits 120
      during interpreter shutdown *after* writing valid output,
@@ -20,6 +25,60 @@ states the one or two values it is sweeping. For each run this script:
 
 Everything (configs, logs, manifest) is written under the shared filesystem, not
 node-local scratch, so the compute nodes can read it.
+
+``stage = "ssvm"`` in the spec makes it a sweep of SSVM weight fits instead:
+each job runs ``fit_weights_ssvm.py`` (``[base]`` then also needs ``gt_tracks`` /
+``gt_seg``), runs land in ``<output_dir>/ssvm/sweeps/<sweep_id>/runs/<label>``,
+and each eval scores the fit's solution (``track_stage = "ssvm"``). An SSVM
+ablation is one such sweep: each condition is a ``[[runs]]`` entry, a feature is
+left out of a fit with its ``ablate_*`` flag (``ablate_drift``, ``ablate_area``,
+``ablate_intensity``, ``ablate_curvature``, ``ablate_cohesion_adhesion``; that is
+the one thing those flags still do), and a different segmentation (``- Merges``,
+``- Affinities``) is a ``seg_result`` override::
+
+    sweep_id = "ssvm_ablation"
+    stage = "ssvm"
+
+    [lsf]
+    track_slots = 8          # the fit job
+    track_walltime = "24:00"
+    eval_slots = 2
+    eval_walltime = "1:00"
+
+    [base]                   # a complete fit config, minus exp_uid
+    raw_path = ".../data/Fluo-C3DL-MDA231/01_cells.zarr"
+    output_dir = ".../experiments/Fluo-C3DL-MDA231/01_cells"
+    seg_result = "fs1cpm6_seg_base_wzfix"
+    flow_result = "2026-09-22_14-11-08"
+    gt_tracks = ".../Fluo-C3DL-MDA231/01_cells/gt/ctc/correct_tracks.zarr"
+    gt_seg = ".../Fluo-C3DL-MDA231/01_cells/gt/ctc/correct_seg.zarr"
+    ssvm_reg = 0.1
+    # ... the remaining tracking keys
+
+    [eval]
+    gt_tracks = ".../gt/ctc/correct_tracks.zarr"
+    gt_seg = ".../gt/ctc/correct_seg.zarr"
+    ctc_seg_dir = ".../gt/ctc/01_GT/SEG"
+    metrics = ["ctc", "f1_aogm", "track_overlap"]
+    matcher = "ctc"
+
+    [[runs]]
+    label = "ssvm_full"
+    [[runs]]
+    label = "ssvm_no_drift"
+    [runs.overrides]
+    ablate_drift = true
+    [[runs]]
+    label = "ssvm_no_merges"
+    [runs.overrides]
+    seg_result = "fs1cpm6_seg_nomrg_wzfix"
+
+No run is ever redone in place. Before submitting anything the launcher refuses
+if a selected label's run directory already exists (a crashed run leaves one,
+since tracking writes its config first). ``--retry`` gives those labels a new run
+name, ``runs/<label>_r2`` (``_r3``, ...), recorded in the manifest; the old
+directory is left for you to delete. A finished run whose eval failed is
+re-evaluated with ``launch_evals.py`` instead.
 
 Usage, from the repo root on the cluster::
 
@@ -57,11 +116,8 @@ JOB_ID_RE = re.compile(r"Job <(\d+)>")
 # Structural / IO parameters that a sweep must never vary: changing them makes
 # runs incomparable (or violates the "do not tune" rule in CLAUDE.md).
 PROTECTED_KEYS = {
-    "raw_base_dir",
-    "input_base_dir",
-    "output_base_dir",
-    "experiment",
-    "dataset",
+    "raw_path",
+    "output_dir",
     "exp_uid",
     "size_threshold",
     "max_edge_distance",
@@ -79,14 +135,34 @@ OPTIONAL_KEYS = {
     "z_flow_min_pass_pixels",
     "max_timepoints",
     "division_weight",
-    "graph_cache_dir",
+    "graph_cache",
+    # SSVM fits: the regularizer, and the features a fit leaves out.
+    "ssvm_reg", "ssvm_max_iter", "ssvm_eps", "iogt_threshold",
+    "ablate_drift", "ablate_area", "ablate_intensity", "ablate_curvature",
+    "ablate_cohesion_adhesion",
 }
+
+# Keys of the old results layout. A spec still carrying them was written for it.
+OLD_LAYOUT_KEYS = (
+    "input_base_dir", "output_base_dir", "raw_base_dir", "experiment", "dataset",
+    "graph_cache_dir", "gt_data_dir", "ctc_gt",
+)
+# Eval keys the launcher fills in for each run.
+FILLED_EVAL_KEYS = ("output_dir", "track_result", "track_stage", "eval_name")
+RUN_STAGE = "tracking"
+SPEC_STAGES = ("tracking", "ssvm")
 
 TRACK_INNER = (
     "export OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads} "
     "OPENBLAS_NUM_THREADS={threads} && "
     "module load gurobi && conda run -n {env} --no-capture-output "
     "python -u scripts/04_tracking/run_tracking.py {cfg}"
+)
+FIT_INNER = (
+    "export OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads} "
+    "OPENBLAS_NUM_THREADS={threads} && "
+    "module load gurobi && conda run -n {env} --no-capture-output "
+    "python -u scripts/04_tracking/fit_weights_ssvm.py {cfg}"
 )
 EVAL_INNER = (
     "export OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads} "
@@ -103,13 +179,33 @@ def check_no_windows_paths(config, where):
             raise SystemExit(f"{where}: {key} = {value!r} is a Windows path")
 
 
+def check_no_old_keys(table, where):
+    old = [key for key in OLD_LAYOUT_KEYS if key in table]
+    if old:
+        raise SystemExit(
+            f"{where} uses keys of the old results layout: {old}. Specs now give "
+            "raw_path / output_dir in [base] and GT paths in [eval]; the dataset is "
+            "named by output_dir (see output_layout_plan.md, Part 2, convention 1)."
+        )
+
+
 def validate_spec(spec, allow_protected=False):
-    for key in ("sweep_id", "experiment", "dataset"):
-        if key not in spec:
-            raise SystemExit(f"spec is missing required key {key!r}")
+    if "sweep_id" not in spec:
+        raise SystemExit("spec is missing required key 'sweep_id'")
+    check_no_old_keys(spec, "the spec")
     base = spec.get("base")
     if not base:
         raise SystemExit("spec is missing the [base] tracking config")
+    check_no_old_keys(base, "[base]")
+    stage = spec.get("stage", RUN_STAGE)
+    if stage not in SPEC_STAGES:
+        raise SystemExit(f"stage must be one of {SPEC_STAGES}, got {stage!r}")
+    required = ("raw_path", "output_dir", "seg_result")
+    if stage == "ssvm":
+        required += ("gt_tracks", "gt_seg")
+    for key in required:
+        if key not in base:
+            raise SystemExit(f"[base] is missing {key!r}")
     if "exp_uid" in base:
         raise SystemExit("[base] must not set exp_uid -- it is generated per run")
     check_no_windows_paths(base, "[base]")
@@ -117,6 +213,12 @@ def validate_spec(spec, allow_protected=False):
     eval_stub = spec.get("eval")
     if not eval_stub:
         raise SystemExit("spec is missing the [eval] config stub")
+    check_no_old_keys(eval_stub, "[eval]")
+    filled = [key for key in FILLED_EVAL_KEYS if key in eval_stub]
+    if filled:
+        raise SystemExit(f"[eval] must not set {filled}: the launcher fills them per run")
+    if "gt_tracks" not in eval_stub:
+        raise SystemExit("[eval] is missing gt_tracks")
     check_no_windows_paths(eval_stub, "[eval]")
     # Omitting `matcher` silently falls back to PointMatcher and produces wrong
     # (lower) CTC numbers with no error -- see the phantom-regression note in
@@ -177,7 +279,7 @@ def validate_spec(spec, allow_protected=False):
 def config_path_for_cmd(path, repo=REPO):
     """Path to hand the inner command, which runs with ``cwd=repo``.
 
-    Sweep artifacts live under ``output_base_dir``, which is only inside the repo
+    Sweep artifacts live under ``output_dir``, which is only inside the repo
     when the checkout and the data tree are the same directory. In a worktree
     (repo ``mhat-cluster``, data ``mhat``) they are siblings, so fall back to the
     absolute path rather than failing.
@@ -188,7 +290,46 @@ def config_path_for_cmd(path, repo=REPO):
         return str(path)
 
 
-def build_configs(spec, sweep_dir, repo=REPO):
+def run_uid(sweep_id, run_name):
+    return f"sweeps/{sweep_id}/runs/{run_name}"
+
+
+def run_dir_taken(output_dir, uid, stage=RUN_STAGE):
+    """Whether a run directory exists and holds anything (cf. Dataset.check_new_run)."""
+    run_dir = Path(output_dir) / stage / uid
+    return run_dir.is_dir() and any(run_dir.iterdir())
+
+
+def assign_uids(spec, selected_labels, previous, retry, stage=RUN_STAGE):
+    """Each label's run uid: the one the manifest already records, else
+    ``sweeps/<sweep_id>/runs/<label>``. A selected label whose run directory is
+    taken is refused, or with ``retry`` moved on to the next free ``<label>_rN``.
+    """
+    output_dir, sweep_id = spec["base"]["output_dir"], spec["sweep_id"]
+    uids, taken = {}, []
+    for run in spec["runs"]:
+        label = run["label"]
+        uid = previous.get(label) or run_uid(sweep_id, label)
+        if label in selected_labels and run_dir_taken(output_dir, uid, stage):
+            if not retry:
+                taken.append(uid)
+            else:
+                n = 2
+                while run_dir_taken(output_dir, run_uid(sweep_id, f"{label}_r{n}"), stage):
+                    n += 1
+                uid = run_uid(sweep_id, f"{label}_r{n}")
+                print(f"[{label}] earlier run directory exists; retrying as {uid}")
+        uids[label] = uid
+    if taken:
+        raise SystemExit(
+            f"{len(taken)} run directories already exist (crashed or finished runs), "
+            f"e.g. {taken[:3]}. Pass --retry to give those labels new run names, or "
+            "re-evaluate finished runs with launch_evals.py."
+        )
+    return uids
+
+
+def build_configs(spec, sweep_dir, uids, repo=REPO):
     """Write per-run tracking and eval configs; return the run records."""
     base = spec["base"]
     eval_stub = spec["eval"]
@@ -205,7 +346,7 @@ def build_configs(spec, sweep_dir, repo=REPO):
         label = run["label"]
         condition = run.get("condition", "")
         overrides = run.get("overrides", {})
-        exp_uid = f"{sweep_id}_{label}"
+        exp_uid = uids[label]
 
         track_config = copy.deepcopy(base)
         track_config.update(conditions.get(condition, {}))
@@ -216,9 +357,11 @@ def build_configs(spec, sweep_dir, repo=REPO):
             toml.dump(track_config, handle)
 
         eval_config = copy.deepcopy(eval_stub)
-        eval_config["experiment"] = spec["experiment"]
-        eval_config["dataset"] = spec["dataset"]
+        eval_config["output_dir"] = base["output_dir"]
         eval_config["track_result"] = exp_uid
+        eval_config["eval_name"] = sweep_id
+        if spec.get("stage", RUN_STAGE) != RUN_STAGE:
+            eval_config["track_stage"] = spec["stage"]
         eval_path = eval_dir / f"{label}.toml"
         with open(eval_path, "w") as handle:
             toml.dump(eval_config, handle)
@@ -291,16 +434,14 @@ def bsub(
 
 
 def sweep_dir_for(spec):
-    """Where a spec's configs, logs and manifest land (no side effects)."""
-    return (
-        Path(spec["base"]["output_base_dir"]) / "tracking" / spec["experiment"]
-        / spec["dataset"] / "sweeps" / spec["sweep_id"]
-    )
+    """Where a spec's configs, logs, manifest and runs land (no side effects)."""
+    stage = spec.get("stage", RUN_STAGE)
+    return Path(spec["base"]["output_dir"]) / stage / "sweeps" / spec["sweep_id"]
 
 
 def launch(
     spec_path, *, only=None, allow_protected=False, dep=None, dry_run=False,
-    repo=REPO, wrap=None,
+    repo=REPO, wrap=None, retry=False,
 ):
     """Validate a spec, write its configs, submit its jobs, write its manifest.
 
@@ -323,21 +464,31 @@ def launch(
     eval_walltime = lsf.get("eval_walltime", "0:30")
 
     sweep_dir = sweep_dir_for(spec)
-    log_dir = sweep_dir / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    records = build_configs(spec, sweep_dir, repo)
-    print(f"Wrote {len(records)} track + eval configs to {sweep_dir}")
-
-    selected = records
+    manifest_path = sweep_dir / "manifest.toml"
+    previous_runs = (
+        {run["label"]: run for run in toml.load(manifest_path).get("runs", [])}
+        if manifest_path.is_file() else {}
+    )
+    labels = [run["label"] for run in spec["runs"]]
     if only:
-        known = {record["label"] for record in records}
-        unknown = [label for label in only if label not in known]
+        unknown = [label for label in only if label not in labels]
         if unknown:
             raise SystemExit(f"unknown run labels: {unknown}")
-        selected = [record for record in records if record["label"] in only]
+    selected_labels = set(only) if only else set(labels)
+    stage = spec.get("stage", RUN_STAGE)
+    uids = assign_uids(
+        spec, selected_labels,
+        {label: run.get("exp_uid") for label, run in previous_runs.items()}, retry,
+        stage=stage,
+    )
+    run_inner = FIT_INNER if stage == "ssvm" else TRACK_INNER
 
-    manifest_path = None
+    log_dir = sweep_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    records = build_configs(spec, sweep_dir, uids, repo)
+    print(f"Wrote {len(records)} track + eval configs to {sweep_dir}")
+    selected = [record for record in records if record["label"] in selected_labels]
+
     for record in selected:
         label = record["label"]
         print(f"[{label}] {record['condition']} {record['overrides']}")
@@ -345,7 +496,7 @@ def launch(
             f"{spec['sweep_id']}_trk_{label}",
             track_slots, track_walltime, queue,
             str(log_dir / f"track_{label}"),
-            TRACK_INNER.format(threads=track_slots, env=env, cfg=record["track_config"]),
+            run_inner.format(threads=track_slots, env=env, cfg=record["track_config"]),
             dep_job=dep, raw_dep=True, dry_run=dry_run, repo=repo, wrap=wrap,
         )
         eval_job = bsub(
@@ -359,35 +510,33 @@ def launch(
         record["eval_job_id"] = eval_job or ""
 
     if not dry_run:
-        manifest_path = sweep_dir / "manifest.toml"
-        # Preserve job ids from earlier partial submissions (repeated --only).
-        if manifest_path.is_file():
-            previous = {
-                run["label"]: run for run in toml.load(manifest_path).get("runs", [])
-            }
-            for record in records:
-                old = previous.get(record["label"], {})
+        # Preserve job ids from earlier partial submissions (repeated --only),
+        # unless the label was retried under a new run name since.
+        for record in records:
+            old = previous_runs.get(record["label"], {})
+            if old.get("exp_uid") == record["exp_uid"]:
                 for key in ("track_job_id", "eval_job_id"):
                     if not record.get(key) and old.get(key):
                         record[key] = old[key]
-                record.setdefault("track_job_id", "")
-                record.setdefault("eval_job_id", "")
-        else:
-            for record in records:
-                record.setdefault("track_job_id", "")
-                record.setdefault("eval_job_id", "")
+            record.setdefault("track_job_id", "")
+            record.setdefault("eval_job_id", "")
 
+        eval_stub = spec["eval"]
         manifest = {
             "sweep_id": spec["sweep_id"],
-            "experiment": spec["experiment"],
-            "dataset": spec["dataset"],
+            "output_dir": spec["base"]["output_dir"],
+            "stage": stage,
+            # How collect_sweep.py finds each run's eval: <eval_name>_<metrics>_<time>.
+            "eval_name": spec["sweep_id"],
+            "metrics": eval_stub.get("metrics", ["basic", "track_overlap"]),
+            "gt": {key: eval_stub[key] for key in ("gt_tracks", "gt_seg", "ctc_seg_dir")
+                   if key in eval_stub},
             "spec": str(Path(spec_path).resolve()),
             "queue": queue,
             "track_slots": track_slots,
             "track_walltime": track_walltime,
             "eval_slots": eval_slots,
             "eval_walltime": eval_walltime,
-            "eval_base_dir": spec["eval"].get("output_base_dir", spec["base"]["output_base_dir"]),
             "runs": records,
         }
         with open(manifest_path, "w") as handle:
@@ -400,7 +549,7 @@ def launch(
     return {
         "sweep_id": spec["sweep_id"],
         "sweep_dir": sweep_dir,
-        "manifest": manifest_path,
+        "manifest": None if dry_run else manifest_path,
         "records": selected,
     }
 
@@ -411,6 +560,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="write configs and print bsub commands, do not submit")
     parser.add_argument("--only", nargs="+", default=None, help="subset of run labels to submit")
     parser.add_argument("--allow-protected", action="store_true", help="permit overriding structural keys")
+    parser.add_argument(
+        "--retry", action="store_true",
+        help="give selected labels whose run directory already exists a new run name "
+        "(runs/<label>_r2, ...) instead of refusing",
+    )
     parser.add_argument(
         "--dep", default=None,
         help="LSF dependency expression every tracking job waits on, e.g. "
@@ -425,7 +579,7 @@ def main():
 
     launch(
         args.spec, only=args.only, allow_protected=args.allow_protected,
-        dep=args.dep, dry_run=args.dry_run, wrap=args.sandbox,
+        dep=args.dep, dry_run=args.dry_run, wrap=args.sandbox, retry=args.retry,
     )
 
 

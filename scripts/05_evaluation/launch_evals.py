@@ -2,16 +2,22 @@
 
 ``launch_sweep.py`` always submits a tracking job with its eval chained behind
 it, which is wrong when the tracking outputs are fine and only the *ground truth*
-changed. This script submits eval-only jobs for a list of existing ``exp_uid``s
-and writes a ``launch_sweep``-compatible ``manifest.toml``, so
-``collect_sweep.py`` reads the result with no changes.
+or the metric set changed. This script submits eval-only jobs for a list of
+existing runs and writes a manifest that ``collect_sweep.py`` reads unchanged.
+
+Every re-eval is a new eval nested inside the run it scores, named
+``<reeval_id>_<metrics>_<timestamp>`` (``eval_name = <reeval_id>``), so nothing
+earlier is overwritten. The re-eval's configs, logs and manifest live in
+``<output_dir>/<stage>/sweeps/<reeval_id>/``, beside the tracking sweeps, so a
+re-eval id can never reuse a sweep's.
 
 A re-eval is described by a spec TOML::
 
     reeval_id = "corrgt0730"
-    experiment = "primary_nk_cells"
-    dataset = "01_cells"
-    all_runs = true            # or: uids = ["full", "no_drift", ...]
+    output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/primary_nk_cells/01_cells"
+    stage = "tracking"         # or "ssvm" to score SSVM fits; default "tracking"
+    all_runs = true            # or: uids = ["full", "sweeps/s1/runs/a", ...]
+                               # or: sweep = "<sweep_id>" (every run of that sweep)
 
     [lsf]
     env = "mhat-cluster"
@@ -20,28 +26,25 @@ A re-eval is described by a spec TOML::
     eval_walltime = "0:30"
 
     [eval]
-    input_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
-    output_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/"
+    gt_tracks = ".../primary_nk_cells/01_cells/gt/manual/correct_tracks.zarr"
     metrics = [ "basic", "track_overlap",]
     matcher = "point"
     match_threshold = 10
 
-``all_runs = true`` discovers every subdirectory of the dataset's tracking
-directory that holds a ``pred_tracks.zarr``.
+``all_runs = true`` takes every ungrouped run of the stage that holds a
+``pred_tracks.zarr``; runs inside sweeps are named with ``uids`` or ``sweep``.
 
 For the sparsely annotated CTC datasets (Fluo-N3DL-DRO / TRIC / TRIF), adding::
 
     prune_to_ctc_seeds = true
     prune_suffix = "_ctcseeded"   # optional, this is the default
 
-puts a ``prune_to_ctc_seeds.py`` job in front of each eval and points the eval at
-the pruned result, so ``TRA``/``DET``/``LNK`` mean something. ``seg_track_result``
-is set back to the unpruned run, because the SEG reference annotates cells the
-tracking benchmark excludes. Use ``--metric-set ctc`` when collecting.
-
-**``evaluate_tracks.py`` writes ``track_metrics.json`` in place**, so re-running
-an eval destroys the previous metrics for that ``exp_uid``. That is the point
-here, but it means the old numbers only survive wherever they were written down.
+and ``ctc_tra_dir`` (the CTC ``TRA`` marker folder) to ``[eval]`` puts a
+``prune_to_ctc_seeds.py`` job in front of each eval and points the eval at the
+pruned run, a sibling ``<uid><suffix>``, so ``TRA``/``DET``/``LNK`` mean
+something. ``seg_track_result`` is set back to the unpruned run, because the SEG
+reference annotates cells the tracking benchmark excludes. Use
+``--metric-set ctc`` when collecting.
 
 Usage, from the repo root on the cluster::
 
@@ -66,7 +69,13 @@ REPO = Path(__file__).resolve().parents[2]
 # them so the two paths cannot drift apart. Its main() is guarded, so importing
 # it runs nothing.
 sys.path.insert(0, str(REPO / "scripts" / "04_tracking"))
-from launch_sweep import EVAL_INNER, bsub, check_no_windows_paths  # noqa: E402
+from launch_sweep import (  # noqa: E402
+    EVAL_INNER,
+    FILLED_EVAL_KEYS,
+    bsub,
+    check_no_old_keys,
+    check_no_windows_paths,
+)
 
 # Prune each run to the CTC-evaluated lineages before scoring it. Only used when
 # the spec sets `prune_to_ctc_seeds`; see the module docstring.
@@ -75,20 +84,27 @@ PRUNE_INNER = (
     "python -u scripts/05_evaluation/prune_to_ctc_seeds.py {cfg} "
     "--track-result {uid} --suffix {suffix}"
 )
+STAGES = ("tracking", "ssvm")
 
 
 def validate_spec(spec):
-    for key in ("reeval_id", "experiment", "dataset"):
+    for key in ("reeval_id", "output_dir"):
         if key not in spec:
             raise SystemExit(f"spec is missing required key {key!r}")
+    check_no_old_keys(spec, "the spec")
+    if spec.get("stage", "tracking") not in STAGES:
+        raise SystemExit(f"stage must be one of {STAGES}")
 
     eval_stub = spec.get("eval")
     if not eval_stub:
         raise SystemExit("spec is missing the [eval] config stub")
+    check_no_old_keys(eval_stub, "[eval]")
     check_no_windows_paths(eval_stub, "[eval]")
-    for key in ("input_base_dir", "output_base_dir"):
-        if key not in eval_stub:
-            raise SystemExit(f"[eval] is missing {key!r}")
+    filled = [key for key in FILLED_EVAL_KEYS if key in eval_stub]
+    if filled:
+        raise SystemExit(f"[eval] must not set {filled}: the launcher fills them per run")
+    if "gt_tracks" not in eval_stub:
+        raise SystemExit("[eval] is missing gt_tracks")
     # Same trap as in launch_sweep: omitting `matcher` silently falls back to
     # PointMatcher and produces wrong metrics with no error (CLAUDE.md).
     if "matcher" not in eval_stub:
@@ -101,18 +117,39 @@ def validate_spec(spec):
         "match_threshold" in eval_stub or "threshold" in eval_stub
     ):
         raise SystemExit('[eval] matcher = "point" requires match_threshold')
+    if spec.get("prune_to_ctc_seeds") and "ctc_tra_dir" not in eval_stub:
+        raise SystemExit("prune_to_ctc_seeds needs ctc_tra_dir (the CTC TRA folder) in [eval]")
 
-    if "uids" not in spec and not spec.get("all_runs"):
-        raise SystemExit("spec must set either `uids = [...]` or `all_runs = true`")
+    chosen = [key for key in ("uids", "all_runs", "sweep") if spec.get(key)]
+    if len(chosen) != 1:
+        raise SystemExit("spec must set exactly one of `uids`, `all_runs = true`, `sweep`")
 
 
-def discover_uids(track_dir):
-    """Every subdirectory holding a pred_tracks.zarr, i.e. every finished run."""
+def finished(run_dir):
+    """A run that wrote its prediction (an empty solution leaves no geff)."""
+    return (run_dir / "pred_tracks.zarr").is_dir()
+
+
+def select_uids(spec, stage_dir):
+    if spec.get("uids"):
+        return list(spec["uids"])
+    if spec.get("all_runs"):
+        return sorted(
+            p.name for p in stage_dir.iterdir()
+            if p.is_dir() and (p / "config.toml").is_file() and finished(p)
+        )
+    runs_dir = stage_dir / "sweeps" / spec["sweep"] / "runs"
+    if not runs_dir.is_dir():
+        raise SystemExit(f"sweep {spec['sweep']!r} has no runs/ in {runs_dir.parent}")
     return sorted(
-        path.name
-        for path in track_dir.iterdir()
-        if path.is_dir() and (path / "pred_tracks.zarr").is_dir()
+        f"sweeps/{spec['sweep']}/runs/{p.name}" for p in runs_dir.iterdir()
+        if p.is_dir() and finished(p)
     )
+
+
+def file_stem(uid):
+    """A uid as a single file or job name (grouped uids contain slashes)."""
+    return uid.replace("/", "__")
 
 
 def _job_path(path):
@@ -128,7 +165,7 @@ def _job_path(path):
         return str(path)
 
 
-def build_configs(spec, reeval_dir, track_dir, uids):
+def build_configs(spec, reeval_dir, stage_dir, uids):
     """Write one eval config per uid; return the manifest run records."""
     eval_stub = spec["eval"]
     eval_dir = reeval_dir / "eval_configs"
@@ -139,48 +176,41 @@ def build_configs(spec, reeval_dir, track_dir, uids):
 
     records = []
     for uid in uids:
+        scored = f"{uid}{suffix}" if prune else uid
         eval_config = copy.deepcopy(eval_stub)
-        eval_config["experiment"] = spec["experiment"]
-        eval_config["dataset"] = spec["dataset"]
-        eval_config["track_result"] = f"{uid}{suffix}" if prune else uid
+        eval_config["output_dir"] = spec["output_dir"]
+        eval_config["track_result"] = scored
+        eval_config["track_stage"] = spec.get("stage", "tracking")
+        eval_config["eval_name"] = spec["reeval_id"]
         if prune:
             # SEG must stay on the unpruned run: pruning zeroes exactly the cells
             # the SEG reference annotates. See mhat.evaluation.ctc_seed_prune.
-            eval_config["seg_track_result"] = uid
-        eval_path = eval_dir / f"{uid}.toml"
+            # evaluate_tracks resolves it as a sibling of the scored run.
+            eval_config["seg_track_result"] = uid.rsplit("/", 1)[-1]
+        eval_path = eval_dir / f"{file_stem(uid)}.toml"
         with open(eval_path, "w") as handle:
             toml.dump(eval_config, handle)
 
         # `effective` is what collect_sweep.py's edge report reads to work out
-        # which parameters varied across runs. These runs predate the sweep
-        # manifests, so recover it from each run's own saved tracking config.
-        # Externally-produced results (e.g. ultrack) have none -- that is fine,
-        # they just contribute no parameter values.
-        track_config_path = track_dir / uid / "config.toml"
-        if track_config_path.is_file():
-            effective = {
-                key: value
-                for key, value in toml.load(track_config_path).items()
-                if key != "exp_uid"
-            }
-        else:
-            effective = {}
-
-        records.append(
-            {
-                "label": uid,
-                "condition": spec.get("condition", ""),
-                # The directory the metrics land in -- collect_sweep.py reads
-                # eval_root/<exp_uid>/track_metrics.json -- which under pruning
-                # is the pruned result, not the run it came from.
-                "exp_uid": f"{uid}{suffix}" if prune else uid,
-                "source_uid": uid,
-                "overrides": {},
-                "condition_deltas": {},
-                "effective": effective,
-                "eval_config": _job_path(eval_path),
-            }
+        # which parameters varied across runs; recover it from each run's own
+        # saved config. External results (e.g. ultrack) have none -- they just
+        # contribute no parameter values.
+        track_config_path = stage_dir / uid / "config.toml"
+        effective = (
+            {k: v for k, v in toml.load(track_config_path).items() if k != "exp_uid"}
+            if track_config_path.is_file() else {}
         )
+        records.append({
+            "label": uid,
+            "condition": spec.get("condition", ""),
+            # The run the eval scores -- under pruning, the pruned sibling.
+            "exp_uid": scored,
+            "source_uid": uid,
+            "overrides": {},
+            "condition_deltas": {},
+            "effective": effective,
+            "eval_config": _job_path(eval_path),
+        })
     return records
 
 
@@ -193,7 +223,7 @@ def main():
         "--dry-run", action="store_true",
         help="write eval configs and print bsub commands, do not submit",
     )
-    parser.add_argument("--only", nargs="+", default=None, help="subset of exp_uids to submit")
+    parser.add_argument("--only", nargs="+", default=None, help="subset of uids to submit")
     args = parser.parse_args()
 
     spec = toml.load(args.spec)
@@ -205,23 +235,27 @@ def main():
     eval_slots = lsf.get("eval_slots", 1)
     eval_walltime = lsf.get("eval_walltime", "0:30")
 
-    base_dir = Path(spec["eval"]["input_base_dir"])
-    track_dir = base_dir / "tracking" / spec["experiment"] / spec["dataset"]
-    if not track_dir.is_dir():
-        raise SystemExit(f"tracking dir {track_dir} does not exist")
+    stage = spec.get("stage", "tracking")
+    stage_dir = Path(spec["output_dir"]) / stage
+    if not stage_dir.is_dir():
+        raise SystemExit(f"{stage} directory {stage_dir} does not exist")
 
-    uids = spec.get("uids") or discover_uids(track_dir)
+    uids = select_uids(spec, stage_dir)
     if not uids:
-        raise SystemExit(f"no runs with a pred_tracks.zarr found under {track_dir}")
-    missing = [uid for uid in uids if not (track_dir / uid / "pred_tracks.zarr").is_dir()]
+        raise SystemExit(f"no finished runs selected under {stage_dir}")
+    missing = [uid for uid in uids if not finished(stage_dir / uid)]
     if missing:
         raise SystemExit(f"no pred_tracks.zarr for: {missing}")
 
-    reeval_dir = track_dir / "reevals" / spec["reeval_id"]
+    reeval_dir = stage_dir / "sweeps" / spec["reeval_id"]
+    manifest_path = reeval_dir / "manifest.toml"
+    previous = toml.load(manifest_path) if manifest_path.is_file() else None
+    if previous is not None and previous.get("kind") != "reeval":
+        raise SystemExit(f"{reeval_dir} belongs to a tracking sweep; pick another reeval_id")
     log_dir = reeval_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    records = build_configs(spec, reeval_dir, track_dir, uids)
+    records = build_configs(spec, reeval_dir, stage_dir, uids)
     print(f"Wrote {len(records)} eval configs to {reeval_dir}")
 
     selected = records
@@ -229,7 +263,7 @@ def main():
         known = {record["label"] for record in records}
         unknown = [label for label in args.only if label not in known]
         if unknown:
-            raise SystemExit(f"unknown exp_uids: {unknown}")
+            raise SystemExit(f"unknown uids: {unknown}")
         selected = [record for record in records if record["label"] in args.only]
 
     prune = spec.get("prune_to_ctc_seeds", False)
@@ -238,7 +272,7 @@ def main():
     prune_walltime = lsf.get("prune_walltime", "4:00")
 
     for record in selected:
-        label = record["label"]
+        label, stem = record["label"], file_stem(record["label"])
         print(f"[{label}]")
         dep_job = None
         if prune:
@@ -246,9 +280,9 @@ def main():
             # should still fire if the job exits nonzero after writing output,
             # matching how launch_sweep chains tracking -> eval.
             dep_job = record["prune_job_id"] = bsub(
-                f"{spec['reeval_id']}_prn_{label}",
+                f"{spec['reeval_id']}_prn_{stem}",
                 prune_slots, prune_walltime, queue,
-                str(log_dir / f"prune_{label}"),
+                str(log_dir / f"prune_{stem}"),
                 PRUNE_INNER.format(
                     env=env, cfg=record["eval_config"],
                     uid=record["source_uid"], suffix=suffix,
@@ -259,9 +293,9 @@ def main():
             # malformed `-w ended()`.
             dep_job = dep_job or None
         record["eval_job_id"] = bsub(
-            f"{spec['reeval_id']}_evl_{label}",
+            f"{spec['reeval_id']}_evl_{stem}",
             eval_slots, eval_walltime, queue,
-            str(log_dir / f"eval_{label}"),
+            str(log_dir / f"eval_{stem}"),
             EVAL_INNER.format(threads=eval_slots, env=env, cfg=record["eval_config"]),
             dep_job=dep_job,
             dry_run=args.dry_run,
@@ -271,31 +305,28 @@ def main():
         print(f"\n(dry run) {len(selected)} runs; no jobs submitted, no manifest written.")
         return
 
-    manifest_path = reeval_dir / "manifest.toml"
     # Preserve job ids from earlier partial submissions (repeated --only).
-    if manifest_path.is_file():
-        previous = {run["label"]: run for run in toml.load(manifest_path).get("runs", [])}
-        for record in records:
-            if not record.get("eval_job_id"):
-                record["eval_job_id"] = previous.get(record["label"], {}).get("eval_job_id", "")
-            if prune and not record.get("prune_job_id"):
-                earlier = previous.get(record["label"], {})
-                record["prune_job_id"] = earlier.get("prune_job_id", "")
-    else:
-        for record in records:
-            record.setdefault("eval_job_id", "")
-            if prune:
-                record.setdefault("prune_job_id", "")
+    earlier = {run["label"]: run for run in (previous or {}).get("runs", [])}
+    for record in records:
+        for key in ("eval_job_id", "prune_job_id") if prune else ("eval_job_id",):
+            if not record.get(key):
+                record[key] = earlier.get(record["label"], {}).get(key, "")
 
+    eval_stub = spec["eval"]
     manifest = {
         "sweep_id": spec["reeval_id"],
-        "experiment": spec["experiment"],
-        "dataset": spec["dataset"],
+        "kind": "reeval",
+        "output_dir": spec["output_dir"],
+        "stage": stage,
+        # How collect_sweep.py finds each run's eval: <eval_name>_<metrics>_<time>.
+        "eval_name": spec["reeval_id"],
+        "metrics": eval_stub.get("metrics", ["basic", "track_overlap"]),
+        "gt": {key: eval_stub[key] for key in ("gt_tracks", "gt_seg", "ctc_seg_dir")
+               if key in eval_stub},
         "spec": str(Path(args.spec).resolve()),
         "queue": queue,
         "eval_slots": eval_slots,
         "eval_walltime": eval_walltime,
-        "eval_base_dir": spec["eval"]["output_base_dir"],
         "runs": records,
     }
     with open(manifest_path, "w") as handle:

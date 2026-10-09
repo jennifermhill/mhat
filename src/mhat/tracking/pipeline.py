@@ -17,6 +17,7 @@ import numpy as np
 import zarr
 
 from funtracks.import_export import import_from_geff
+from mhat.dataset import Dataset, require_dir
 from mhat.evaluation.evaluate_tracking import (
     read_name_map_and_scale,
     remap_seg_to_track_ids,
@@ -27,72 +28,34 @@ from mhat.utils import get_axes_metadata, seg_chunks
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 
 
-def data_ndim(seg_dir: Path) -> int:
-    """Spatial rank of a segmentation run, from its fragments array (metadata only)."""
-    return zarr.open(seg_dir / "data.zarr", mode="r")["fragments"].ndim - 1
+def resolve_inputs(config):
+    """The input locations a fit or solve config names, checked to exist.
 
-
-def resolve_flow_dirs(config, seg_dir: Path) -> dict:
-    """Which optical-flow directories a run needs, by the data's rank.
-
-    Mirrors run_tracking.py. 3D data must have a 3D flow (nothing else can
-    estimate axial motion); a 2D flow beside it is optional and, when present,
-    supplies the better-resolved in-plane components. 2D data has no 3D flow to
-    look for, so the 2D one is required.
-    """
-    flow_result = config.get("flow_result", None)
-    if flow_result is None:
-        return {"2d": None, "3d": None}
-
-    input_base_dir = Path(config["input_base_dir"])
-    flow_base = input_base_dir / "opticalflow" / config["experiment"] / config["dataset"]
-    flow_dir_2d = flow_base / "opticalflow_2d" / flow_result
-    flow_dir_3d = flow_base / "opticalflow_3d" / flow_result
-    if data_ndim(seg_dir) == 3:
-        assert flow_dir_3d.is_dir(), f"3D optical flow data directory {flow_dir_3d} is missing"
-        if not flow_dir_2d.is_dir():
-            print(f"2D optical flow directory {flow_dir_2d} does not exist, using 3D flow only.")
-            flow_dir_2d = None
-    else:
-        assert flow_dir_2d.is_dir(), (
-            f"2D optical flow data directory {flow_dir_2d} is missing -- "
-            "2D data has no 3D flow to fall back on"
-        )
-        flow_dir_3d = None
-    return {"2d": flow_dir_2d, "3d": flow_dir_3d}
-
-
-def resolve_input_dirs(config) -> tuple[Path, Path, dict, Path]:
-    """Turn the TOML path keys into the directories the pipeline scripts need.
+    Raw, segmentation and flow come from the output directory exactly as for
+    ``run_tracking.py`` (``Dataset.flow_dirs`` holds the rank-dependent flow
+    policy); the ground truth is given explicitly (``gt_tracks``, ``gt_seg``),
+    e.g. the full GT or a subset under ``<output_dir>/gt/subsets/``.
 
     Returns:
-        (raw_dir, seg_dir, flow_dirs, gt_data_dir)
+        (ds, raw_dir, seg_dir, flow_dirs, gt_tracks, gt_seg); the GT paths are
+        None when the config gives none (a solve needs no GT).
 
-    ``gt_data_dir`` defaults to the usual ``<input>/tracking/<exp>/<dataset>``
-    convention but can be overridden with a ``gt_data_dir`` config key — used to
-    point a fit or an evaluation at a reduced GT subset (see gt_subsets.py).
+    Raises:
+        ValueError: If the config still uses ``gt_data_dir`` (or other keys of
+            the old results layout).
     """
-    raw_base_dir = Path(config["raw_base_dir"])
-    input_base_dir = Path(config["input_base_dir"])
-    experiment = config["experiment"]
-    dataset = config["dataset"]
-    assert raw_base_dir.is_dir(), f"Raw base directory {raw_base_dir} is missing"
-    assert input_base_dir.is_dir(), f"Input base directory {input_base_dir} is missing"
-
-    raw_dir = raw_base_dir / experiment / f"{dataset}.zarr"
-    assert raw_dir.is_dir(), f"Raw data directory {raw_dir} is missing"
-
-    seg_dir = input_base_dir / "segmentation" / experiment / dataset / config["seg_result"]
-    assert seg_dir.is_dir(), f"Segmentation data directory {seg_dir} is missing"
-
-    flow_dirs = resolve_flow_dirs(config, seg_dir)
-
-    if config.get("gt_data_dir"):
-        gt_data_dir = Path(config["gt_data_dir"])
-    else:
-        gt_data_dir = input_base_dir / "tracking" / experiment / dataset
-
-    return raw_dir, seg_dir, flow_dirs, gt_data_dir
+    if "gt_data_dir" in config:
+        raise ValueError(
+            "gt_data_dir is gone: set gt_tracks and gt_seg to the GT stores "
+            "(e.g. <output_dir>/gt/ctc/correct_tracks.zarr and correct_seg.zarr)."
+        )
+    ds = Dataset.from_config(config)
+    raw_dir = ds.require_raw_path()
+    seg_dir = require_dir(ds.seg_dir(config["seg_result"]), "Segmentation data directory")
+    flow_dirs = ds.flow_dirs(config.get("flow_result"), config["seg_result"])
+    gt_tracks = Path(config["gt_tracks"]) if config.get("gt_tracks") else None
+    gt_seg = Path(config["gt_seg"]) if config.get("gt_seg") else None
+    return ds, raw_dir, seg_dir, flow_dirs, gt_tracks, gt_seg
 
 
 def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
@@ -146,7 +109,6 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     # Keep the zarr handles around so downstream is-not-None checks still work.
     flow_2d = flow_2d_zarr
     flow_3d = flow_3d_zarr
-    confidence_3d = confidence_3d_zarr
 
     axes = get_axes_metadata(seg_zarr_root["fragments"])
     scale = [axis["scale"] for axis in axes]
@@ -267,7 +229,7 @@ def build_track_graph(config, raw_dir: Path, seg_dir: Path, flow_dirs: dict):
     return track_graph, fragments, merge_history, all_exclusion_sets, scale, axes
 
 
-def load_gt(gt_data_dir: Path, scale):
+def load_gt(gt_tracks: Path, gt_seg: Path, scale):
     """Load a geff ground truth and its label volume, remapped to ``track_id``.
 
     ``scale`` is the *prediction's* scale (the one ``build_track_graph`` read off
@@ -276,22 +238,19 @@ def load_gt(gt_data_dir: Path, scale):
     built from the GT store's own axes, so a 2D geff loads as 2D rather than
     silently skipping a ``z`` it does not have.
 
+    Args:
+        gt_tracks: The GT tracks (a geff).
+        gt_seg: The GT segmentation, labeled by node id. Required: the fit matches
+            candidates to GT cells by overlap.
+
     Returns:
         (gt_graph, gt_seg): the funtracks graph (``track_id`` renumbered by
-        funtracks) and the ``correct_seg.zarr`` volume relabeled to match it.
+        funtracks) and the GT segmentation relabeled to match it.
     """
-    gt_data_dir = Path(gt_data_dir)
-    gt_tracks_path = gt_data_dir / "correct_tracks.zarr"
-    gt_seg_path = gt_data_dir / "correct_seg.zarr"
-    if not gt_tracks_path.is_dir():
-        raise FileNotFoundError(
-            f"GT tracks not found at {gt_tracks_path}. Run evaluate_tracks.py "
-            "once on a prior tracking result to trigger CTC->geff conversion."
-        )
-    if not gt_seg_path.is_dir():
-        raise RuntimeError(
-            f"GT segmentation not found at {gt_seg_path}; cannot compute IoU matches."
-        )
+    if gt_tracks is None or gt_seg is None:
+        raise ValueError("Fitting needs gt_tracks and gt_seg in the config")
+    gt_tracks_path = require_dir(Path(gt_tracks), "GT tracks")
+    gt_seg_path = require_dir(Path(gt_seg), "GT segmentation")
     name_map, own_scale = read_name_map_and_scale(gt_tracks_path)
     assert len(own_scale) == len(scale), (
         f"{gt_tracks_path} has {len(own_scale)} axes but the prediction has "

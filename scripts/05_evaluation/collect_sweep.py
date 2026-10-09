@@ -1,9 +1,17 @@
 """Collect the metrics of a parameter sweep launched by ``launch_sweep.py``.
 
-Reads the sweep's ``manifest.toml``, pulls each run's ``track_metrics.json`` from
-``<eval_base_dir>/evaluation/<experiment>/<dataset>/<exp_uid>/``, writes
-``results.csv`` next to the manifest, and prints a table sorted by the primary
-metric.
+Reads the sweep's ``manifest.toml`` (or a ``launch_evals.py`` one), finds each
+run's eval inside the run, writes ``results.csv`` next to the manifest, and prints
+a table sorted by the primary metric.
+
+An eval is found by its exact name, ``<eval_name>_<sorted metrics>_<timestamp>``,
+with the ``eval_name`` and metrics the manifest records. Only an eval holding a
+``track_metrics.json`` counts. None: the run is pending. More than one (an eval
+repeated by hand under the sweep's id): the collector stops and lists them
+rather than pick one. A ``manifest.migrated.toml`` (old sweeps, after the layout
+migration) lists each run's evals directly: the one the old collector read
+(``sweep_eval``) if it holds this metric set, else the one that does, and more
+than one is refused the same way.
 
 It also reports, per condition and per swept parameter, whether the winning value
 sits at an **edge** of the range that was sampled. An edge winner means the
@@ -13,7 +21,7 @@ direction; an interior winner means it is safe to stop.
 Usage::
 
     conda run -n mhat-cluster python scripts/05_evaluation/collect_sweep.py \\
-        experiments/tracking/Fluo-C3DL-MDA231/01_cells/sweeps/<sweep_id>/manifest.toml \\
+        experiments/Fluo-C3DL-MDA231/01_cells/tracking/sweeps/<sweep_id>/manifest.toml \\
         [--baseline TRA DET LNK] [--metric-set ctc|overlap]
 
 ``--metric-set ctc`` reports TRA/DET/LNK for CTC-ground-truth datasets;
@@ -28,6 +36,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
+import re
 from pathlib import Path
 
 import toml
@@ -83,6 +93,81 @@ METRIC_SETS = {
         ("LNK",  "CTCMetrics", "LNK"),
     ],
 }
+
+
+EVAL_TIMESTAMP = r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}"
+
+
+def find_eval(run_dir, eval_name, metrics):
+    """The one eval of ``run_dir`` named ``<eval_name>_<metrics>_<timestamp>``.
+
+    Returns None if there is none with a ``track_metrics.json`` yet. The name is
+    matched exactly, not as a prefix: ids and metric names contain underscores,
+    so ``regenF01_*`` would also match ``regenF01_baseline_*``.
+
+    Raises:
+        SystemExit: If more than one eval matches.
+    """
+    pattern = re.compile(
+        rf"{re.escape(eval_name)}_{re.escape('+'.join(sorted(metrics)))}_{EVAL_TIMESTAMP}"
+    )
+    parent = Path(run_dir) / "evaluation"
+    if not parent.is_dir():
+        return None
+    found = sorted(
+        entry for entry in parent.iterdir()
+        if entry.is_dir() and pattern.fullmatch(entry.name)
+        and (entry / "track_metrics.json").is_file()
+    )
+    if len(found) > 1:
+        raise SystemExit(
+            f"{run_dir} holds {len(found)} evals named {eval_name}_{'+'.join(sorted(metrics))}"
+            f"_<time>: {[e.name for e in found]}. Decide which one counts (move the other "
+            "out of evaluation/) and collect again."
+        )
+    return found[0] if found else None
+
+
+def run_metrics_path(manifest, run, columns):
+    """Path of a run's track_metrics.json, or None while the run is pending."""
+    output_dir = Path(manifest["output_dir"])
+    if "new_run" in run:  # manifest.migrated.toml: the evals are listed
+        # The eval the old collector read for this run, when the migration knew it.
+        sweep_eval = run.get("sweep_eval")
+        if sweep_eval:
+            path = output_dir / sweep_eval / "track_metrics.json"
+            if load_metrics(path, columns) is not None:
+                return path
+        usable = [
+            output_dir / e / "track_metrics.json" for e in run.get("new_evals", [])
+            if load_metrics(output_dir / e / "track_metrics.json", columns) is not None
+        ]
+        if len(usable) > 1:
+            raise SystemExit(
+                f"run {run['new_run']} has {len(usable)} migrated evals with these "
+                f"metrics: {[str(p.parent.name) for p in usable]}. Pick one."
+            )
+        return usable[0] if usable else None
+    run_dir = output_dir / manifest.get("stage", "tracking") / run["exp_uid"]
+    found = find_eval(run_dir, manifest["eval_name"], manifest["metrics"])
+    return found / "track_metrics.json" if found else None
+
+
+def read_manifest(path):
+    manifest = toml.load(path)
+    runs = manifest.get("runs", [])
+    if "output_dir" not in manifest and runs and "new_run" in runs[0]:
+        # A migrated manifest sits at <output_dir>/<stage>/sweeps/<id>/: take the
+        # output directory from there, so it also collects on a copy of the tree.
+        manifest["output_dir"] = str(Path(os.path.abspath(path)).parents[3])
+        return manifest
+    if "output_dir" not in manifest:
+        migrated = Path(path).with_name("manifest.migrated.toml")
+        raise SystemExit(
+            f"{path} was written for the old results layout. After the layout "
+            f"migration, collect {migrated} instead."
+        )
+    return manifest
 
 
 def load_metrics(path, columns):
@@ -167,7 +252,6 @@ def main():
              "judging convergence one round at a time re-flags ranges already closed.",
     )
     parser.add_argument("--metric-set", choices=sorted(METRIC_SETS), default="ctc")
-    parser.add_argument("--metrics-filename", default="track_metrics.json")
     args = parser.parse_args()
 
     manifest_paths = [Path(p).resolve() for p in args.manifest]
@@ -175,13 +259,9 @@ def main():
 
     rows = []
     for manifest_path in manifest_paths:
-        manifest = toml.load(manifest_path)
-        eval_root = (
-            Path(manifest["eval_base_dir"]) / "evaluation"
-            / manifest["experiment"] / manifest["dataset"]
-        )
+        manifest = read_manifest(manifest_path)
         for run in manifest["runs"]:
-            metrics_path = eval_root / run["exp_uid"] / args.metrics_filename
+            metrics_path = run_metrics_path(manifest, run, columns)
             rows.append(
                 {
                     "label": run["label"],
@@ -189,7 +269,7 @@ def main():
                     "exp_uid": run["exp_uid"],
                     "overrides": run.get("overrides", {}),
                     "effective": run.get("effective", {}),
-                    "_metrics": load_metrics(metrics_path, columns),
+                    "_metrics": load_metrics(metrics_path, columns) if metrics_path else None,
                 }
             )
 

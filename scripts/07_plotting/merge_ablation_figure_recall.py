@@ -1,20 +1,20 @@
 """Merge ablation plot for Node Recall + Edge Recall (BasicMetrics).
 
-Sibling of merge_ablation_figure.py. Reads condition tracking_uids from
-merge_ablation.toml as before, but uses the per-dataset
-``recall_metrics_filename`` and ``[<dataset>.recall_metrics]`` section
-to locate BasicMetrics JSON files and the metric specs to plot.
+Sibling of merge_ablation_figure.py. Reads each condition's run from
+merge_ablation.toml as before, but its ``recall_eval`` (the eval holding
+BasicMetrics) and the ``[<dataset>.recall_metrics]`` section for the metric specs
+to plot (see plot_spec.py).
 
 Usage:
     python scripts/07_plotting/merge_ablation_figure_recall.py configs/evaluation/merge_ablation.toml --dataset {mda231,nc281,nc281_sparse}
 """
 import argparse
-import json
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+
+import plot_spec
 
 CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
 
@@ -25,8 +25,6 @@ PALETTE = {
     "no_affinities": "#009E73",  # bluish green
     "no_merges": "#000000",      # black
 }
-
-PLACEHOLDER = "<fill in>"
 
 
 def walk_json_path(obj, path):
@@ -50,21 +48,9 @@ def reduce_value(value, reduction):
 
 
 def load_condition_metrics(cond_cfg, dataset_cfg, metric_specs):
-    tracking_uid = cond_cfg["tracking_uid"]
-    if tracking_uid == PLACEHOLDER:
+    track_metrics = plot_spec.load_metrics(dataset_cfg, cond_cfg, "recall_eval")
+    if track_metrics is None:
         return None
-    metrics_filename = dataset_cfg["recall_metrics_filename"]
-    metrics_path = (
-        Path(dataset_cfg["eval_base_dir"])
-        / dataset_cfg["experiment"]
-        / dataset_cfg["dataset_dir"]
-        / tracking_uid
-        / metrics_filename
-    )
-    if not metrics_path.is_file():
-        raise FileNotFoundError(f"recall metrics file not found at {metrics_path}")
-    with open(metrics_path) as f:
-        track_metrics = json.load(f)
     return {
         key: reduce_value(walk_json_path(track_metrics, spec["json_path"]), spec["reduction"])
         for key, spec in metric_specs.items()
@@ -85,8 +71,6 @@ def main():
 
     if "recall_metrics" not in dataset_cfg:
         raise KeyError(f"dataset {args.dataset!r} missing [<dataset>.recall_metrics] section")
-    if "recall_metrics_filename" not in dataset_cfg:
-        raise KeyError(f"dataset {args.dataset!r} missing recall_metrics_filename")
 
     metric_specs = dataset_cfg["recall_metrics"]
     conditions = dataset_cfg["conditions"]
@@ -101,7 +85,7 @@ def main():
         cond_cfg = conditions[cond_name]
         values = load_condition_metrics(cond_cfg, dataset_cfg, metric_specs)
         if values is None:
-            print(f"warning: tracking_uid for {cond_name!r} is unfilled, skipping")
+            print(f"warning: {cond_name!r} is still a placeholder, skipping")
             continue
         labels.append(cond_cfg["label"])
         colors.append(PALETTE[cond_name])
@@ -109,7 +93,7 @@ def main():
             metric_values[key].append(val)
 
     if not labels:
-        raise RuntimeError("no conditions had a filled-in tracking_uid; nothing to plot")
+        raise RuntimeError("every condition is still a placeholder; nothing to plot")
 
     n_metrics = len(metric_specs)
     fig, axes = plt.subplots(1, n_metrics, figsize=(5 * n_metrics + 1, 5))
@@ -140,7 +124,10 @@ def main():
     fig.suptitle(suptitle, fontsize=14, fontweight="bold")
     plt.tight_layout()
 
-    output_path = Path(args.output or dataset_cfg["recall_output_png"])
+    output_path = plot_spec.figure_path(
+        dataset_cfg, f"merge_ablation_recall_{args.dataset}.png", args.output,
+        key="recall_output_png",
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     print(f"Saved {output_path}")

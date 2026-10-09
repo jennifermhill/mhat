@@ -16,12 +16,12 @@ Usage:
         [--x DET --y LNK --color TRA] [--mode both|ablation|addition] [--output f.png]
 """
 import argparse
-import json
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+
+import plot_spec
 
 
 def walk(obj, path):
@@ -36,21 +36,12 @@ def reduce_value(value, reduction):
     return float(value)  # "scalar"
 
 
-def mfile_for(cond, dataset_cfg):
-    # per-condition override wins (e.g. sparse baseline/full store point-matched
-    # metrics in track_metrics_point.json), else the dataset default.
-    return cond.get("metrics_filename",
-                    dataset_cfg.get("metrics_filename", "track_metrics.json"))
-
-
-def load(dataset_cfg, uid, metric_specs, mfile):
-    p = (Path(dataset_cfg["eval_base_dir"]) / dataset_cfg["experiment"]
-         / dataset_cfg["dataset_dir"] / uid / mfile)
-    if not p.is_file():
-        print(f"warning: metrics missing for uid={uid}; omitting")
+def load(dataset_cfg, cond, metric_specs):
+    """The condition's metrics (its run and eval, see plot_spec.py), or None for a
+    placeholder, which is omitted and noted. A named eval that is missing raises."""
+    m = plot_spec.load_metrics(dataset_cfg, cond)
+    if m is None:
         return None
-    with open(p) as f:
-        m = json.load(f)
     return {k: reduce_value(walk(m, s["json_path"]), s["reduction"])
             for k, s in metric_specs.items()}
 
@@ -94,7 +85,7 @@ def main():
     cd = metric_specs[c_key]["display_name"]
 
     def load_pt(cfg, cond):
-        v = load(cfg, cond["tracking_uid"], metric_specs, mfile_for(cond, cfg))
+        v = load(cfg, cond, metric_specs)
         if v is None:
             return (0.0, 0.0, 0.0), True
         return (v[x_key], v[y_key], v[c_key]), False
@@ -185,8 +176,9 @@ def main():
     ax.grid(alpha=0.25)
     plt.tight_layout()
 
-    out = Path(args.output or (Path(abl["eval_base_dir"]) / abl["experiment"]
-               / abl["dataset_dir"] / f"metric_tradeoff_{args.dataset}.png"))
+    out = plot_spec.figure_path(
+        abl, f"metric_tradeoff_{args.dataset}.png", args.output, key="tradeoff_output_png"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out, dpi=150, bbox_inches="tight")
     print(f"Saved {out}")

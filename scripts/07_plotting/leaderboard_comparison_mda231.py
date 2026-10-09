@@ -8,10 +8,10 @@ x tick labels -- not color -- identify the methods.
 
 Data provenance
 ---------------
-* MHAT: loaded live from the 02_cells baseline eval. The baseline uid and eval
-  directory come from an ablation TOML (default: merge_ablation.toml
-  [mda231_02cells].conditions.baseline) so this figure tracks the same baseline
-  as the other 02_cells figures. TRA/DET/SEG read from that run's
+* MHAT: loaded live from the 02_cells baseline eval. The baseline's run and eval
+  come from an ablation TOML (default: merge_ablation.toml
+  [mda231_02cells].conditions.baseline, see plot_spec.py) so this figure tracks
+  the same baseline as the other 02_cells figures. TRA/DET/SEG read from that run's
   track_metrics.json so a re-eval (e.g. the 2026-07-20 SEG fix) is picked up.
 * CTC methods: public benchmark spreadsheets (snapshot 2025-08-15),
   CellTrackingBenchmark.xlsx / CellSegmentationBenchmark.xlsx. Method labels are
@@ -26,12 +26,12 @@ Usage:
         [config] [--dataset mda231_02cells] [--output foo.png]
 """
 import argparse
-import json
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+
+import plot_spec
 
 # The MHAT baseline pointer is read from an ablation TOML (below); only the CTC
 # leaderboard values stay hardcoded -- they're external published scores.
@@ -39,15 +39,13 @@ DEFAULT_CONFIG = "configs/evaluation/merge_ablation.toml"
 DEFAULT_DATASET = "mda231_02cells"
 
 
-def baseline_eval_dir(config_path, dataset):
-    """(eval_dir, baseline_uid) for the dataset's conditions.baseline."""
+def baseline_metrics(config_path, dataset):
+    """(dataset table, CTCMetrics of its conditions.baseline eval)."""
     cfg = toml.load(config_path)[dataset]
-    eval_dir = (
-        Path(cfg["eval_base_dir"])
-        / cfg["experiment"]
-        / cfg["dataset_dir"]
-    )
-    return eval_dir, cfg["conditions"]["baseline"]["tracking_uid"]
+    metrics = plot_spec.load_metrics(cfg, cfg["conditions"]["baseline"])
+    if metrics is None:
+        raise ValueError("the baseline condition is still a placeholder")
+    return cfg, metrics["CTCMetrics"]
 
 # --- CTC top-3 competitors per metric, MDA231 leaderboard averages (mean over
 # videos 01+02; snapshot 2025-08-15). Ordered highest -> lowest within each metric.
@@ -73,9 +71,7 @@ def main():
     ap.add_argument("--output", default=None, help="Override output PNG path")
     args = ap.parse_args()
 
-    eval_dir, baseline_uid = baseline_eval_dir(args.config, args.dataset)
-    mhat = json.loads((eval_dir / baseline_uid / "track_metrics.json")
-                      .read_text())["CTCMetrics"]
+    dataset_cfg, mhat = baseline_metrics(args.config, args.dataset)
 
     # Per panel: MHAT first, then that metric's top-3 competitors (already sorted).
     groups = {m: [("MHAT", mhat[m])] + CTC_TOP3[m] for m in METRICS}
@@ -106,7 +102,10 @@ def main():
         ax.set_axisbelow(True)
 
     fig.tight_layout()
-    out = Path(args.output or eval_dir / "leaderboard_comparison_mda231_02.png")
+    out = plot_spec.figure_path(
+        dataset_cfg, "leaderboard_comparison_mda231_02.png", args.output,
+        key="leaderboard_output_png",
+    )
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"Saved {out}")
 

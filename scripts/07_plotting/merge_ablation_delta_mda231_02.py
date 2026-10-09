@@ -12,10 +12,10 @@ hurts every metric.
 
 Data provenance
 ---------------
-Condition tracking_uids, labels, and the eval directory are read live from
-configs/evaluation/merge_ablation.toml (the mda231_02cells section by default),
-so this figure stays in sync with the other merge figures when the TOML's uids
-change. Values load from each condition's track_metrics.json (CTCMetrics), so the
+Each condition's run and eval (see plot_spec.py) and its label are read live
+from configs/evaluation/merge_ablation.toml (the mda231_02cells section by
+default), so this figure stays in sync with the other merge figures when the
+TOML changes. Values load from each condition's track_metrics.json (CTCMetrics), so the
 2026-07-20 SEG fix is reflected. SEG is used in place of LNK and isn't in the
 TOML metric list, so the three metrics are defined locally here; the palette is
 keyed by condition name and defined locally (it no longer matches
@@ -26,12 +26,12 @@ Usage:
         [config] [--dataset mda231_02cells] [--output foo.png]
 """
 import argparse
-import json
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+
+import plot_spec
 
 # Baseline first, then the three delta bars (matches merge_ablation_figure.py).
 CONDITION_ORDER = ["baseline", "no_cohesion", "no_affinities", "no_merges"]
@@ -49,14 +49,10 @@ PALETTE = {
 METRICS = ["TRA", "DET", "SEG"]
 
 
-PLACEHOLDER = "<fill in>"  # same sentinel as merge_ablation_figure.py: unfilled uid -> bar skipped
-
-
-def load_ctc(eval_dir, uid):
-    if uid == PLACEHOLDER:
-        return None
-    path = eval_dir / uid / "track_metrics.json"
-    return json.loads(path.read_text())["CTCMetrics"]
+def load_ctc(dataset_cfg, cond):
+    """CTCMetrics of the condition's eval; None for a placeholder (bar skipped)."""
+    metrics = plot_spec.load_metrics(dataset_cfg, cond)
+    return None if metrics is None else metrics["CTCMetrics"]
 
 
 def main():
@@ -74,21 +70,18 @@ def main():
         raise KeyError(f"dataset {args.dataset!r} not in {args.config}; "
                        f"available: {list(config.keys())}")
     dataset_cfg = config[args.dataset]
-    eval_dir = (
-        Path(dataset_cfg["eval_base_dir"])
-        / dataset_cfg["experiment"]
-        / dataset_cfg["dataset_dir"]
-    )
     conditions = dataset_cfg["conditions"]
 
-    base = load_ctc(eval_dir, conditions["baseline"]["tracking_uid"])
+    base = load_ctc(dataset_cfg, conditions["baseline"])
+    if base is None:
+        raise ValueError("the baseline condition is still a placeholder")
     # (label, color, deltas) for each non-baseline condition, in fixed order.
     rows = []
     for cond_name in CONDITION_ORDER[1:]:
         cond = conditions[cond_name]
-        m = load_ctc(eval_dir, cond["tracking_uid"])
+        m = load_ctc(dataset_cfg, cond)
         if m is None:
-            print(f"warning: tracking_uid for {cond_name!r} is unfilled, skipping")
+            print(f"warning: {cond_name!r} is still a placeholder, skipping")
             continue
         deltas = {k: m[k] - base[k] for k in METRICS}
         rows.append((cond["label"], PALETTE[cond_name], deltas))
@@ -130,7 +123,9 @@ def main():
     ax.set_axisbelow(True)
 
     fig.tight_layout()
-    out = Path(args.output or eval_dir / "merge_ablation_delta_mda231_02.png")
+    out = plot_spec.figure_path(
+        dataset_cfg, "merge_ablation_delta_mda231_02.png", args.output, key="delta_output_png"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"Saved {out}")

@@ -25,6 +25,20 @@ The candidate graph, the GT, and the candidate<->GT overlap matrices are built
 ONCE and reused across every run — that is the whole reason this is a driver
 rather than N invocations of fit_weights_ssvm.py (~4 min of setup each).
 
+Where things go (the config is a fit config -- ``raw_path``, ``output_dir``,
+``seg_result``, ``flow_result``, the full ``gt_tracks`` / ``gt_seg`` -- plus the
+sweep keys):
+
+    <output_dir>/gt/subsets/n<N>_s<seed>/     reduced GT, arms A/B (gt_subsets_name)
+    <output_dir>/gt/crops/<box>/              reduced GT, arm C (gt_crops_name)
+    <output_dir>/ssvm/sweeps/<fits_id>/       the fits (fits_id, default gt_amount_fits)
+        runs/<token>/                         one fit; its config's gt_tracks / gt_seg
+                                              name the GT it was fit on
+        eval_configs/<token>.toml             train-side score against that same GT
+        run_summary*.json
+
+An existing fit is never redone: its token is reported and skipped.
+
 Usage:
     python scripts/04_tracking/run_gt_amount_experiment.py <config.toml>
         [--dry-run]           annotate + mask every combination, assert invariants,
@@ -42,7 +56,6 @@ from __future__ import annotations
 import argparse
 import json
 import traceback
-from pathlib import Path
 
 import motile
 import networkx as nx
@@ -71,14 +84,18 @@ from mhat.tracking.gt_subsets import (
     mask_nodes_none,
     materialize_masked_gt,
     prune_exclusion_sets,
+    check_gt_amount_config,
+    gt_variant_root,
     remove_nodes,
-    run_dir,
-    run_ref,
     run_token,
     sample_track_subsets,
     subset_dirname,
+    sweep_dir,
+    sweep_id,
+    sweep_run_uid,
 )
-from mhat.tracking.pipeline import build_track_graph, resolve_input_dirs
+from mhat.tracking.pipeline import build_track_graph, resolve_inputs
+from sweep_ssvm_reg import make_eval_config
 
 # Keys that configure the sweep itself; stripped from the per-run tracking config.
 _SWEEP_KEYS = (
@@ -87,7 +104,7 @@ _SWEEP_KEYS = (
     "seeds",
     "arms",
     "mask_overlap_criterion",
-    "gt_subsets_dirname",
+    "gt_subsets_name",
     "run_name_prefix",
     "ssvm_reg_normalize",
     "ssvm_reg_effective_target",
@@ -97,21 +114,22 @@ _SWEEP_KEYS = (
     "crop_growth_step",
     "crop_axes",
     "crop_membership",
-    "gt_crops_dirname",
-    # Where the sweep groups its runs — a property of the sweep, not of any one
-    # run's tracking parameters.
-    "runs_subdir",
-    "test_runs_subdir",
-    "regsweep_subdir",
+    "gt_crops_name",
+    # The experiment's sweeps — properties of the sweep, not of any one run's
+    # tracking parameters.
+    "regsweep_id",
+    "fits_id",
+    "solves_id",
     # How the sweep is scored and where stage 3 sends its solves — sweep-level, not
     # per-run tracking parameters.
     "eval_metrics",
     "eval_matcher",
     "eval_match_threshold",
-    "ctc_gt",
-    "test_ctc_gt",
+    "ctc_seg_dir",
+    "test_ctc_seg_dir",
+    "test_gt_tracks",
+    "test_gt_seg",
     "selection_metric",
-    "test_dataset",
     "test_template",
 )
 
@@ -482,6 +500,7 @@ def main() -> None:
         parser.error("config is required unless --self-test is given")
 
     config = toml.load(args.config)
+    check_gt_amount_config(config)
     sizes = args.sizes or config["sizes"]
     seeds = args.seeds or config["seeds"]
     arms = args.arms or config["arms"]
@@ -504,12 +523,12 @@ def main() -> None:
             "--crop-targets / --crop-fractions)"
         )
 
-    raw_dir, seg_dir, flow_dirs, gt_data_dir = resolve_input_dirs(config)
-    output_base_dir = Path(config["output_base_dir"])
-    dataset_out = output_base_dir / "tracking" / config["experiment"] / config["dataset"]
-    gt_subsets_root = dataset_out / config.get("gt_subsets_dirname", "gt_subsets")
-    gt_crops_root = dataset_out / config.get("gt_crops_dirname", "gt_crops")
-    runs_subdir = config.get("runs_subdir", "")
+    ds, raw_dir, seg_dir, flow_dirs, full_gt_tracks, full_gt_seg = resolve_inputs(config)
+    ds.bind_raw()
+    gt_subsets_root = gt_variant_root(ds.output_dir, config, "subsets")
+    gt_crops_root = gt_variant_root(ds.output_dir, config, "crops")
+    fits = sweep_id(config, "fits_id")
+    fits_dir = sweep_dir(ds.output_dir, "ssvm", fits)
 
     print("Building candidate graph (once)...")
     base_graph, fragments, merge_history, base_exclusion_sets, scale, axes = build_track_graph(
@@ -519,7 +538,7 @@ def main() -> None:
     print(f"  {len(base_graph.nodes)} candidate nodes, {len(base_graph.edges)} candidate edges")
 
     print("Loading GT (once)...")
-    gt_tracks, gt_seg = load_gt(gt_data_dir, scale)
+    gt_tracks, gt_seg = load_gt(full_gt_tracks, full_gt_seg, scale)
 
     print("Computing candidate<->GT overlaps (once)...")
     overlaps = compute_gt_overlaps(base_graph, fragments, gt_tracks, gt_seg, merge_history)
@@ -567,7 +586,8 @@ def main() -> None:
                 subset_info[(n, seed)] = json.loads((out / "subset.json").read_text())
                 continue
             info = materialize_masked_gt(
-                gt_data_dir,
+                full_gt_tracks,
+                full_gt_seg,
                 out,
                 subsets[seed][n],
                 gt_tracks,
@@ -702,12 +722,13 @@ def main() -> None:
                             f" axes={found.get('axes')}\n"
                             f"  config:   starts={wanted['starts']} stops={wanted['stops']}"
                             f" axes={wanted['axes']}\n"
-                            "Pass --force-gt to rewrite it, or use a fresh gt_crops_dirname."
+                            "Pass --force-gt to rewrite it, or use a fresh gt_crops_name."
                         )
                     crop_info[(condition, seed)] = existing
                     continue
                 info = materialize_cropped_gt(
-                    gt_data_dir,
+                    full_gt_tracks,
+                    full_gt_seg,
                     out,
                     box,
                     gt_tracks,
@@ -938,11 +959,22 @@ def main() -> None:
         if args.dry_run:
             continue
 
-        out_dir = run_dir(dataset_out, runs_subdir, token)
-        out_dir.mkdir(parents=True, exist_ok=True)
+        uid = sweep_run_uid(fits, token)
+        try:
+            out_dir = ds.prepare_run_dir("ssvm", uid)
+        except FileExistsError as error:
+            print(f"  {error}")
+            row["status"] = "run_dir_exists"
+            continue
+        # The GT this run is fit on: its subset or crop (the full GT for the
+        # full-GT reference, whose materialized copy exists for the first seed).
+        own_gt = gt_data_subdir if (gt_data_subdir / "correct_tracks.zarr").is_dir() else None
+        run_gt_tracks = own_gt / "correct_tracks.zarr" if own_gt else full_gt_tracks
+        run_gt_seg = own_gt / "correct_seg.zarr" if own_gt else full_gt_seg
         run_config = {k: v for k, v in config.items() if k not in _SWEEP_KEYS}
-        run_config["output_name"] = token
-        run_config["exp_uid"] = run_ref(runs_subdir, token)
+        run_config["exp_uid"] = uid
+        run_config["gt_tracks"] = str(run_gt_tracks).replace("\\", "/")
+        run_config["gt_seg"] = str(run_gt_seg).replace("\\", "/")
         run_config["gt_amount_arm"] = arm
         run_config["gt_amount_kind"] = job["kind"]
         run_config["gt_amount_n_tracks"] = int(row["n_tracks"])
@@ -985,13 +1017,24 @@ def main() -> None:
         with open(out_dir / "fit_summary.json", "w") as f:
             json.dump(row, f, indent=2)
 
+        # Train-side score: the fit's solution against exactly the GT it was fit
+        # on, written the same way as the held-out solves' eval configs.
+        eval_cfg = make_eval_config(
+            config, ds.output_dir, uid, stage="ssvm", eval_name=fits,
+            gt_tracks=run_gt_tracks, gt_seg=run_gt_seg,
+            ctc_seg_dir=config.get("ctc_seg_dir"),
+        )
+        (fits_dir / "eval_configs").mkdir(parents=True, exist_ok=True)
+        with open(fits_dir / "eval_configs" / f"{token}.toml", "w") as f:
+            toml.dump(eval_cfg, f)
+
     # One file per invocation. With --only (the shape a cluster fan-out takes) every
     # job would otherwise write the same path concurrently and clobber the others.
     stem = "dry_run_summary" if args.dry_run else "run_summary"
     if args.only:
         stem += "_" + ("_".join(sorted(args.only)) if len(args.only) <= 3 else f"{len(args.only)}runs")
-    summary_path = gt_subsets_root / f"{stem}.json"
-    gt_subsets_root.mkdir(parents=True, exist_ok=True)
+    summary_path = fits_dir / f"{stem}.json"
+    fits_dir.mkdir(parents=True, exist_ok=True)
     with open(summary_path, "w") as f:
         json.dump(rows, f, indent=2)
     print(f"\nWrote {summary_path}")

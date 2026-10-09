@@ -2,10 +2,8 @@
 
 For every ground truth edge this compares the raw frame-to-frame displacement
 against the flow-corrected residual ``|pos_u + flow(u) - pos_v|`` — the quantity
-the ILP actually pays for through ``drift_weight``/``drift_constant``. The flow
-field used by the tracking run is always reported; if the sibling flow variant
-(Farneback vs Lucas-Kanade) exists on disk it is reported alongside, which is
-what the original ``compare_gt_drift.py`` did by hand.
+the ILP actually pays for through ``drift_weight``/``drift_constant``, using
+the flow field(s) the tracking run read.
 """
 
 from pathlib import Path
@@ -37,33 +35,19 @@ def _open_flow(flow_dir):
         return None
 
 
-def flow_variants(config, run_config):
-    """Locate the flow fields for this run plus any sibling variant on disk.
+def flow_variants(flow_dirs):
+    """The flow fields the tracking run read, as a list of variants.
 
-    Returns a list of dicts: ``{"name", "flow_3d", "flow_2d", "used_by_run"}``.
+    ``flow_dirs`` is ``Dataset.flow_dirs`` for the run (``{"2d": ..., "3d": ...}``).
+    Returns a list of dicts ``{"name", "flow_3d", "flow_2d", "used_by_run"}``:
+    one Farneback variant, or none when the run used no flow.
     """
-    flow_result = run_config.get("flow_result")
-    if not flow_result:
+    flow_3d = _open_flow(flow_dirs.get("3d"))
+    flow_2d = _open_flow(flow_dirs.get("2d"))
+    if flow_3d is None and flow_2d is None:
         return []
-
-    flow_base = (Path(config["input_base_dir"]) / "opticalflow" /
-                 config["experiment"] / config["dataset"])
-    used_lk = bool(run_config.get("use_lk", False))
-
-    variants = []
-
-    fb_3d = _open_flow(flow_base / "opticalflow_3d" / flow_result)
-    fb_2d = _open_flow(flow_base / "opticalflow_2d" / flow_result)
-    if fb_3d is not None or fb_2d is not None:
-        variants.append({"name": "farneback", "flow_3d": fb_3d, "flow_2d": fb_2d,
-                         "used_by_run": not used_lk})
-
-    lk_3d = _open_flow(flow_base / "opticalflow_lucaskanade" / flow_result)
-    if lk_3d is not None:
-        variants.append({"name": "lucaskanade", "flow_3d": lk_3d, "flow_2d": None,
-                         "used_by_run": used_lk})
-
-    return variants
+    return [{"name": "farneback", "flow_3d": flow_3d, "flow_2d": flow_2d,
+             "used_by_run": True}]
 
 
 def _flow_frames(variant, t):
@@ -83,7 +67,7 @@ def _component_sources(f3, f2, ndim):
     order -- ``(vz, vy, vx)`` for 3D, ``(vy, vx)`` for 2D -- regardless of
     whether the store on disk is native or legacy x-first. In 3D the Z
     component comes from the 3D field and Y/X from the 2D field when it exists
-    (Farneback), otherwise everything comes from one field (LK); the in-plane
+    (Farneback), otherwise everything comes from the 3D field; the in-plane
     pair is always the last two components of the source array, so this works
     whether that array has 2 or 3 components.
     """
@@ -113,8 +97,8 @@ def _region_flow(variant, t, seg_frame, labels, scale_spatial):
     """Flow vectors averaged over each GT label's region, as the tracker does.
 
     ``mhat.tracking.utils.nodes_from_segmentation`` averages the flow over the
-    whole segment rather than sampling one voxel, which matters a lot for
-    Lucas-Kanade (its per-voxel outliers reach hundreds of pixels). Labels absent
+    whole segment rather than sampling one voxel, which damps per-voxel flow
+    outliers. Labels absent
     from the frame come back as NaN so the caller can fall back to point sampling.
     """
     from scipy.ndimage import mean as ndi_mean
@@ -147,32 +131,35 @@ def _region_flow(variant, t, seg_frame, labels, scale_spatial):
 
 
 def gt_label_map(gt_graph, gt_metadata):
-    """{node: segmentation label} for the GT graph, or None if unavailable."""
-    label_prop = "track_id"
-    related = getattr(gt_metadata, "related_objects", None)
-    if related:
-        for ro in related:
-            if ro.type == "labels" and ro.label_prop:
-                label_prop = ro.label_prop
-                break
+    """{node: segmentation label} for the GT graph.
 
-    label_map = {}
-    for node, data in gt_graph.nodes(data=True):
-        if label_prop not in data:
-            return None
-        label_map[node] = int(data[label_prop])
-    return label_map
+    The label property is the one the geff declares for its ``labels`` related
+    object: ``node_prop`` (``from_ctc_to_geff`` writes ``"label"``, equal to the
+    node id), else ``label_prop`` (older stores: ``"seg_id"`` or, for track-id
+    labeled CTC conversions, ``"track_id"``). If no property is declared, or the
+    declared one is not on every node, the segmentation is labeled by node id
+    -- the same fallback ``remap_seg_to_track_ids`` relies on.
+    """
+    label_prop = None
+    for ro in getattr(gt_metadata, "related_objects", None) or []:
+        if ro.type == "labels":
+            label_prop = getattr(ro, "node_prop", None) or ro.label_prop
+            break
+    nodes = gt_graph.nodes(data=True)
+    if label_prop is None or any(label_prop not in data for _, data in nodes):
+        return {node: int(node) for node in gt_graph.nodes}
+    return {node: int(data[label_prop]) for node, data in nodes}
 
 
-def compare_gt_drift(config, gt_data_dir, pred_data_dir, run_config, output_dir=None,
-                     plots=True, echo=True):
+def compare_gt_drift(gt_tracks, gt_seg, flow_dirs, output_dir=None, plots=True,
+                     echo=True):
     """Compare raw vs flow-corrected displacement over all GT edges.
 
     Args:
-        config (dict): Evaluation config (``input_base_dir``/``experiment``/``dataset``).
-        gt_data_dir (Path): Directory holding ``correct_tracks.zarr``.
-        pred_data_dir (Path): Tracking result directory (used for the axis scale).
-        run_config (dict): Tracking config of the run (``flow_result``, ``use_lk``).
+        gt_tracks (Path): The ground-truth tracks (a geff).
+        gt_seg (Path | None): The ground-truth segmentation, labeled by node id.
+            Without it the flow is sampled at each GT centroid.
+        flow_dirs (dict): ``Dataset.flow_dirs`` of the tracking run.
         output_dir (Path | None): Where to write ``gt_drift_report.txt`` and the
             histogram. Nothing is written if None.
         plots (bool): Write the histogram PNG.
@@ -181,10 +168,9 @@ def compare_gt_drift(config, gt_data_dir, pred_data_dir, run_config, output_dir=
     Returns:
         dict: Displacement stats per flow variant.
     """
-    gt_data_dir = Path(gt_data_dir)
     report = Report("GT drift analysis (raw vs flow-corrected displacement)", echo=echo)
 
-    gt_graph, gt_metadata = geff.read(gt_data_dir / "correct_tracks.zarr")
+    gt_graph, gt_metadata = geff.read(Path(gt_tracks))
     axes = gt_metadata.axes or []
     names = [a.name for a in axes if getattr(a, "type", None) != "time"] or ["z", "y", "x"]
     scale = [a.scale if a.scale is not None else 1.0 for a in axes] or [1.0] * (len(names) + 1)
@@ -217,28 +203,23 @@ def compare_gt_drift(config, gt_data_dir, pred_data_dir, run_config, output_dir=
 
     # Prefer averaging the flow over each GT segment, which is what
     # nodes_from_segmentation does; fall back to sampling at the centroid.
-    gt_seg = None
-    label_map = None
-    for candidate in ("correct_seg.zarr", "segmentation"):
-        seg_path = gt_data_dir / candidate
-        if seg_path.exists():
-            try:
-                gt_seg = zarr.open(str(seg_path), mode="r")
-            except (KeyError, FileNotFoundError, ValueError):
-                gt_seg = None
-            break
+    seg_path, gt_seg, label_map = gt_seg, None, None
+    if seg_path is not None and Path(seg_path).exists():
+        try:
+            gt_seg = zarr.open(str(seg_path), mode="r")
+        except (KeyError, FileNotFoundError, ValueError):
+            gt_seg = None
     if gt_seg is not None and gt_seg.ndim - 1 == len(names):
         label_map = gt_label_map(gt_graph, gt_metadata)
     use_regions = gt_seg is not None and label_map is not None
     report.line("Flow sampling: " + ("mean over the GT segment (matches tracking)"
                                      if use_regions else
                                      "single voxel at the GT centroid (no GT segmentation "
-                                     "available; outlier-sensitive for Lucas-Kanade)"))
+                                     "available; outlier-sensitive)"))
 
-    variants = flow_variants(config, run_config)
+    variants = flow_variants(flow_dirs)
     if not variants:
-        report.line("No optical flow results found for this run "
-                    "(no flow_result in the tracking config, or the flow dirs are missing).")
+        report.line("No optical flow for this run (no flow_result in its config).")
 
     results = {"none": {"dist": no_flow, "flow_mag": None, "used_by_run": not variants}}
 

@@ -17,9 +17,21 @@ The dense-crop arm is a *training-annotation* protocol, so nothing is cropped he
 its weights are applied to the whole test volume exactly like every other arm's, and
 the crop geometry rides along only as provenance.
 
+The test side is given by the sweep config: ``test_template`` is a tracking
+config for the test movie (its own ``raw_path``, ``output_dir``, ``seg_result``,
+``flow_result`` and structural parameters), and ``test_gt_tracks`` /
+``test_gt_seg`` (``test_ctc_seg_dir``) its GT. Everything is written into the
+held-out solves' sweep on the test movie, ``<test output_dir>/tracking/sweeps/
+<solves_id>/``: ``track_configs/<token>.toml`` (run ``sweeps/<solves_id>/runs/
+<token>``, with ``weights_from`` naming the fit) and ``eval_configs/<token>.toml``
+(``eval_name`` = the sweep id). Then::
+
+    python scripts/04_tracking/solve_many_weights.py <solves sweep>/track_configs/*.toml
+    python scripts/05_evaluation/run_evals.py --config-dir <solves sweep>/eval_configs
+    python scripts/05_evaluation/collect_gt_amount.py <config> --side test
+
 Usage:
-    python scripts/04_tracking/make_gt_amount_test_configs.py \
-        configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/gt_amount/gt_amount.toml
+    python scripts/04_tracking/make_gt_amount_test_configs.py <gt_amount_config.toml>
 """
 
 from __future__ import annotations
@@ -32,17 +44,18 @@ import toml
 
 from fit_weights_ssvm import _LEARNED_WEIGHT_TO_TOML
 from sweep_ssvm_reg import make_eval_config
-from mhat.tracking.gt_subsets import iter_run_dirs, run_ref, token_regex
+
+from mhat.dataset import Dataset
+from mhat.tracking.gt_subsets import (
+    check_gt_amount_config,
+    iter_sweep_runs,
+    sweep_dir,
+    sweep_id,
+    sweep_run_uid,
+    token_regex,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# Fallbacks only. The dataset and template belong to the sweep, so they are read
-# from the sweep config (`test_dataset` / `test_template`) when it carries them;
-# these keep the original NC281 invocation working unchanged.
-DEFAULT_TEST_DATASET = "02_nuclei_denoised_test"
-DEFAULT_TEMPLATE = (
-    REPO_ROOT
-    / "scratch_configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/ssvm_test_from_train_config.toml"
-)
 
 WEIGHT_KEYS = tuple(_LEARNED_WEIGHT_TO_TOML.values())
 PROVENANCE_KEYS = (
@@ -63,55 +76,44 @@ PROVENANCE_KEYS = (
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", help="the GT-amount sweep config (train side)")
-    parser.add_argument("--test-template", type=Path, default=None)
-    parser.add_argument("--out-dir", type=Path, default=None)
-    parser.add_argument("--test-dataset", default=None)
+    parser.add_argument("--test-template", type=Path, default=None,
+                        help="overrides the config's test_template")
     parser.add_argument("--match-threshold", type=int, default=None)
     args = parser.parse_args()
 
     config = toml.load(args.config)
+    check_gt_amount_config(config)
     prefix = config.get("run_name_prefix", "gta")
     token_re = token_regex(prefix)
-
-    # CLI overrides config overrides the NC281 fallback.
-    test_dataset = args.test_dataset or config.get("test_dataset") or DEFAULT_TEST_DATASET
-    test_template = args.test_template or config.get("test_template") or DEFAULT_TEMPLATE
-    test_template = Path(test_template)
-    if not test_template.is_absolute():
-        test_template = REPO_ROOT / test_template
     if args.match_threshold is not None:
         config = {**config, "eval_match_threshold": args.match_threshold}
 
-    input_base_dir = Path(config["input_base_dir"])
-    output_base_dir = Path(config["output_base_dir"])
-    experiment = config["experiment"]
-    train_root = input_base_dir / "tracking" / experiment / config["dataset"]
+    test_template = args.test_template or config.get("test_template")
+    if not test_template:
+        raise SystemExit("set test_template (a tracking config for the test movie)")
+    test_template = Path(test_template)
+    if not test_template.is_absolute():
+        test_template = REPO_ROOT / test_template
+    template = toml.load(test_template)
+    test_ds = Dataset.from_config(template)  # refuses old-layout keys
+    for key in ("test_gt_tracks", "test_gt_seg"):
+        if key not in config:
+            raise SystemExit(f"set {key} (the test movie's GT) in the sweep config")
 
     # Fits are discovered on the train side; the solves they produce live on the
-    # test side, which is grouped independently.
-    runs_subdir = config.get("runs_subdir", "")
-    test_runs_subdir = config.get("test_runs_subdir", "")
-
-    template = toml.load(test_template)
-    assert template["dataset"] == test_dataset, (
-        f"template targets {template['dataset']!r}, expected {test_dataset!r}"
-    )
-
-    # Config layout mirrors the experiments layout.
-    out_dir = args.out_dir or (
-        REPO_ROOT / "configs/tracking" / experiment / test_dataset
-        / (test_runs_subdir or "gt_amount")
-    )
-    eval_dir = out_dir / "eval"
+    # test side, as their own sweep.
+    fits = sweep_id(config, "fits_id")
+    solves = sweep_id(config, "solves_id")
+    solves_dir = sweep_dir(test_ds.output_dir, "tracking", solves)
+    out_dir, eval_dir = solves_dir / "track_configs", solves_dir / "eval_configs"
     out_dir.mkdir(parents=True, exist_ok=True)
     eval_dir.mkdir(parents=True, exist_ok=True)
 
     written, skipped, train_empty_tokens = [], [], []
-    for fit_dir in iter_run_dirs(train_root, runs_subdir):
+    for fit_dir in iter_sweep_runs(config["output_dir"], "ssvm", fits):
         token = fit_dir.name
         if not token_re.match(token):
             continue
-
         summary_path = fit_dir / "fit_summary.json"
         train_empty = False
         if summary_path.is_file():
@@ -130,8 +132,8 @@ def main() -> None:
         if not learned_path.is_file():
             skipped.append((token, "no learned_weights.toml"))
             continue
-        learned = toml.load(learned_path)
 
+        learned = toml.load(learned_path)
         track_cfg = dict(template)
         for key in WEIGHT_KEYS:
             if key in learned:
@@ -139,7 +141,10 @@ def main() -> None:
         for key in PROVENANCE_KEYS:
             if key in learned:
                 track_cfg[key] = learned[key]
-        track_cfg["exp_uid"] = run_ref(test_runs_subdir, token)
+        uid = sweep_run_uid(solves, token)
+        track_cfg["exp_uid"] = uid
+        # The fit the weights came from (an ssvm run, possibly of another movie).
+        track_cfg["weights_from"] = str(fit_dir).replace("\\", "/")
         with open(out_dir / f"{token}.toml", "w") as f:
             f.write(
                 f"# Auto-generated by make_gt_amount_test_configs.py from {learned_path}\n"
@@ -148,18 +153,14 @@ def main() -> None:
             )
             toml.dump(track_cfg, f)
 
-        # The TEST split has its own CTC GT folder, so `ctc_gt` is overridden here
-        # rather than inherited: the sweep config's value names the TRAIN folder,
-        # and pointing at it would silently skip SEG on every generated run.
+        # Scored against the TEST movie's own GT (and CTC SEG folder): the train
+        # values would silently score the wrong annotation, or skip SEG.
         eval_cfg = make_eval_config(
-            {**config, "ctc_gt": config.get("test_ctc_gt", config.get("ctc_gt"))},
-            input_base_dir,
-            output_base_dir,
-            experiment,
-            test_dataset,
-            run_ref(test_runs_subdir, token),
+            config, test_ds.output_dir, uid, stage="tracking", eval_name=solves,
+            gt_tracks=config["test_gt_tracks"], gt_seg=config["test_gt_seg"],
+            ctc_seg_dir=config.get("test_ctc_seg_dir"),
         )
-        with open(eval_dir / f"{token}_eval.toml", "w") as f:
+        with open(eval_dir / f"{token}.toml", "w") as f:
             toml.dump(eval_cfg, f)
         written.append(token)
         if train_empty:

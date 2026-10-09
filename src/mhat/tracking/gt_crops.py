@@ -745,7 +745,8 @@ def assert_no_unannotated_overlap(
 
 
 def materialize_cropped_gt(
-    gt_data_dir: Path,
+    gt_tracks: Path,
+    gt_seg: Path,
     out_dir: Path,
     box: CropBox,
     ft_graph,
@@ -755,8 +756,9 @@ def materialize_cropped_gt(
 ) -> dict:
     """Write the GT an annotator working in `box` would actually possess.
 
-    A drop-in ``gt_data_dir``: ``correct_tracks.zarr`` + ``correct_seg.zarr``, so
-    ``load_gt`` and ``evaluate_tracks.py`` point straight at it. Kept GT objects
+    ``correct_tracks.zarr`` + ``correct_seg.zarr``, read from the full GT
+    (``gt_tracks`` / ``gt_seg``), so a config's ``gt_tracks`` / ``gt_seg`` point
+    straight at them. Kept GT objects
     are written **whole**, never clipped to the box — an annotator who annotates a
     cell annotates all of it, and clipping would corrupt every area/IoGT the fit
     and the evaluation compute.
@@ -770,8 +772,7 @@ def materialize_cropped_gt(
     ``gt_track_labels_in_crop`` reads the track-id-remapped volume. Both are views
     of the same voxels, so the two label sets correspond exactly.
     """
-    gt_tracks_path = Path(gt_data_dir) / "correct_tracks.zarr"
-    gt_seg_path = Path(gt_data_dir) / "correct_seg.zarr"
+    gt_tracks_path, gt_seg_path = Path(gt_tracks), Path(gt_seg)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -832,7 +833,7 @@ def materialize_cropped_gt(
         "seed": int(box.seed),
         "crop": box.to_dict(),
         "membership": membership,
-        "source_gt_dir": str(gt_data_dir),
+        "source_gt_tracks": str(gt_tracks_path),
         "kept_track_ids": kept_track_ids,
         "kept_geff_node_ids": kept_node_ids,
         "n_tracks": len(kept_track_ids),

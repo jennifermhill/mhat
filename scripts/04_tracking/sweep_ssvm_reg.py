@@ -21,11 +21,16 @@ The graph, GT and candidate<->GT overlaps are built ONCE and reused across the g
 so the whole sweep is a single job (~4 min setup + ~1 min per value). Do not fan it
 out — parallelizing would pay the 4 min setup per value to save seconds.
 
+The fits are the sweep ``<output_dir>/ssvm/sweeps/<regsweep_id>/`` (default id
+``regsweep``): run ``<prefix>_rNN`` holds the fit, ``eval_configs/`` one eval config
+per fit (scored against the full ``gt_tracks`` / ``gt_seg``, ``eval_name`` = the
+sweep id), and ``--collect`` writes ``<prefix>_summary.json`` there.
+
 Usage:
     # fit the grid
     python scripts/04_tracking/sweep_ssvm_reg.py <gt_amount_config.toml>
     # score them
-    python scripts/05_evaluation/run_evals.py --config-dir <printed eval dir>
+    python scripts/05_evaluation/run_evals.py --config-dir <sweep>/eval_configs
     # read off the winner and the effective-reg target for stage 2
     python scripts/04_tracking/sweep_ssvm_reg.py <gt_amount_config.toml> --collect
 """
@@ -34,16 +39,28 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import traceback
 from pathlib import Path
 
-import numpy as np
 import toml
 
 from fit_weights_ssvm import configure_logging, fit_and_solve_on_graph, load_gt
 from mhat.tracking.gt_annotation import assign_gt_labels, compute_gt_overlaps
-from mhat.tracking.gt_subsets import copy_track_graph, run_dir, run_ref
-from mhat.tracking.pipeline import build_track_graph, resolve_input_dirs
+from mhat.tracking.gt_subsets import (
+    check_gt_amount_config,
+    copy_track_graph,
+    sweep_dir,
+    sweep_id,
+    sweep_run_uid,
+)
+from mhat.tracking.pipeline import build_track_graph, resolve_inputs
+
+# The exact-name eval lookup lives with the sweep collector (convention 2).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "05_evaluation"))
+from collect_sweep import find_eval  # noqa: E402
+
+DEFAULT_EVAL_METRICS = ["basic", "track_overlap"]
 
 # Even twelfth-decade grid, 0.1 down to 0.00316 — effective reg ~34.4 to ~1087.7 at
 # full GT (n_labeled = 10877). It nests the familiar quarter-decade points (0.0562,
@@ -65,19 +82,20 @@ DEFAULT_REGS = [
 
 SWEEP_KEYS = (
     "sizes", "include_full", "seeds", "arms", "mask_overlap_criterion",
-    "gt_subsets_dirname", "run_name_prefix", "ssvm_reg_normalize",
+    "gt_subsets_name", "run_name_prefix", "ssvm_reg_normalize",
     "ssvm_reg_effective_target", "ssvm_reg_sweep",
     # Stage 1 calibrates on the full GT and never crops, but it shares the sweep
     # config with stage 2, so the arm-C keys have to be stripped here as well.
-    "crop_fractions", "crop_axes", "crop_membership", "gt_crops_dirname",
+    "crop_fractions", "crop_axes", "crop_membership", "gt_crops_name",
     "crop_target_gt_nodes", "crop_growth_step",
-    # Stage 1 and stage 2 group their runs separately, so the stage-2 keys must
-    # not leak into a regsweep run's own config.
-    "runs_subdir", "test_runs_subdir", "regsweep_subdir",
+    # The experiment's sweeps, so the stage-2 keys must not leak into a regsweep
+    # run's own config.
+    "regsweep_id", "fits_id", "solves_id",
     # How the sweep is SCORED, and where stage 3 sends its solves. Properties of
     # the sweep, not of any one run's tracking parameters.
-    "eval_metrics", "eval_matcher", "eval_match_threshold", "ctc_gt", "test_ctc_gt",
-    "selection_metric", "test_dataset", "test_template",
+    "eval_metrics", "eval_matcher", "eval_match_threshold", "ctc_seg_dir",
+    "test_ctc_seg_dir", "test_gt_tracks", "test_gt_seg",
+    "selection_metric", "test_template",
 )
 
 #: Short name -> path into track_metrics.json. `selection_metric` in the sweep
@@ -96,11 +114,16 @@ def token(index: int, prefix: str) -> str:
     return f"{prefix}_r{index:02d}"
 
 
-def make_eval_config(config, input_base_dir, output_base_dir, experiment, dataset, track_result):
-    """Build the eval config for one regsweep run.
+def make_eval_config(
+    config, output_dir, track_result, *, stage, eval_name, gt_tracks, gt_seg,
+    ctc_seg_dir=None,
+):
+    """Build the eval config for one run of a GT-amount sweep.
 
     Metrics/matcher come from the sweep config so a CTC dataset can be scored with
-    the CTC matcher. Defaults reproduce the point-matched NC281 setup exactly.
+    the CTC matcher; defaults reproduce the point-matched NC281 setup. The eval
+    nests inside the run as ``<eval_name>_<metrics>_<time>``, ``eval_name`` being
+    the sweep id, which is how ``--collect`` and ``collect_gt_amount.py`` find it.
 
     `match_threshold` is written only for matchers that take one: `CTCMatcher()`
     accepts no arguments, and evaluate_tracking forwards `threshold=` whenever the
@@ -108,18 +131,20 @@ def make_eval_config(config, input_base_dir, output_base_dir, experiment, datase
     """
     matcher = config.get("eval_matcher", "point")
     eval_cfg = {
-        "input_base_dir": str(input_base_dir).replace("\\", "/") + "/",
-        "output_base_dir": str(output_base_dir).replace("\\", "/") + "/",
-        "experiment": experiment,
-        "dataset": dataset,
+        "output_dir": str(output_dir).replace("\\", "/"),
         "track_result": track_result,
-        "metrics": config.get("eval_metrics", ["basic", "track_overlap"]),
+        "eval_name": eval_name,
+        "gt_tracks": str(gt_tracks).replace("\\", "/"),
+        "gt_seg": str(gt_seg).replace("\\", "/"),
+        "metrics": config.get("eval_metrics", DEFAULT_EVAL_METRICS),
         "matcher": matcher,
     }
+    if stage != "tracking":
+        eval_cfg["track_stage"] = stage
     if matcher != "ctc":
         eval_cfg["match_threshold"] = config.get("eval_match_threshold", 10)
-    if config.get("ctc_gt"):
-        eval_cfg["ctc_gt"] = config["ctc_gt"]
+    if ctc_seg_dir:
+        eval_cfg["ctc_seg_dir"] = str(ctc_seg_dir).replace("\\", "/")
     return eval_cfg
 
 
@@ -133,22 +158,15 @@ def main() -> None:
     args = parser.parse_args()
 
     config = toml.load(args.config)
+    check_gt_amount_config(config)
     regs = args.regs or config.get("ssvm_reg_sweep") or DEFAULT_REGS
     prefix = args.prefix
 
-    input_base_dir = Path(config["input_base_dir"])
-    output_base_dir = Path(config["output_base_dir"])
-    experiment = config["experiment"]
-    dataset = config["dataset"]
-    train_root = output_base_dir / "tracking" / experiment / dataset
-    eval_root = output_base_dir / "evaluation" / experiment / dataset
-    # Stage 1 groups its runs separately from stage 2 — they share this config but
-    # are different sweeps over the same dataset.
-    subdir = config.get("regsweep_subdir", "")
-    eval_cfg_dir = (
-        Path(__file__).resolve().parents[2]
-        / "scratch_configs/tracking" / experiment / dataset / (subdir or "gt_amount") / "eval"
-    )
+    # Stage 1 is its own sweep, separate from the stage-2 fits that share this config.
+    regsweep = sweep_id(config, "regsweep_id")
+    reg_dir = sweep_dir(config["output_dir"], "ssvm", regsweep)
+    eval_cfg_dir = reg_dir / "eval_configs"
+    eval_metrics = config.get("eval_metrics", DEFAULT_EVAL_METRICS)
 
     selection_metric = config.get("selection_metric", "target_effectiveness")
     if selection_metric not in SELECTION_METRIC_PATHS:
@@ -162,15 +180,17 @@ def main() -> None:
         rows = []
         for i, reg in enumerate(regs):
             tok = token(i, prefix)
-            summary_path = run_dir(train_root, subdir, tok) / "fit_summary.json"
-            metrics_path = run_dir(eval_root, subdir, tok) / "track_metrics.json"
+            fit_dir = reg_dir / "runs" / tok
+            summary_path = fit_dir / "fit_summary.json"
+            found = find_eval(fit_dir, regsweep, eval_metrics)
+            metrics_path = found / "track_metrics.json" if found else None
             row = {"token": tok, "ssvm_reg": reg, "status": "missing"}
             if summary_path.is_file():
                 s = json.loads(summary_path.read_text())
                 row["status"] = s.get("status", "ok")
                 row["n_labeled"] = s.get("n_labeled_variables")
                 row["n_solution_nodes"] = s.get("n_solution_nodes")
-            if metrics_path.is_file():
+            if metrics_path is not None:
                 m = json.loads(metrics_path.read_text())
                 row["target_effectiveness"] = m.get("TrackOverlapMetrics", {}).get(
                     "target_effectiveness"
@@ -237,7 +257,7 @@ def main() -> None:
         top = sorted(scored, key=lambda r: r["selected"], reverse=True)[:3]
         spread = top[0]["selected"] - top[-1]["selected"]
         print(
-            f"Top 3: "
+            "Top 3: "
             + ", ".join(f"{r['token']}={r['selected']:.4f}" for r in top)
             + f"  (spread {spread:.4f})"
         )
@@ -246,13 +266,13 @@ def main() -> None:
                 "  ^^ PLATEAU: top-3 spread < 0.005. Prefer the geometric center of the\n"
                 "     plateau over the argmax — the ranking here is within eval noise."
             )
-        summary_out = train_root / subdir if subdir else train_root
-        summary_out.mkdir(parents=True, exist_ok=True)
-        with open(summary_out / f"{prefix}_summary.json", "w") as f:
+        reg_dir.mkdir(parents=True, exist_ok=True)
+        with open(reg_dir / f"{prefix}_summary.json", "w") as f:
             json.dump({"rows": rows, "best": best, "effective_target": target}, f, indent=2)
         return
 
-    raw_dir, seg_dir, flow_dirs, gt_data_dir = resolve_input_dirs(config)
+    ds, raw_dir, seg_dir, flow_dirs, gt_tracks_path, gt_seg_path = resolve_inputs(config)
+    ds.bind_raw()
 
     print("Building candidate graph (once)...")
     base_graph, fragments, merge_history, exclusion_sets, scale, axes = build_track_graph(
@@ -262,7 +282,7 @@ def main() -> None:
     print(f"  {len(base_graph.nodes)} nodes, {len(base_graph.edges)} edges")
 
     print("Loading GT (once)...")
-    gt_graph, gt_seg = load_gt(gt_data_dir, scale)
+    gt_graph, gt_seg = load_gt(gt_tracks_path, gt_seg_path, scale)
     print("Computing candidate<->GT overlaps (once)...")
     overlaps = compute_gt_overlaps(base_graph, fragments, gt_graph, gt_seg, merge_history)
 
@@ -284,12 +304,15 @@ def main() -> None:
         n_labeled = sum(1 for d in graph.nodes.values() if d.get("gt_selected") is not None)
         n_labeled += sum(1 for d in graph.edges.values() if d.get("gt_selected") is not None)
 
-        out_dir = run_dir(train_root, subdir, tok)
-        out_dir.mkdir(parents=True, exist_ok=True)
+        uid = sweep_run_uid(regsweep, tok)
+        try:
+            out_dir = ds.prepare_run_dir("ssvm", uid)
+        except FileExistsError as error:
+            print(f"  {error}")
+            continue
         run_config = {k: v for k, v in config.items() if k not in SWEEP_KEYS}
         run_config["ssvm_reg"] = float(reg)
-        run_config["output_name"] = tok
-        run_config["exp_uid"] = run_ref(subdir, tok)
+        run_config["exp_uid"] = uid
         with open(out_dir / "config.toml", "w") as f:
             toml.dump(run_config, f)
 
@@ -316,11 +339,13 @@ def main() -> None:
             json.dump(row, f, indent=2)
 
         # Score against the COMPLETE train GT — legitimate here because this stage is
-        # the fully-annotated condition. No gt_data_dir override needed.
+        # the fully-annotated condition.
         eval_cfg = make_eval_config(
-            config, input_base_dir, output_base_dir, experiment, dataset, run_ref(subdir, tok)
+            config, ds.output_dir, uid, stage="ssvm", eval_name=regsweep,
+            gt_tracks=gt_tracks_path, gt_seg=gt_seg_path,
+            ctc_seg_dir=config.get("ctc_seg_dir"),
         )
-        with open(eval_cfg_dir / f"{tok}_eval.toml", "w") as f:
+        with open(eval_cfg_dir / f"{tok}.toml", "w") as f:
             f.write(f"# ssvm_reg = {reg}; scored against the COMPLETE train GT.\n")
             toml.dump(eval_cfg, f)
 

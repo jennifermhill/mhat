@@ -638,7 +638,7 @@ def _nearest(labels, centroids, pos):
     return int(labels[idx]), float(dists[idx])
 
 
-def analyze_fn_nodes(matched, config, pred_data_dir, run_config, output_dir=None,
+def analyze_fn_nodes(matched, config, pred_data_dir, seg_dir, output_dir=None,
                      proximity_threshold=None, max_listed=None, echo=True):
     """Classify unmatched GT nodes as segmentation / solver / matcher misses.
 
@@ -652,9 +652,10 @@ def analyze_fn_nodes(matched, config, pred_data_dir, run_config, output_dir=None
 
     Args:
         matched: traccuracy ``Matched`` object for this run.
-        config (dict): Evaluation config (for ``input_base_dir``/``experiment``/``dataset``).
+        config (dict): Evaluation config (for the proximity threshold).
         pred_data_dir (Path): Tracking result directory.
-        run_config (dict): Tracking config of the run (for ``seg_result``).
+        seg_dir (Path | None): The segmentation run the tracking run read
+            (``Dataset.seg_dir`` of its ``seg_result``), or None if unknown.
         output_dir (Path | None): Where to write ``fn_nodes_report.txt``.
         proximity_threshold (float | None): Max distance (world units) for an
             object to count as "at the GT location". Defaults to the eval config's
@@ -701,10 +702,8 @@ def analyze_fn_nodes(matched, config, pred_data_dir, run_config, output_dir=None
 
     # Candidate fragments (all hypotheses, not just the selected ones).
     fragments = None
-    seg_result = run_config.get("seg_result")
-    if seg_result:
-        seg_zarr_path = (Path(config["input_base_dir"]) / "segmentation" /
-                         config["experiment"] / config["dataset"] / seg_result / "data.zarr")
+    if seg_dir is not None:
+        seg_zarr_path = Path(seg_dir) / "data.zarr"
         try:
             fragments = zarr.open(str(seg_zarr_path), mode="r")["fragments"]
         except (KeyError, FileNotFoundError, ValueError) as e:

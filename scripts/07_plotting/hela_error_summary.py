@@ -10,21 +10,22 @@ One axes, two groups of bars separated by a divider:
 
 Data provenance
 ---------------
-* TRA / DET / SEG: ``<eval_base_dir>/Fluo-N2DL-HeLa/<dataset>/<uid>/track_metrics.json``.
+* TRA / DET / SEG: the run's eval ``<output_dir>/<run>/evaluation/<eval>/track_metrics.json``.
 * Divisions: recomputed live with traccuracy ``DivisionMetrics`` on the CTC
-  matching (``match_tracking``), at frame buffer ``--frame-buffer`` (default 1,
+  matching (``match_tracking``) against ``<output_dir>/gt/ctc/``, at frame buffer ``--frame-buffer`` (default 1,
   the buffer used for BC(1) / BIO in hela_optimization_log.md). Two traccuracy
   0.4.3 workarounds, same as ``scratch_configs/experiments/hela_bio/bio.py``:
   ``override_matcher=True`` because the CTC matching is many-to-one, and pred
   nodes matched to several GT nodes (ns nodes) are dropped from the matching
   first, because the shifted-division correction raises on them.
 
-Defaults are the held-out run (02_cells / hela_holdout_ft08). For the train
-best, pass ``--dataset 01_cells --uid hela_B6_ft08``.
+Defaults are the held-out run (02_cells / hela_holdout_ft08) and its CTC eval;
+for another run pass ``--output-dir``, ``--run`` and ``--eval``.
 
 Usage:
     python scripts/07_plotting/hela_error_summary.py \
-        [--dataset 02_cells] [--uid hela_holdout_ft08] [--output foo.png]
+        [--output-dir experiments/Fluo-N2DL-HeLa/02_cells] [--run tracking/hela_holdout_ft08] \
+        [--eval ctc_ctc_2026-09-24_15-10-46] [--output foo.png]
 """
 import argparse
 import json
@@ -39,7 +40,6 @@ from traccuracy.matchers._matched import Matched
 
 from mhat.evaluation.evaluate_tracking import match_tracking
 
-EXPERIMENT = "Fluo-N2DL-HeLa"
 CTC_METRICS = ["TRA", "DET", "SEG"]
 
 # MHAT's CTC scores keep the pink used for MHAT in the other figures (Wong
@@ -51,13 +51,15 @@ INK = "#333333"
 MUTED = "#666666"
 
 
-def division_counts(tracking_dir, dataset, uid, frame_buffer):
+def division_counts(output_dir, run, frame_buffer):
     """(total GT, FP, FN) divisions for one run at the given frame buffer."""
-    gt_dir = tracking_dir / EXPERIMENT / dataset
-    cfg = {"metrics": ["ctc"], "matcher": "ctc", "ctc_gt": dataset[:2] + "_GT"}
+    gt_dir = output_dir / "gt" / "ctc"
+    cfg = {"metrics": ["ctc"], "matcher": "ctc"}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        m = match_tracking(cfg, gt_dir, gt_dir / uid)
+        m = match_tracking(
+            cfg, gt_dir / "correct_tracks.zarr", gt_dir / "correct_seg.zarr", output_dir / run
+        )
         n_gt_per_pred = Counter(p for _, p in m.mapping)
         one_to_one = Matched(
             m.gt_graph, m.pred_graph,
@@ -73,20 +75,21 @@ def division_counts(tracking_dir, dataset, uid, frame_buffer):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--dataset", default="02_cells")
-    ap.add_argument("--uid", default="hela_holdout_ft08")
-    ap.add_argument("--tracking-base-dir", default="experiments/tracking")
-    ap.add_argument("--eval-base-dir", default="experiments/evaluation")
+    ap.add_argument("--output-dir", type=Path, default=Path("experiments/Fluo-N2DL-HeLa/02_cells"),
+                    help="the HeLa movie's output directory")
+    ap.add_argument("--run", default="tracking/hela_holdout_ft08",
+                    help="the run, relative to --output-dir")
+    ap.add_argument("--eval", default="ctc_ctc_2026-09-24_15-10-46",
+                    help="the run's CTC eval (directory name)")
     ap.add_argument("--frame-buffer", type=int, default=1)
     ap.add_argument("--output", default=None, help="Override output PNG path")
     args = ap.parse_args()
 
-    eval_dir = Path(args.eval_base_dir) / EXPERIMENT / args.dataset
-    ctc = json.loads((eval_dir / args.uid / "track_metrics.json")
-                     .read_text())["CTCMetrics"]
-    n_gt, n_fp, n_fn = division_counts(Path(args.tracking_base_dir), args.dataset,
-                                       args.uid, args.frame_buffer)
-    print(f"{args.dataset}/{args.uid}: " + ", ".join(f"{k} {ctc[k]:.4f}" for k in CTC_METRICS)
+    metrics_path = args.output_dir / args.run / "evaluation" / args.eval / "track_metrics.json"
+    ctc = json.loads(metrics_path.read_text())["CTCMetrics"]
+    n_gt, n_fp, n_fn = division_counts(args.output_dir, args.run, args.frame_buffer)
+    dataset = args.output_dir.name
+    print(f"{dataset}/{args.run}: " + ", ".join(f"{k} {ctc[k]:.4f}" for k in CTC_METRICS)
           + f"; GT divisions {n_gt}, FP {n_fp}, FN {n_fn} (frame buffer {args.frame_buffer})")
 
     labels = CTC_METRICS + ["FP\ndivisions", "FN\ndivisions"]
@@ -119,7 +122,8 @@ def main():
     ax.set_axisbelow(True)
 
     fig.tight_layout()
-    out = Path(args.output or eval_dir / f"hela_error_summary_{args.dataset}.png")
+    out = Path(args.output or args.output_dir / "figures" / f"hela_error_summary_{dataset}.png")
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"Saved {out}")
 

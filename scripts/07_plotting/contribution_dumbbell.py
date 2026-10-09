@@ -22,12 +22,11 @@ Usage:
         --addition configs/evaluation/solver_addition.toml --dataset mda231 [--output foo.png]
 """
 import argparse
-import json
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+
+import plot_spec
 
 
 def walk(obj, path):
@@ -42,30 +41,12 @@ def reduce_value(value, reduction):
     return float(value)  # "scalar"
 
 
-def mfile_for(cond, dataset_cfg):
-    # per-condition override wins (e.g. sparse baseline/full store point-matched
-    # metrics in track_metrics_point.json), else the dataset default.
-    return cond.get("metrics_filename",
-                    dataset_cfg.get("metrics_filename", "track_metrics.json"))
-
-
-MISSING = set()
-
-
-def load_metrics(dataset_cfg, uid, metric_specs, mfile="track_metrics.json"):
-    p = (
-        Path(dataset_cfg["eval_base_dir"])
-        / dataset_cfg["experiment"]
-        / dataset_cfg["dataset_dir"]
-        / uid
-        / mfile
-    )
-    if not p.is_file():
-        print(f"warning: metrics missing for uid={uid}; treating as zeros")
-        MISSING.add(uid)
-        return {k: 0.0 for k in metric_specs}
-    with open(p) as f:
-        m = json.load(f)
+def load_metrics(dataset_cfg, cond, metric_specs):
+    """The condition's metrics (its run and eval, see plot_spec.py). A named eval
+    that is missing raises; a placeholder has no place in this figure either."""
+    m = plot_spec.load_metrics(dataset_cfg, cond)
+    if m is None:
+        raise ValueError(f"condition {cond.get('label')!r} is still a placeholder")
     return {k: reduce_value(walk(m, spec["json_path"]), spec["reduction"])
             for k, spec in metric_specs.items()}
 
@@ -96,10 +77,8 @@ def main():
     # Reference points.
     full_cond = abl["conditions"]["baseline"]
     none_cond = add["conditions"]["none"]
-    full_uid = full_cond["tracking_uid"]
-    none_uid = none_cond["tracking_uid"]
-    full = load_metrics(abl, full_uid, metric_specs, mfile_for(full_cond, abl))
-    none = load_metrics(add, none_uid, metric_specs, mfile_for(none_cond, add))
+    full = load_metrics(abl, full_cond, metric_specs)
+    none = load_metrics(add, none_cond, metric_specs)
 
     # cost key -> {ablation deltas, addition deltas, label, color}
     costs = {}
@@ -107,24 +86,21 @@ def main():
         if key in ("baseline", "no_all"):
             continue
         c = strip_prefix(key)
-        m = load_metrics(abl, cond["tracking_uid"], metric_specs, mfile_for(cond, abl))
+        m = load_metrics(abl, cond, metric_specs)
         # Signed change from removing the cost: metric(Full - X) - metric(Full).
         # Negative when removing hurts, so an essential cost spans a wide range
         # (big negative removal + big positive addition) and a useless one hugs 0.
         costs.setdefault(c, {})["abl"] = {k: m[k] - full[k] for k in metric_specs}
-        costs[c]["abl_missing"] = cond["tracking_uid"] in MISSING
         costs[c].setdefault("label", nice_label(cond.get("label")))
         costs[c].setdefault("color", cond.get("color", "#444444"))
     for key, cond in add["conditions"].items():
         if key in ("none", "full"):
             continue
         c = strip_prefix(key)
-        m = load_metrics(add, cond["tracking_uid"], metric_specs, mfile_for(cond, add))
+        m = load_metrics(add, cond, metric_specs)
         costs.setdefault(c, {})["add"] = {k: m[k] - none[k] for k in metric_specs}
-        costs[c]["add_missing"] = cond["tracking_uid"] in MISSING
         costs[c]["label"] = nice_label(cond.get("label"))  # prefer addition label
         costs[c].setdefault("color", cond.get("color", "#444444"))
-    none_missing = none_uid in MISSING
 
     # Order rows by total spread (addition gain minus signed ablation change) on
     # the first metric, so the most essential cost is at the top.
@@ -158,29 +134,13 @@ def main():
             col = costs[c]["color"]
             a = costs[c].get("abl", {}).get(key)
             d = costs[c].get("add", {}).get(key)
-            # Red X only when a dot's OWN run is missing. When just the None
-            # reference is missing, the open (addition) dot still has data -- it
-            # shows an absolute metric instead of a marginal (see footnote), so
-            # we keep it as an open dot but drop the connecting line.
-            d_missing = costs[c].get("add_missing", False)
-            a_missing = costs[c].get("abl_missing", False)
-            line_ok = (a is not None and d is not None and not d_missing
-                       and not a_missing and not none_missing)
-            if line_ok:
+            if a is not None and d is not None:
                 ax.plot([d, a], [i, i], color=col, lw=2, alpha=0.55, zorder=1)
             if d is not None:
-                if d_missing:
-                    ax.scatter(d, i, s=70, marker="x", color="#d62728",
-                               linewidths=2, zorder=3)
-                else:
-                    ax.scatter(d, i, s=90, facecolors="white", edgecolors=col,
-                               linewidths=2, zorder=3)
+                ax.scatter(d, i, s=90, facecolors="white", edgecolors=col,
+                           linewidths=2, zorder=3)
             if a is not None:
-                if a_missing:
-                    ax.scatter(a, i, s=70, marker="x", color="#d62728",
-                               linewidths=2, zorder=3)
-                else:
-                    ax.scatter(a, i, s=95, color=col, zorder=3)
+                ax.scatter(a, i, s=95, color=col, zorder=3)
         ax.axvline(0, color="gray", lw=0.9, ls="--", alpha=0.7)
         ax.set_title(spec["display_name"], fontsize=13, fontweight="bold")
         ax.set_xlabel(f"Δ {spec['display_name']}   (− removed · + added)")
@@ -196,22 +156,16 @@ def main():
         plt.Line2D([], [], marker="o", ls="", color="#333", markersize=10,
                    label="removed from Full → loss (−)"),
     ]
-    if MISSING:
-        handles.append(plt.Line2D([], [], marker="x", ls="", color="#d62728",
-                                  markersize=9, markeredgewidth=2, label="no result"))
     fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
                bbox_to_anchor=(0.5, 1.005), fontsize=10)
-    if none_missing:
-        fig.text(0.5, -0.02,
-                 "None baseline returned no result → treated as 0; addition dots "
-                 "(open) therefore show absolute metric, not a true marginal.",
-                 ha="center", fontsize=8, color="#666")
     fig.suptitle(add.get("suptitle", "").replace("Addition", "Cost Contribution")
                  or "Cost Contribution", fontsize=14, fontweight="bold", y=1.06)
     plt.tight_layout()
 
-    out = Path(args.output or (Path(abl["eval_base_dir"]) / abl["experiment"]
-               / abl["dataset_dir"] / f"contribution_dumbbell_{args.dataset}.png"))
+    out = plot_spec.figure_path(
+        abl, f"contribution_dumbbell_{args.dataset}.png", args.output,
+        key="dumbbell_output_png",
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out, dpi=150, bbox_inches="tight")
     print(f"Saved {out}")

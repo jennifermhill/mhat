@@ -13,8 +13,8 @@ re-eval can never change a figure.
 ``PLACEHOLDER`` as a ``run`` or eval skips that bar while a figure is in
 progress. Any other named result that is missing raises: a zero bar in a figure
 is too easy to miss. Old specs (``experiment`` / ``dataset_dir`` /
-``eval_base_dir`` / ``tracking_uid``) are refused with a pointer to
-``scripts/convert_figure_specs.py``.
+``eval_base_dir`` / ``tracking_uid``) are refused: every spec in
+``configs/evaluation/`` was converted in the 2026-10 layout migration.
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ def check_spec_table(table: dict, where: str = "spec") -> None:
     old = [key for key in OLD_SPEC_KEYS if key in table]
     if old:
         raise ValueError(
-            f"{where} uses keys of the old results layout: {old}. Convert the spec "
-            "with scripts/convert_figure_specs.py (output_dir, and run + eval per "
-            "condition)."
+            f"{where} uses keys of the old results layout: {old}. Give the table "
+            "an output_dir and each condition a run and an exact eval directory "
+            "name (see this module's docstring)."
         )
 
 

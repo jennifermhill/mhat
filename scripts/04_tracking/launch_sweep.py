@@ -192,7 +192,7 @@ def check_no_old_keys(table, where):
         raise SystemExit(
             f"{where} uses keys of the old results layout: {old}. Specs now give "
             "raw_path / output_dir in [base] and GT paths in [eval]; the dataset is "
-            "named by output_dir (see output_layout_plan.md, Part 2, convention 1)."
+            "named by output_dir (see this script's docstring)."
         )
 
 

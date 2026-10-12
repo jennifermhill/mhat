@@ -81,8 +81,8 @@ def parse_refs(specs_dir, only=None):
                 continue
             if "output_dir" not in d:
                 raise SystemExit(
-                    f"{name} [{table_name}] has no output_dir: convert the spec first "
-                    "(scripts/convert_figure_specs.py)"
+                    f"{name} [{table_name}] has no output_dir: the spec is in the old "
+                    "layout (see scripts/07_plotting/plot_spec.py for the new keys)"
                 )
             output_dir = Path(d["output_dir"])
             exp, ds = output_dir.parts[-2], output_dir.parts[-1]

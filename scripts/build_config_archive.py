@@ -42,12 +42,34 @@ GROUP = {"merge": "merge", "solver_ablation": "solver", "solver_addition": "solv
 PLACEHOLDER = "<fill in>"
 
 
+def config_source(output_dir, run, eval_name):
+    """The run's saved config: its own ``config.toml``, or the copy its eval kept.
+
+    A bar can rest on an *orphan eval* -- the tracking run was deleted at some
+    point and the migration put its evaluation under
+    ``tracking/_orphan_evals/<uid>/``. There is no run directory to read, but
+    every eval saves the tracking config beside its metrics, and that copy is
+    what the archive was built from before. 10 NC281-Fl2mSiH2B 03_nuclei solver
+    bars are in this state.
+    """
+    own = Path(output_dir) / run / "config.toml"
+    if own.is_file():
+        return own
+    saved = Path(output_dir) / run / "evaluation" / (eval_name or "") / "tracking_config.toml"
+    if eval_name and saved.is_file():
+        return saved
+    raise SystemExit(
+        f"no saved config for run {run}: neither {own} nor {saved}"
+    )
+
+
 def parse_refs(specs_dir, only=None):
     """Return list of dicts: {toml, exp, ds, cond, uid, output_dir, run, seg_uid}.
 
     ``uid`` is the condition's run (a path relative to ``output_dir``); ``exp`` /
     ``ds`` are the last two parts of ``output_dir``; ``seg_uid`` comes from the
-    run's own config (its ``seg_result``).
+    run's own config (its ``seg_result``), and ``config_src`` is where that config
+    was read from.
     """
     refs = []
     for ttype, name in TOMLS.items():
@@ -68,9 +90,11 @@ def parse_refs(specs_dir, only=None):
                 run = cc.get("run", "")
                 if not run or run == PLACEHOLDER:
                     continue
-                run_config = toml.load(output_dir / run / "config.toml")
+                config_src = config_source(output_dir, run, cc.get("eval"))
+                run_config = toml.load(config_src)
                 refs.append({"toml": ttype, "exp": exp, "ds": ds, "cond": cond,
                              "uid": run, "output_dir": output_dir,
+                             "config_src": config_src,
                              "run_config": run_config,
                              "seg_uid": run_config.get("seg_result")})
     return refs
@@ -121,8 +145,7 @@ def build(specs_dir, out_root, only=None):
         if key in seen:
             continue
         seen.add(key)
-        src = r["output_dir"] / r["uid"] / "config.toml"
-        copy_verbatim(src, os.path.join(out_root, rel))
+        copy_verbatim(r["config_src"], os.path.join(out_root, rel))
 
     # ---- segmentation (roles from the merge conditions) ----
     seg_role = {}  # (exp,ds,seg_uid) -> (role, output_dir)

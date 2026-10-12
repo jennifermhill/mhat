@@ -65,4 +65,4 @@ No code change was needed: a `solve_with_motile.py` edit made in the first pass 
 `weight==0` branch and never reads the missing `'cohesion'` node attribute (verified: `nomrg2_*` runs
 complete on the reverted code with no `KeyError`).
 
-Figures: `experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_{train,test}/*.png`.
+Figures: `experiments/NC281-sparse-label/02_nuclei_denoised_{train,test}/figures/*.png`.

@@ -131,7 +131,7 @@ sets are not comparable across the line**.
 Re-eval submitted with the new `scripts/05_evaluation/launch_evals.py`
 (spec `configs/sweeps/nk_cells_reeval_corrgt.toml`, `reeval_id = corrgt0730`); manifest and
 `results.csv` under
-`experiments/tracking/primary_nk_cells/01_cells/reevals/corrgt0730/`.
+`experiments/primary_nk_cells/01_cells/tracking/sweeps/corrgt0730/` (it is a re-eval: the runs it scores stay flat under `tracking/`).
 
 Full table, sorted by TE. `old TE` is the same run's Phase 0–4 number for reference only.
 

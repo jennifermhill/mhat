@@ -117,12 +117,12 @@ All commands run from the repo root. **On `Y:` use the `mhat2` env**
    - For addition "+ X" conditions, set that term's weight/constant to the tuned
      values for this bar; keep all other costs zeroed.
 2. Run tracking: `python scripts/04_tracking/run_tracking.py scripts/04_tracking/tracking_config.toml`.
-3. Read the `exp_uid` from `experiments/tracking/<experiment>/<dataset>/test_run/config.toml`.
+3. Read the `exp_uid` from `<D>/tracking/test_run/config.toml` (`<D>` = `experiments/<experiment>/<dataset>`, the config's `output_dir`).
 4. Update `scripts/05_evaluation/eval_config.toml` — set `track_result` to that
    `exp_uid`. Confirm the correct `matcher` per dataset (MDA231 → `"ctc"`;
    NC281 → `"point"`, `match_threshold = 10`).
 5. Run eval: `python scripts/05_evaluation/evaluate_tracks.py scripts/05_evaluation/eval_config.toml`.
-6. Confirm `experiments/evaluation/<experiment>/<dataset>/<exp_uid>/<metrics_file>.json`
+6. Confirm `<D>/tracking/<exp_uid>/evaluation/<gt label>_<metrics>_<timestamp>/<metrics_file>.json`
    was written.
 7. Record the `tracking_uid` in the matching TOML
    (`configs/evaluation/solver_ablation.toml` or `solver_addition.toml`),

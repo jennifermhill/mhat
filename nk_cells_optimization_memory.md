@@ -3,7 +3,7 @@
 Read + update this each batch. Companion to the append-only `nk_cells_optimization_log.md`.
 
 ## ⚠ Ground truth was corrected 2026-07-30
-`experiments/tracking/primary_nk_cells/01_cells/correct_tracks.zarr` is now **1070 nodes /
+`experiments/primary_nk_cells/01_cells/gt/manual/correct_tracks.zarr` is now **1070 nodes /
 1029 edges** (was 1011 / 976; old version kept as `correct_tracks_old.zarr`). It is stored as
 a nested `tracks/` geff group — `evaluate_tracking.geff_group_path()` handles either layout.
 All 22 runs were re-scored against it (Phase 5). **Any TE/TF number below 0.5 in this file or

@@ -611,7 +611,7 @@ run below).
 
 **GT**: linajea figshare GT converted by `scripts/05_evaluation/linajea_to_geff.py`,
 split into `gt_side_1` (64 divisions, tuning side) and `gt_side_2` (56 divisions,
-held out) under `experiments/tracking/Fluo-N3DL-DRO/03_nuclei_div/`. **Tune on side 1
+held out) at `experiments/Fluo-N3DL-DRO/03_nuclei_div/gt/side_{1,2}/`. **Tune on side 1
 only.** The runs below did not tune on either side.
 
 **Eval**: `metrics = ["linajea"]`, `linajea_gt = ["gt_side_1", "gt_side_2"]`,

@@ -31,7 +31,7 @@ All commands run from the repo root in the `mhat-sandbox` conda env (`conda run 
 
 1. Edit `scripts/02_segmentation/seg_config.toml` with the override from the table above. For `- affinities`, uncomment/set `scoring_function = "symmetric"` under `[waterz_params]`. For `- merges`, set `skip_merges = true`.
 2. Run segmentation: `python scripts/02_segmentation/create_seg_hypotheses.py scripts/02_segmentation/seg_config.toml`.
-3. Note the resulting `seg_uid` — the timestamped directory created under `experiments/segmentation/<experiment>/<dataset>/`.
+3. Note the resulting `seg_uid` — the timestamped directory created under `<D>/segmentation/` (`<D>` = `experiments/<experiment>/<dataset>`, the config's `output_dir`).
 
 **For every condition — run tracking and eval:**
 
@@ -39,10 +39,10 @@ All commands run from the repo root in the `mhat-sandbox` conda env (`conda run 
    - Set `seg_result` to the `seg_uid` for this condition (baseline and `- cohesion` share the same seg_uid).
    - Zero `cohesion_weight`, `cohesion_constant`, `adhesion_weight`, `adhesion_constant` for the three non-baseline conditions; leave them at the tuned values for baseline.
 5. Run tracking: `python scripts/04_tracking/run_tracking.py scripts/04_tracking/tracking_config.toml`.
-6. Read the `exp_uid` from `experiments/tracking/<experiment>/<dataset>/test_run/config.toml`.
+6. Read the `exp_uid` from `<D>/tracking/test_run/config.toml`.
 7. Update `scripts/05_evaluation/eval_config.toml` — set `track_result` to that `exp_uid`.
 8. Run eval: `python scripts/05_evaluation/evaluate_tracks.py scripts/05_evaluation/eval_config.toml`.
-9. Confirm `experiments/evaluation/<experiment>/<dataset>/<exp_uid>/track_metrics.json` was written.
+9. Confirm `<D>/tracking/<exp_uid>/evaluation/<gt label>_<metrics>_<timestamp>/track_metrics.json` was written.
 10. Record the `seg_uid` and `tracking_uid` in `scripts/05_evaluation/merge_ablation.toml` under the matching dataset and condition.
 
 ### Running notes (UIDs)

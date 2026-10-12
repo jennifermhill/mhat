@@ -9,7 +9,7 @@ definitions are unchanged; the dataset, its scale and its metric family differ.
   `holdout_fs1_cpm6` + `2026-05-29_10-59-37` (test).
 - Metric: CTC `TRA` (primary), with `DET` and `SEG` panels. `matcher = "ctc"`.
 - Driver config: `configs/tracking/Fluo-C3DL-MDA231/01_cells/gt_amount/gt_amount_stage2.toml`
-- Figures: `experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/gt_amount_{curve,panels}.png`
+- Figures: `experiments/Fluo-C3DL-MDA231/02_cells/figures/gt_amount/gt_amount_{curve,panels}.png`
 - CSV: `.../02_cells/gt_amount/stage2_test.csv` (151 rows)
 
 ---

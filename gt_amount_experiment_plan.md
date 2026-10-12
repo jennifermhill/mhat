@@ -120,18 +120,19 @@ Leave everything else alone. The driver config is
 ## Stage 0b — where everything lives
 
 This sweep is ~80 runs across two datasets. Left flat they buried the ordinary runs
-sharing those dataset directories, so each stage groups its runs in a subdirectory,
-mirrored identically under `experiments/tracking/`, `experiments/evaluation/` and
-`configs/tracking/`:
+sharing those dataset directories, so each stage groups its runs. Since the 2026-10-09
+layout migration each group is a sweep under the stage that made its runs, inside the
+dataset's output directory `<D>` = `experiments/<experiment>/<dataset>` (the paths below
+are where these runs are **now**; the config keys still name the group):
 
-| stage | subdirectory | train | test |
+| stage | location under `<D>` | train | test |
 |---|---|---|---|
-| 1 — regularizer calibration | `gt_amount/stage1_regsweep/` | 19 fits | — |
-| 2 — GT-amount fits | `gt_amount/stage2_fits/` | 61 fits | — |
-| 3 — test solves | `gt_amount/stage2_solves/` | — | 59 solves |
+| 1 — regularizer calibration | `ssvm/sweeps/stage1_regsweep/runs/` | 19 fits | — |
+| 2 — GT-amount fits | `ssvm/sweeps/stage2_fits/runs/` | 61 fits | — |
+| 3 — test solves | `tracking/sweeps/stage2_solves/runs/` | — | 59 solves |
 
-Materialized GT sits alongside them at `.../02_nuclei_denoised_train/gt_amount/{gt_subsets,gt_crops}/`,
-and the stage-2 CSVs and figures at `experiments/evaluation/.../<dataset>/gt_amount/`.
+Materialized GT sits at `<D>/gt/{subsets,crops}/` on the train dataset, and the stage-2
+CSVs and figures at `<D>/figures/gt_amount/`.
 
 Set by four keys in the driver config — `regsweep_subdir`, `runs_subdir`,
 `test_runs_subdir`, and the existing `gt_subsets_dirname` / `gt_crops_dirname`.
@@ -259,8 +260,8 @@ python scripts/04_tracking/run_gt_amount_experiment.py <gt_amount_stage2.toml> -
 ```
 
 Writes 21 dirs under
-`experiments/tracking/NC281-sparse-label/02_nuclei_denoised_train/gt_amount/gt_subsets/n<N>_s<seed>/`
-plus 20 under `.../gt_amount/gt_crops/b<NNNN>_s<seed>/` (each: `correct_tracks.zarr`,
+`experiments/NC281-sparse-label/02_nuclei_denoised_train/gt/subsets/n<N>_s<seed>/`
+plus 20 under `.../gt/crops/b<NNNN>_s<seed>/` (each: `correct_tracks.zarr`,
 `correct_seg.zarr`, `subset.json`), and `gt_crops/crop_budgets.json`. **Concurrent jobs
 would race on these**, so this must complete first. Existing dirs are skipped — for
 crops, only after checking the box on disk matches the one this config asks for, so
@@ -360,10 +361,10 @@ sin this whole protocol was rebuilt to remove.
 ## Stage 4 — collect and plot
 
 ```bash
-B=/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label
+B=/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label
 
 python scripts/05_evaluation/collect_gt_amount.py <gt_amount_stage2.toml> \
-    --output $B/02_nuclei_denoised_test/gt_amount/stage2_test.csv
+    --output $B/02_nuclei_denoised_test/figures/gt_amount/stage2_test.csv
 
 python scripts/07_plotting/gt_amount_curve.py <curve_config.toml>
 python scripts/07_plotting/gt_amount_curve.py <curve_config.toml> \

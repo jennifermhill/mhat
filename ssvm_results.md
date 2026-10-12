@@ -57,7 +57,7 @@ The margin scales all learned cost magnitudes: `curvature_weight` grows 0.41 →
 
 **Conclusion:** TRA peaks at **w=1** and falls off on both sides — the response is non-monotonic with a single interior optimum at the stock setting. Small weight (0.1) collapses **detection** via under-selection (`fn_nodes` 37 → 118, `fp_nodes` drops to 99); large weight (≥10) collapses **linking** (LNK 0.478 → 0.213, `fn_edges` climbs) while DET stays flat (~0.842). No sweep point beats stock SSVM, and all remain short of hand-tuned (gap dominated by LNK). Scaling the Hamming margin is not a productive lever on this dataset.
 
-Reproducibility: fit configs `scripts/04_tracking/MDA231_ssvm_hamming_w{0p1,1,10,100}.toml`; outputs under `experiments/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_hamming_w{0p1,1,10,100}/`; eval configs under `experiments/tracking/Fluo-C3DL-MDA231/01_cells/eval_configs/`; metrics under `experiments/evaluation/Fluo-C3DL-MDA231/01_cells/ssvm_hamming_w*/track_metrics.json`.
+Reproducibility: fit configs `scripts/04_tracking/MDA231_ssvm_hamming_w{0p1,1,10,100}.toml`; outputs under `experiments/Fluo-C3DL-MDA231/01_cells/ssvm/ssvm_hamming_w{0p1,1,10,100}/`; eval configs under `experiments/Fluo-C3DL-MDA231/01_cells/_unsorted/tracking/eval_configs/`; metrics under `experiments/Fluo-C3DL-MDA231/01_cells/ssvm/ssvm_hamming_w*/evaluation/ctc_ctc_*/track_metrics.json`.
 
 ---
 
@@ -163,7 +163,7 @@ The per-feature std approach hits a sweet spot: enough conditioning to converge 
 
 ## Source files / reproducibility
 
-- Logfiles with full ε trajectories: `experiments/tracking/Fluo-C3DL-MDA231/01_cells/ssvm_fit/fit_weights_ssvm_*.log`
+- Logfiles with full ε trajectories: `experiments/Fluo-C3DL-MDA231/01_cells/ssvm/ssvm_fit/fit_weights_ssvm_*.log`
 - Sweep output: `/tmp/sweep_reg10.out` (per-feature std) and `/tmp/sweep_graphnorm.out` (graph norm) — temp files, may not persist
 - Fit config: `scripts/04_tracking/MDA231_ssvm_fit.toml` (`ssvm_reg = 0.1` — current default after the 2026-05-15 ilpy fix; the pre-fix experiments in this doc used `ssvm_reg = 10.0`)
 - Hand-tuned config: `scripts/04_tracking/MDA231_baseline.toml`

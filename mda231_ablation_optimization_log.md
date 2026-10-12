@@ -218,7 +218,7 @@ done against them.
 
 - Sweep specs: `configs/sweeps/mda231_01cells_stage{A..G}.toml`
 - Final parameter record: `configs/sweeps/mda231_0{1,2}_cells_final.toml`
-- Runs: `experiments/tracking/Fluo-C3DL-MDA231/{01,02}_cells/fs1cpm6v2_<condition>/`
+- Runs: `experiments/Fluo-C3DL-MDA231/{01,02}_cells/tracking/sweeps/fs1cpm6v2/runs/<condition>/`
 - Per-round tables: `.../sweeps/figopt0729*/results.csv`
 - Recall files (`track_metrics_basic.json`, point matcher @ 10) regenerated for
   the four merge conditions on both datasets; CTC `track_metrics.json` restored

@@ -364,16 +364,8 @@ def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bo
     graph fresh and not save it.
     """
 
-    seg_zarr_path = seg_dir / "data.zarr"
-    output_seg_path = output_dir / "pred_seg.zarr"
-    normalized_merge_history_csv_path = output_dir / "normalized_merge_history.csv"
-    config_filepath = output_dir / "config.toml"
-    output_filepath_geff = output_dir / "pred_tracks.zarr"
-
-    with open(config_filepath, "w") as config_file:
+    with open(output_dir / "config.toml", "w") as config_file:
         toml.dump(config, config_file)
-
-    seg_group = "fragments"
 
     pkl_path = json_path = None
     if cache_dir is not None:
@@ -402,15 +394,30 @@ def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bo
         if pkl_path is not None:
             save_graph_bundle(bundle, key, pkl_path, json_path)
 
+    solution_graph = solve_candidate_graph(config, bundle, output_dir, stats_only)
+    if solution_graph is None:
+        return
+    print("Saving results...")
+    write_solution(solution_graph, bundle, seg_dir, output_dir)
+
+
+def solve_candidate_graph(config, bundle, output_dir, stats_only=False):
+    """Everything between the candidate graph and the outputs: solve one config.
+
+    Writes ``normalized_merge_history.csv``, ``normalized_costs.toml`` (with
+    ``normalize_features``) and ``candidate_edges.npy`` into ``output_dir``, then
+    solves. Shared with ``solve_many_weights.py``, which builds one bundle and
+    calls this once per config, so both paths solve and write identically. The
+    bundle is only read, never modified, so it can serve any number of configs.
+
+    Returns:
+        The solution graph, or None in stats-only mode.
+    """
     track_graph = bundle["track_graph"]
     all_exclusion_sets = bundle["all_exclusion_sets"]
     no_merges = bundle["no_merges"]
     merge_history = bundle["merge_history"]
-    frag_ids = set(bundle["frag_ids"])
-    max_node_id = bundle["max_node_id"]
-    img_shape = bundle["img_shape"]
-    axes = bundle["axes"]
-    scale = bundle["scale"]
+    normalized_merge_history_csv_path = output_dir / "normalized_merge_history.csv"
 
     if no_merges:
         # Warned here rather than in the builder so a cache hit says it too --
@@ -458,7 +465,7 @@ def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bo
     if stats_only:
         report_graph_statistics(config, track_graph)
         print("Stats-only mode: skipping ILP solve and result saving.")
-        return
+        return None
 
     # Save candidate edge list for analysis (simple edges only, skip hyperedges)
     cand_edges_path = output_dir / "candidate_edges.npy"
@@ -471,12 +478,26 @@ def run_tracking(config, raw_dir, seg_dir, flow_dirs, output_dir, stats_only: bo
     print(f"Saved {len(cand_edge_list)} candidate edges to {cand_edges_path}")
 
     print("Solving tracking with motile...")
-    solution_graph = solve_with_motile(config, track_graph, all_exclusion_sets, no_merges=no_merges)
+    return solve_with_motile(config, track_graph, all_exclusion_sets, no_merges=no_merges)
 
-    print("Saving results...")
+
+def write_solution(solution_graph, bundle, seg_dir, output_dir):
+    """Write ``pred_seg.zarr`` and ``pred_tracks.zarr`` for one solution.
+
+    Labels ``solution_graph`` with tracklet ids. The bundle is only read.
+    """
+    merge_history = bundle["merge_history"]
+    # A copy: the bundle may serve further configs (solve_many_weights.py).
+    frag_ids = set(bundle["frag_ids"])
+    max_node_id = bundle["max_node_id"]
+    img_shape = bundle["img_shape"]
+    axes = bundle["axes"]
+    scale = bundle["scale"]
+    output_seg_path = output_dir / "pred_seg.zarr"
+    output_filepath_geff = output_dir / "pred_tracks.zarr"
 
     # Reopened rather than cached: the fragments zarr is lazy and costs nothing.
-    fragments = zarr.open(seg_zarr_path)[seg_group]
+    fragments = zarr.open(seg_dir / "data.zarr")["fragments"]
 
     frag_ids.discard(0)
     lookup = utils.get_solution_lookup(

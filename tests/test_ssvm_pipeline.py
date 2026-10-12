@@ -1,7 +1,7 @@
 """Smoke tests for the shared SSVM-branch pipeline helpers, at both ranks.
 
-``mhat.tracking.pipeline`` is what fit_weights_ssvm.py, solve_many_weights.py,
-sweep_ssvm_reg.py and the GT-amount driver build their candidate graph with,
+``mhat.tracking.pipeline`` is what fit_weights_ssvm.py, sweep_ssvm_reg.py and
+the GT-amount driver build their candidate graph with,
 load their ground truth with, and write their outputs with. run_tracking.py
 does the same three things inline. These tests pin the two paths to each
 other and to ``evaluate_tracking``'s readers, on 2D data as well as 3D, so a

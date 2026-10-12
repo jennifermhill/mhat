@@ -5,14 +5,19 @@ run_tracking.py once per config would rebuild the identical candidate graph
 dozens of times (~4 min each) to do ~2 s of actual solving. This builds the
 graph once and loops.
 
-Solving does not mutate the graph and each iteration gets a fresh motile.Solver,
-so results are identical to the per-config path — verify that on a couple of
-tokens before trusting the batch.
+The graph is built, solved and written by run_tracking.py's own functions
+(``build_candidate_graph``, ``solve_candidate_graph``, ``write_solution``), and
+configs are grouped by its graph-cache key, so each run here is the run
+run_tracking.py would make from the same config: same outputs, including
+``normalized_merge_history.csv``, ``candidate_edges.npy`` and
+``normalize_features``.
 
 Each config's run is a tracking run at ``<output_dir>/tracking/<exp_uid>``
 (``exp_uid`` defaults to the config's file stem; a grouped uid such as
 ``sweeps/<id>/runs/<token>`` is fine). An existing run is never redone: with
-``--skip-existing`` a finished one is skipped, otherwise it is reported.
+``--skip-existing`` a finished one is skipped, otherwise it is reported. An
+empty solution writes no ``pred_tracks.zarr``, which is how
+``collect_gt_amount.py`` recognizes it.
 
 Usage:
     python scripts/04_tracking/solve_many_weights.py <dir>/*.toml
@@ -23,34 +28,36 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import traceback
 from pathlib import Path
 
 import toml
-
-from mhat.tracking.pipeline import (
-    build_track_graph,
-    resolve_inputs,
-    write_tracking_outputs,
+from run_tracking import (
+    build_candidate_graph,
+    graph_cache_key,
+    input_fingerprint,
+    solve_candidate_graph,
+    uses_drift_distance,
+    write_solution,
 )
-from mhat.tracking.solve_with_motile import solve_with_motile
+
+from mhat.tracking.pipeline import resolve_inputs
 
 
-def _graph_key(config) -> tuple:
-    """Configs sharing this key share a candidate graph."""
-    return (
-        config["output_dir"],
-        config["seg_result"],
-        config.get("flow_result"),
-        config["size_threshold"],
-        config["max_edge_distance"],
-        config["max_children"],
-        config["divisions"],
-        config.get("min_merge_cost", config.get("min_merge_score", 0.0)),
-        config.get("max_merge_cost", config.get("max_merge_score", 1.0)),
-        config.get("z_flow_conf_threshold"),
-        config.get("z_flow_min_pass_pixels", 10),
-        tuple(config.get("drift_distance", ())),
+def graph_identity(config) -> str:
+    """Configs with equal identities share a candidate graph.
+
+    The graph-cache key (run_tracking.py), so the two can never disagree about
+    which parameters shape the graph, plus the output directory, since uids
+    only name runs within one.
+    """
+    ds, _raw_dir, seg_dir, flow_dirs, _gt_tracks, _gt_seg = resolve_inputs(config)
+    key = graph_cache_key(
+        config, uses_drift_distance(flow_dirs), input_fingerprint(seg_dir, flow_dirs)
+    )
+    return json.dumps(
+        {"output_dir": str(ds.output_dir), **key}, sort_keys=True, default=str
     )
 
 
@@ -72,31 +79,22 @@ def main() -> None:
         parser.error("no configs given")
 
     configs = [(p, toml.load(p)) for p in sorted(set(paths))]
-    # run_tracking.py z-scores the cost parameters for normalize_features; this
-    # loop calls the solver directly and does not, so it would silently solve
-    # with the raw weights. Refuse until the two share their post-graph path.
-    zscored = [p.name for p, c in configs if c.get("normalize_features") is not None]
-    if zscored:
+    identities = {graph_identity(c) for _, c in configs}
+    if len(identities) != 1:
         parser.error(
-            f"normalize_features is not supported here (use run_tracking.py): {zscored}"
-        )
-
-    keys = {_graph_key(c) for _, c in configs}
-    if len(keys) != 1:
-        parser.error(
-            f"configs describe {len(keys)} different candidate graphs; "
+            f"configs describe {len(identities)} different candidate graphs; "
             "split them into one batch per graph"
         )
 
     first = configs[0][1]
     ds, raw_dir, seg_dir, flow_dirs, _gt_tracks, _gt_seg = resolve_inputs(first)
-    ds.bind_raw()
+    for _, config in configs:
+        # Each config names its own raw_path; all must match the directory's.
+        resolve_inputs(config)[0].bind_raw()
 
     print(f"Building the shared candidate graph once for {len(configs)} configs...")
-    track_graph, fragments, merge_history, exclusion_sets, scale, axes = build_track_graph(
-        first, raw_dir, seg_dir, flow_dirs
-    )
-    no_merges = len(merge_history) == 0
+    bundle = build_candidate_graph(first, raw_dir, seg_dir, flow_dirs)
+    track_graph = bundle["track_graph"]
     print(f"  {len(track_graph.nodes)} nodes, {len(track_graph.edges)} edges")
 
     failures = []
@@ -116,19 +114,12 @@ def main() -> None:
         with open(out_dir / "config.toml", "w") as f:
             toml.dump(config, f)
         try:
-            solution_graph = solve_with_motile(
-                config, track_graph, exclusion_sets, no_merges=no_merges
-            )
+            solution_graph = solve_candidate_graph(config, bundle, out_dir)
             if solution_graph is None or solution_graph.number_of_nodes() == 0:
                 print(f"  {exp_uid}: EMPTY solution; no outputs written")
                 failures.append((exp_uid, "empty_solution"))
                 continue
-
-            # Same writer as run_tracking.py / fit_weights_ssvm.py, so the outputs
-            # are byte-compatible with the per-config path at either rank.
-            write_tracking_outputs(
-                solution_graph, fragments, merge_history, scale, axes, out_dir
-            )
+            write_solution(solution_graph, bundle, seg_dir, out_dir)
             print(
                 f"  {exp_uid}: {solution_graph.number_of_nodes()} nodes, "
                 f"{solution_graph.number_of_edges()} edges -> {out_dir}"

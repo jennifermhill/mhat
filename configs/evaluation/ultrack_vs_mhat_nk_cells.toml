@@ -7,13 +7,11 @@
 # match_threshold = 10.
 # Rendered by competitor_vs_mhat.py (same script as the NC281 figure).
 
-output_png = "Y:/jennifer/mhat/experiments/evaluation/primary_nk_cells/01_cells/ultrack_vs_mhat_nk_cells.png"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/ultrack_vs_mhat_nk_cells.png"
 title = ""
 ylabel = "Score (higher is better)"
 
-experiment = "primary_nk_cells"
-dataset_dir = "01_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/primary_nk_cells/01_cells"
 
 # x-groups: track-coverage metrics first, then the per-object recalls.
 metric_order = ["target_effectiveness", "track_fractions", "node_recall", "edge_recall"]
@@ -41,9 +39,11 @@ method_order = ["mhat", "ultrack"]
 [methods.mhat]
 label = "MHAT"
 color = "#CC79A7"
-tracking_uid = "nkgraph_size120"  # campaign best (Phase 6 Stage 2: size_threshold=120, max_children=5)
+run = "tracking/sweeps/nkgraph/runs/size120"  # campaign best (Phase 6 Stage 2: size_threshold=120, max_children=5)
+eval = "manual_basic+track_overlap_2026-07-30_15-36-44"
 
 [methods.ultrack]
 label = "Ultrack"
 color = "#B0B0B0"
-tracking_uid = "ultrack"
+run = "tracking/ultrack"
+eval = "manual_basic+track_overlap_2026-07-30_14-28-22"

@@ -30,22 +30,16 @@
 # track_metrics.json files were never overwritten.
 
 [mda231]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "01_cells"
-eval_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_results_mda231_ssvm_regen.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231_ssvm_regen.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation - SSVM-fit weights (01_cells, train)"
-recall_metrics_filename = "track_metrics_basic.json"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_recall_mda231_ssvm_regen.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_recall_mda231_ssvm_regen.png"
 
 [mda231_02cells]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "02_cells"
-eval_base_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/merge_ablation_results_mda231_02_ssvm_regen.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_results_mda231_02_ssvm_regen.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Merge Ablation - SSVM-fit weights (held-out test)"
-recall_metrics_filename = "track_metrics_basic.json"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/merge_ablation_recall_mda231_02_ssvm_regen.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_recall_mda231_02_ssvm_regen.png"
 
 [mda231.metrics.TRA]
 display_name = "TRA"
@@ -64,30 +58,34 @@ reduction = "scalar"
 
 [mda231.conditions.baseline]
 label = "Baseline"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
-tracking_uid = "ssvm_merge_ablation/baseline"
+run = "ssvm/sweeps/ssvm_merge_ablation/runs/baseline"
+eval = "ctc_ctc+track_overlap_2026-10-02_14-00-20"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
-tracking_uid = "ssvm_merge_ablation/no_cohesion"
+run = "ssvm/sweeps/ssvm_merge_ablation/runs/no_cohesion"
+eval = "ctc_ctc+track_overlap_2026-10-02_14-00-25"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 [mda231.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "ssvm_merge_ablation/no_affinities"
+run = "ssvm/sweeps/ssvm_merge_ablation/runs/no_affinities"
+eval = "ctc_ctc+track_overlap_2026-10-02_14-00-29"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_affinities_config.toml"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
-seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "ssvm_merge_ablation/no_merges"
+run = "ssvm/sweeps/ssvm_merge_ablation/runs/no_merges"
+eval = "ctc_ctc+track_overlap_2026-10-02_14-00-34"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 
 [mda231.recall_metrics.NodeRecall]
@@ -117,30 +115,34 @@ reduction = "scalar"
 
 [mda231_02cells.conditions.baseline]
 label = "Baseline"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
-tracking_uid = "ssvm_merge_ablation/baseline"
+run = "tracking/sweeps/ssvm_merge_ablation/runs/baseline"
+eval = "ctc_ctc_2026-10-02_14-02-58"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
-tracking_uid = "ssvm_merge_ablation/no_cohesion"
+run = "tracking/sweeps/ssvm_merge_ablation/runs/no_cohesion"
+eval = "ctc_ctc_2026-10-02_14-03-02"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "ssvm_merge_ablation/no_affinities"
+run = "tracking/sweeps/ssvm_merge_ablation/runs/no_affinities"
+eval = "ctc_ctc_2026-10-02_14-03-07"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_affinities_config.toml"
 
 [mda231_02cells.conditions.no_merges]
 label = "- Merges"
-seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "ssvm_merge_ablation/no_merges"
+run = "tracking/sweeps/ssvm_merge_ablation/runs/no_merges"
+eval = "ctc_ctc_2026-10-02_14-03-12"
+recall_eval = "ctc_basic_2026-10-02_14-16-22"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_merges_config.toml"
 
 [mda231_02cells.recall_metrics.NodeRecall]

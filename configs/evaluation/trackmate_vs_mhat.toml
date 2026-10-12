@@ -4,13 +4,11 @@
 # hard-coded here except which tracking result each method points at.
 # Rendered by competitor_vs_mhat.py.
 
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/trackmate_vs_handtuned_nc281_sparse_train.png"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/trackmate_vs_handtuned_nc281_sparse_train.png"
 title = ""
 ylabel = "Score (higher is better)"
 
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_train"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
 
 # x-groups: which TrackOverlapMetrics fields to plot, in order.
 metric_order = ["target_effectiveness", "track_fractions", "track_purity"]
@@ -35,9 +33,11 @@ method_order = ["mhat", "trackmate"]
 [methods.mhat]
 label = "MHAT"
 color = "#CC79A7"
-tracking_uid = "2026-07-02_10-55-33"  # hand-tuned baseline
+run = "tracking/2026-07-02_10-55-33"  # hand-tuned baseline
+eval = "manual_basic+track_overlap_2026-07-02_11-22-11"
 
 [methods.trackmate]
 label = "TrackMate"
 color = "#B0B0B0"
-tracking_uid = "trackmate"
+run = "tracking/trackmate"
+eval = "manual_basic+track_overlap_2026-07-14_13-37-33"

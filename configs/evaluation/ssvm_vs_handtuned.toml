@@ -18,7 +18,7 @@
 # Companion figure: ssvm_vs_handtuned_test.toml, which shows the held-out test scores.
 # Keep the two consistent -- if one is repointed at new runs, repoint the other.
 
-output_png = "Y:/jennifer/mhat/experiments/evaluation/ssvm_vs_handtuned.png"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/_unsorted/evaluation/ssvm_vs_handtuned.png"
 suptitle = ""
 ylabel = "Score (higher is better)"
 dataset_order = ["nc281_train", "mda231"]
@@ -39,9 +39,7 @@ color = "#CC79A7"
 
 [datasets.mda231]
 name = "MDA231"
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "01_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
 json_path = ["CTCMetrics", "TRA"]
 reduction = "scalar"
 #
@@ -62,20 +60,22 @@ reduction = "scalar"
 # SSVM gt_amount/stage1_regsweep/regsweep_r14 TRA 0.9044, both on
 # seg_cp_20260720_fs1_cpm6 / flow 2026-02-17_15-55-00.
 [datasets.mda231.hand_tuned]
-tracking_uid = "regenF01_baseline"
+run = "tracking/sweeps/regenF01/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-15-09"
 [datasets.mda231.ssvm]
-tracking_uid = "gt_amount/stage1_regsweep_regen/regsweep_r05"
+run = "ssvm/sweeps/stage1_regsweep_regen/runs/regsweep_r05"
+eval = "ctc_ctc+track_overlap_2026-09-30_14-51-34"
 
 [datasets.nc281_train]
 name = '$\mathit{Dictyostelium}$'   # literal string; mathtext -> italic tick label
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_train"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
 json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 reduction = "scalar"
 # No parity issue here: the hand-tuned run, the old ssvm_fit and regsweep_r11 all share
 # seg 2026-07-02_10-32-29 / flow 2026-07-02_10-43-07, so only the SSVM bar moves.
 [datasets.nc281_train.hand_tuned]
-tracking_uid = "2026-07-02_10-55-33"
+run = "tracking/2026-07-02_10-55-33"
+eval = "manual_basic+track_overlap_2026-07-02_11-22-11"
 [datasets.nc281_train.ssvm]
-tracking_uid = "gt_amount/stage1_regsweep/regsweep_r11"
+run = "ssvm/sweeps/stage1_regsweep/runs/regsweep_r11"
+eval = "manual_basic+track_overlap_2026-08-03_15-37-38"

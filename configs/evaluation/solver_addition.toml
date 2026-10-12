@@ -43,10 +43,8 @@
 # ---------------------------------------------------------------------------
 
 [mda231]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "01_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/solver_addition_results_mda231.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_addition_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Solver Addition"
 reference = "last"
 xtick_rotation = 30
@@ -75,49 +73,56 @@ reduction = "scalar"
 label = "None"
 color = "#999999"
 note = "base_edge_constant=-500 (identical to - All)"
-tracking_uid = "regenF01_none"
+run = "tracking/sweeps/regenF01/runs/none"
+eval = "ctc_ctc_2026-09-22_16-15-09"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/none_config.toml"
 
 [mda231.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#009E73"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "regenF01_plus_cohesion"
+run = "tracking/sweeps/regenF01/runs/plus_cohesion"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_cohesion_config.toml"
 
 [mda231.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "active: intensity (w=8, c=-3000)"
-tracking_uid = "regenF01_plus_intensity"
+run = "tracking/sweeps/regenF01/runs/plus_intensity"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_intensity_config.toml"
 
 [mda231.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "active: area (w=500, c=-500)"
-tracking_uid = "regenF01_plus_volume"
+run = "tracking/sweeps/regenF01/runs/plus_volume"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_volume_config.toml"
 
 [mda231.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#0072B2"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "regenF01_plus_curvature"
+run = "tracking/sweeps/regenF01/runs/plus_curvature"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_curvature_config.toml"
 
 [mda231.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "regenF01_plus_drift"
+run = "tracking/sweeps/regenF01/runs/plus_drift"
+eval = "ctc_ctc_2026-09-22_16-15-09"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/plus_drift_config.toml"
 
 [mda231.conditions.full]
 label = "Full"
 color = "#000000"
 note = "full tuned baseline (wzfix_final params with adhesion_weight=-2500; curvature off)"
-tracking_uid = "regenF01_baseline"
+run = "tracking/sweeps/regenF01/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-15-09"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 # =============================================================================
@@ -125,10 +130,8 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 # Same condition set as 01_cells; separate tracking runs.
 # =============================================================================
 [mda231_02cells]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "02_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/solver_addition_results_mda231_02.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/solver_addition_results_mda231_02.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Solver Addition"
 reference = "last"
 xtick_rotation = 30
@@ -157,62 +160,66 @@ reduction = "scalar"
 label = "None"
 color = "#999999"
 note = "base_edge_constant=-500 (identical to - All)"
-tracking_uid = "regenF02_none"
+run = "tracking/sweeps/regenF02/runs/none"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/none_config.toml"
 
 [mda231_02cells.conditions.plus_cohesion]
 label = "+ Coh/Adh"
 color = "#009E73"
 note = "active: cohesion+adhesion (coh_w=750, adh_w=-1000; base_edge_constant=-2000 offset)"
-tracking_uid = "regenF02_plus_cohesion"
+run = "tracking/sweeps/regenF02/runs/plus_cohesion"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_cohesion_config.toml"
 
 [mda231_02cells.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "active: intensity (w=8, c=-3000)"
-tracking_uid = "regenF02_plus_intensity"
+run = "tracking/sweeps/regenF02/runs/plus_intensity"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_intensity_config.toml"
 
 [mda231_02cells.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "active: area (w=500, c=-500)"
-tracking_uid = "regenF02_plus_volume"
+run = "tracking/sweeps/regenF02/runs/plus_volume"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_volume_config.toml"
 
 [mda231_02cells.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#0072B2"
 note = "active: curvature (w=10, c=-500)"
-tracking_uid = "regenF02_plus_curvature"
+run = "tracking/sweeps/regenF02/runs/plus_curvature"
+eval = "ctc_ctc_2026-09-22_16-15-14"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_curvature_config.toml"
 
 [mda231_02cells.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "active: drift (w=30, c=-1000)"
-tracking_uid = "regenF02_plus_drift"
+run = "tracking/sweeps/regenF02/runs/plus_drift"
+eval = "ctc_ctc_2026-09-22_16-15-12"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/plus_drift_config.toml"
 
 [mda231_02cells.conditions.full]
 label = "Full"
 color = "#000000"
 note = "full tuned baseline (wzfix_final params with adhesion_weight=-2500; curvature off)"
-tracking_uid = "regenF02_baseline"
+run = "tracking/sweeps/regenF02/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-12-37"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 # =============================================================================
 # NC281-Fl2mSiH2B / 03_nuclei
 # =============================================================================
 [nc281]
-experiment = "NC281-Fl2mSiH2B"
-dataset_dir = "03_nuclei"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/solver_addition_results_nc281.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/solver_addition_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Solver Addition"
 # Point-matched TE/TF in track_metrics.json (see solver_ablation.toml note).
-metrics_filename = "track_metrics.json"
 reference = "last"
 xtick_rotation = 30
 condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
@@ -235,28 +242,32 @@ reduction = "mean"
 label = "None"
 color = "#999999"
 note = "empty model (no cost weights)"
-tracking_uid = "2026-04-27_18-44-11"
+run = "tracking/_orphan_evals/2026-04-27_18-44-11"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-46"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/none_config.toml"
 
 [nc281.conditions.plus_cohesion]
 label = "+ Cohesion"
 color = "#009E73"
 note = "active: cohesion+adhesion (cohesion_w=-500)"
-tracking_uid = "2026-04-27_19-03-50"
+run = "tracking/_orphan_evals/2026-04-27_19-03-50"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-46"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_cohesion_config.toml"
 
 [nc281.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "active: area (w=2350)"
-tracking_uid = "2026-04-27_19-18-02"
+run = "tracking/_orphan_evals/2026-04-27_19-18-02"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-47"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_volume_config.toml"
 
 [nc281.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "active: intensity (w=7)"
-tracking_uid = "2026-04-27_19-36-39"
+run = "tracking/_orphan_evals/2026-04-27_19-36-39"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-47"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_intensity_config.toml"
 
 # curvature batch nc281curvadd_2026-04-29_16-49-06 R3 (cluster run, on Y:).
@@ -264,21 +275,24 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_intensity_config.toml"
 label = "+ Momentum"
 color = "#0072B2"
 note = "active: curvature (w=100, c=-800)"
-tracking_uid = "2026-04-29_16-49-06_R3"
+run = "tracking/sweeps/nc281curvadd_2026-04-29_16-49-06/runs/R3"
+eval = "manual_basic+track_overlap_2026-04-29_21-32-45"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_curvature_config.toml"
 
 [nc281.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "active: drift (w=30)"
-tracking_uid = "2026-04-27_18-49-31"
+run = "tracking/_orphan_evals/2026-04-27_18-49-31"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-47"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/plus_drift_config.toml"
 
 [nc281.conditions.full]
 label = "Full"
 color = "#000000"
 note = "full tuned baseline (drift_w=30, cohesion_w=-500)"
-tracking_uid = "2026-04-23_15-11-00"
+run = "tracking/_orphan_evals/2026-04-23_15-11-00"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-45"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_solver_config.toml"
 
 # =============================================================================
@@ -286,13 +300,10 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_solver_config.toml
 # Dense GT (despite "sparse-label" name) -- purity is a reliable signal here.
 # =============================================================================
 [nc281_sparse]
-experiment = "NC281-sparse-label"
-dataset_dir = "01_nuclei_denoised"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/solver_addition_results_nc281-sparse.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/solver_addition_results_nc281-sparse.png"
 # Point-matched (dataset's documented matcher); see solver_ablation.toml note.
 suptitle = "NC28.1-sparse-label Solver Addition"
-metrics_filename = "track_metrics.json"
 reference = "last"
 xtick_rotation = 30
 condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
@@ -318,42 +329,48 @@ reduction = "scalar"
 label = "None"
 color = "#999999"
 note = "all ablate_* = true (empty model, appear/disappear only)"
-tracking_uid = "2026-05-01_10-02-14_add_none"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/add_none"
+eval = "manual_basic+track_overlap_2026-05-01_19-03-14"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/none_config.toml"
 
 [nc281_sparse.conditions.plus_cohesion]
 label = "+ Cohesion"
 color = "#009E73"
 note = "active: cohesion+adhesion (w~20k); all other ablate_* = true"
-tracking_uid = "2026-05-01_10-02-14_add_coh_w20k"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/add_coh_w20k"
+eval = "manual_basic+track_overlap_2026-05-01_20-23-05"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_cohesion_config.toml"
 
 [nc281_sparse.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "active: area (w~1300); all other ablate_* = true"
-tracking_uid = "2026-05-01_10-02-14_add_vol_w1300"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/add_vol_w1300"
+eval = "manual_basic+track_overlap_2026-05-01_17-37-25"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_volume_config.toml"
 
 [nc281_sparse.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "active: intensity (w~6); all other ablate_* = true"
-tracking_uid = "2026-05-01_10-02-14_add_int_w6"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/add_int_w6"
+eval = "manual_basic+track_overlap_2026-05-01_21-58-47"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_intensity_config.toml"
 
 [nc281_sparse.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#0072B2"
 note = "active: curvature (w~100); all other ablate_* = true"
-tracking_uid = "2026-05-01_10-02-14_add_curv_w100"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/add_curv_w100"
+eval = "manual_basic+track_overlap_2026-05-02_05-21-46"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_curvature_config.toml"
 
 [nc281_sparse.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "active: drift (w~100); all other ablate_* = true"
-tracking_uid = "2026-05-01_10-02-14_add_drift_w100"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/add_drift_w100"
+eval = "manual_basic+track_overlap_2026-05-01_19-54-16"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_drift_config.toml"
 
 # Full tuned model (drift+coh+adh); point metrics in track_metrics_point.json.
@@ -361,9 +378,9 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/plus_drift_conf
 label = "Full"
 color = "#000000"
 note = "all ablate_* = false (full tuned baseline)"
-tracking_uid = "2026-04-29_11-36-23_R1"
+run = "tracking/sweeps/2026-04-29_11-36-23/runs/R1"
+eval = "manual-point_basic+track_overlap_2026-05-12_11-42-44"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config.toml"
-metrics_filename = "track_metrics_point.json"
 
 # =============================================================================
 # NC281-sparse-label / 02_nuclei_denoised_train  (train/test split)
@@ -372,12 +389,9 @@ metrics_filename = "track_metrics_point.json"
 # tracking_uid as each train sweep winner is chosen.
 # =============================================================================
 [nc281_sparse_train]
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_train"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/solver_addition_results_nc281-sparse_train.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_addition_results_nc281-sparse_train.png"
 suptitle = "NC28.1-sparse-label (train) Solver Addition"
-metrics_filename = "track_metrics.json"
 reference = "last"
 xtick_rotation = 30
 condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
@@ -401,49 +415,56 @@ reduction = "scalar"
 label = "None"
 color = "#999999"
 note = "empty model (drift_weight=0, drift_constant=-2000 flat edge cost); sel=0.326"
-tracking_uid = "add_none_dc2000"
+run = "tracking/add_none_dc2000"
+eval = "manual_basic+track_overlap_2026-07-08_15-34-45"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_all_config.toml"
 
 [nc281_sparse_train.conditions.plus_cohesion]
 label = "+ Cohesion"
 color = "#009E73"
 note = "active: cohesion+adhesion (cohesion_weight=-10000); sel=0.438"
-tracking_uid = "add_coh_w10k"
+run = "tracking/add_coh_w10k"
+eval = "manual_basic+track_overlap_2026-07-08_15-42-49"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_cohesion_config.toml"
 
 [nc281_sparse_train.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "active: area (area_weight=1300); sel=0.611"
-tracking_uid = "add_vol_w1300"
+run = "tracking/add_vol_w1300"
+eval = "manual_basic+track_overlap_2026-07-08_15-58-57"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_volume_config.toml"
 
 [nc281_sparse_train.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "active: intensity (intensity_weight=3); sel=0.639"
-tracking_uid = "add_int_w3"
+run = "tracking/add_int_w3"
+eval = "manual_basic+track_overlap_2026-07-08_16-07-01"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_intensity_config.toml"
 
 [nc281_sparse_train.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#0072B2"
 note = "active: curvature (curvature_weight=100, constant=-1700); sel=0.861"
-tracking_uid = "add_curv_w100"
+run = "tracking/add_curv_w100"
+eval = "manual_basic+track_overlap_2026-07-08_16-24-24"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_curvature_config.toml"
 
 [nc281_sparse_train.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "active: drift (drift_weight=100, constant=-2000); sel=0.862"
-tracking_uid = "add_drift_w100"
+run = "tracking/add_drift_w100"
+eval = "manual_basic+track_overlap_2026-07-08_16-36-42"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_drift_config.toml"
 
 [nc281_sparse_train.conditions.full]
 label = "Full"
 color = "#000000"
 note = "all costs active (full tuned baseline; Step-0 train tune, drift_w=100, coh=-500/450); sel=0.861"
-tracking_uid = "s0_dw100_cw500"
+run = "tracking/s0_dw100_cw500"
+eval = "manual_basic+track_overlap_2026-07-08_15-11-00"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
 
 # =============================================================================
@@ -451,12 +472,9 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_
 # verbatim from the train winners above -- NO tuning on test).
 # =============================================================================
 [nc281_sparse_test]
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_test"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/solver_addition_results_nc281-sparse_test.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_addition_results_nc281-sparse_test.png"
 suptitle = "NC28.1-sparse-label (test) Solver Addition"
-metrics_filename = "track_metrics.json"
 reference = "last"
 xtick_rotation = 30
 condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
@@ -480,47 +498,54 @@ reduction = "scalar"
 label = "None"
 color = "#999999"
 note = "train params applied to test (empty model); sel=0.316"
-tracking_uid = "test_none"
+run = "tracking/test_none"
+eval = "manual_basic+track_overlap_2026-07-08_17-48-21"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_all_config.toml"
 
 [nc281_sparse_test.conditions.plus_cohesion]
 label = "+ Cohesion"
 color = "#009E73"
 note = "train params applied to test (cohesion_weight=-10000); sel=0.365"
-tracking_uid = "test_plus_coh"
+run = "tracking/test_plus_coh"
+eval = "manual_basic+track_overlap_2026-07-08_18-00-04"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_cohesion_config.toml"
 
 [nc281_sparse_test.conditions.plus_volume]
 label = "+ Volume"
 color = "#D55E00"
 note = "train params applied to test (area_weight=1300); sel=0.618"
-tracking_uid = "test_plus_vol"
+run = "tracking/test_plus_vol"
+eval = "manual_basic+track_overlap_2026-07-08_18-03-59"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_volume_config.toml"
 
 [nc281_sparse_test.conditions.plus_intensity]
 label = "+ Intensity"
 color = "#E69F00"
 note = "train params applied to test (intensity_weight=3); sel=0.629"
-tracking_uid = "test_plus_int"
+run = "tracking/test_plus_int"
+eval = "manual_basic+track_overlap_2026-07-08_18-07-55"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_intensity_config.toml"
 
 [nc281_sparse_test.conditions.plus_curvature]
 label = "+ Momentum"
 color = "#0072B2"
 note = "train params applied to test (curvature_weight=100); sel=0.839"
-tracking_uid = "test_plus_curv"
+run = "tracking/test_plus_curv"
+eval = "manual_basic+track_overlap_2026-07-08_18-12-10"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_curvature_config.toml"
 
 [nc281_sparse_test.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
 note = "train params applied to test (drift_weight=100); sel=0.857"
-tracking_uid = "test_plus_drift"
+run = "tracking/test_plus_drift"
+eval = "manual_basic+track_overlap_2026-07-08_18-16-07"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_drift_config.toml"
 
 [nc281_sparse_test.conditions.full]
 label = "Full"
 color = "#000000"
 note = "train params applied to test (full tuned baseline); sel=0.858"
-tracking_uid = "test_full"
+run = "tracking/test_full"
+eval = "manual_basic+track_overlap_2026-07-08_17-44-25"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"

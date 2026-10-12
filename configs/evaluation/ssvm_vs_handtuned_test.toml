@@ -13,7 +13,7 @@
 # cellpose 4.0.7 -> 4.2.1.1 change; see the segmentation-parity note below. NC281 is
 # unchanged and still on its pre-fix segmentation.
 
-output_png = "Y:/jennifer/mhat/experiments/evaluation/ssvm_vs_handtuned_test.png"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/_unsorted/evaluation/ssvm_vs_handtuned_test.png"
 suptitle = ""
 ylabel = "Score (higher is better)"
 dataset_order = ["nc281_test", "mda231"]
@@ -47,9 +47,7 @@ color = "#CC79A7"
 
 [datasets.mda231]
 name = "MDA231"
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "02_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
 json_path = ["CTCMetrics", "TRA"]
 reduction = "scalar"
 #
@@ -64,21 +62,22 @@ reduction = "scalar"
 # flow 2026-05-29_10-59-37.
 # Negative control on the same seg/flow and candidate graph (graph cache shared).
 [datasets.mda231.mean_normalized]
-tracking_uid = "negctrl_test"
+run = "tracking/negctrl_test"
+eval = "ctc_ctc_2026-10-01_14-48-53"
 [datasets.mda231.hand_tuned]
-tracking_uid = "regenF02_baseline"
+run = "tracking/sweeps/regenF02/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-12-37"
 # Weights learned on 01_cells by the 2026-09-30 regularizer re-calibration
 # (gt_amount/stage1_regsweep_regen/regsweep_r05, ssvm_reg 0.0383, train TRA 0.9099) and
 # applied here verbatim. Solve config:
 # scratch_configs/tracking/Fluo-C3DL-MDA231/02_cells/ssvm_regen_test_config.toml
 [datasets.mda231.ssvm]
-tracking_uid = "gt_amount/stage3_solves_regen/regsweep_r05"
+run = "tracking/sweeps/stage3_solves_regen/runs/regsweep_r05"
+eval = "ctc_ctc+track_overlap_2026-09-30_14-56-05"
 
 [datasets.nc281_test]
 name = '$\mathit{Dictyostelium}$'   # literal string; mathtext -> italic tick label
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_test"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
 json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 reduction = "scalar"
 # No parity issue here: test_full, the old ssvm_test and the new full-GT solve all
@@ -89,10 +88,13 @@ reduction = "scalar"
 # change (test_full 0.8290 -> wzfix_test_full 0.8282). Repoint all three at _wzfix
 # once the NC281 SSVM refit exists.
 [datasets.nc281_test.mean_normalized]
-tracking_uid = "negctrl_test"
+run = "tracking/negctrl_test"
+eval = "manual_basic+track_overlap_2026-10-01_14-41-37"
 [datasets.nc281_test.hand_tuned]
-tracking_uid = "test_full"
+run = "tracking/test_full"
+eval = "manual_basic+track_overlap_2026-07-08_17-44-25"
 # Current best: as for MDA231, the calibrated-regularizer full-GT fit, replacing the
 # old ssvm_reg = 0.1 run (TE 0.7209).
 [datasets.nc281_test.ssvm]
-tracking_uid = "gt_amount/stage2_solves/gt2_full_n167_s0"
+run = "tracking/sweeps/stage2_solves/runs/gt2_full_n167_s0"
+eval = "manual_basic+track_overlap_2026-08-04_12-06-42"

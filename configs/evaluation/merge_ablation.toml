@@ -28,13 +28,10 @@
 # ---------------------------------------------------------------------------
 
 [mda231]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "01_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_results_mda231.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation"
-recall_metrics_filename = "track_metrics_basic.json"
-recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_recall_mda231.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_recall_mda231.png"
 
 [mda231.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -63,22 +60,24 @@ reduction = "scalar"
 
 [mda231.conditions.baseline]
 label = "Baseline"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Shared run for baseline (= solver baseline/full); identical config, full data on Y:.
-tracking_uid = "regenF01_baseline"
+run = "tracking/sweeps/regenF01/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-15-09"
+recall_eval = "ctc_basic_2026-09-22_16-18-10"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Ported from the solver - Coh/Adh re-opt (new zero-cost ablation, drift_w=100,
 # z_flow absent). Same seg/flow as the merge baseline.
 # Parity retune 2026-10-01: every bar was given the identical 37-point search
 # (specs scratch_configs/sweeps/{naff01,coh01,bas01,mrg01}*), rule TRA primary /
 # SEG tie-break. Baseline's winner was R0, so its uid is unchanged.
-tracking_uid = "coh01c_a1400_ec500"  # appear = disappear = 1400, area_constant = -1000
+run = "tracking/sweeps/coh01c/runs/a1400_ec500"  # appear = disappear = 1400, area_constant = -1000
+eval = "ctc_ctc_2026-10-01_15-51-46"
+recall_eval = "ctc_basic_2026-10-01_16-51-41"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 # 2026-07-29 RESULT, not an oversight: with cohesion/adhesion zeroed (the
@@ -93,16 +92,18 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 # baseline under the old definition) was considered and deliberately not adopted.
 [mda231.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "naff01e_a1400_ec500"  # appear = disappear = 1400, area_constant = -1000
+run = "tracking/sweeps/naff01e/runs/a1400_ec500"  # appear = disappear = 1400, area_constant = -1000
+eval = "ctc_ctc_2026-10-01_15-58-19"
+recall_eval = "ctc_basic_2026-10-01_16-51-41"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_affinities_config.toml"
 
 [mda231.conditions.no_merges]
 label = "- Merges"
-seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "mrg01c_app1400"  # appear = disappear = 1400
+run = "tracking/sweeps/mrg01c/runs/app1400"  # appear = disappear = 1400
+eval = "ctc_ctc_2026-10-01_16-21-03"
+recall_eval = "ctc_basic_2026-10-01_16-51-41"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 
 # =============================================================================
@@ -110,13 +111,10 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 # Same param values as 01_cells; separate dataset/segmentation/tracking runs.
 # =============================================================================
 [mda231_02cells]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "02_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/merge_ablation_results_mda231_02.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_results_mda231_02.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Merge Ablation"
-recall_metrics_filename = "track_metrics_basic.json"
-recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/merge_ablation_recall_mda231_02.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_recall_mda231_02.png"
 
 [mda231_02cells.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -145,45 +143,45 @@ reduction = "scalar"
 
 [mda231_02cells.conditions.baseline]
 label = "Baseline"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
-tracking_uid = "regenF02_baseline"
+run = "tracking/sweeps/regenF02/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-12-37"
+recall_eval = "ctc_basic_2026-09-22_16-18-27"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "fs1cpm6_seg_base_wzfix"
 seg_overrides = ""
 # Consolidated with the solver - Coh/Adh re-opt (drift_w=100, zeroed coh/adh).
-tracking_uid = "parF02_no_cohesion"
+run = "tracking/sweeps/parF02/runs/no_cohesion"
+eval = "ctc_ctc_2026-10-01_16-30-38"
+recall_eval = "ctc_basic_2026-10-01_16-51-41"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "fs1cpm6_seg_noaff_wzfix"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "parF02_no_affinities"
+run = "tracking/sweeps/parF02/runs/no_affinities"
+eval = "ctc_ctc_2026-10-01_16-30-40"
+recall_eval = "ctc_basic_2026-10-01_16-51-41"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_affinities_config.toml"
 
 [mda231_02cells.conditions.no_merges]
 label = "- Merges"
-seg_uid = "fs1cpm6_seg_nomrg_wzfix"
 seg_overrides = "skip_merges = true, seg_method = 'cellpose'"
-tracking_uid = "parF02_no_merges"
+run = "tracking/sweeps/parF02/runs/no_merges"
+eval = "ctc_ctc_2026-10-01_16-30-45"
+recall_eval = "ctc_basic_2026-10-01_16-51-41"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_merges_config.toml"
 
 # =============================================================================
 # NC281-Fl2mSiH2B / 03_nuclei
 # =============================================================================
 [nc281]
-experiment = "NC281-Fl2mSiH2B"
-dataset_dir = "03_nuclei"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/merge_ablation_results_nc281.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/merge_ablation_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Merge Ablation"
-metrics_filename = "track_metrics_iou.json"
-recall_metrics_filename = "track_metrics_iou.json"
-recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/merge_ablation_recall_nc281.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/merge_ablation_recall_nc281.png"
 
 [nc281.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -207,30 +205,34 @@ reduction = "mean"
 
 [nc281.conditions.baseline]
 label = "Baseline"
-seg_uid = "2026-02-25_11-56-23"
 seg_overrides = ""
-tracking_uid = "2026-05-12_15-57-57"
+run = "tracking/2026-05-12_15-57-57"
+eval = "manual-iou_basic+track_overlap_2026-05-12_17-44-45"
+recall_eval = "manual-iou_basic+track_overlap_2026-05-12_17-44-45"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_merge_config.toml"
 
 [nc281.conditions.no_cohesion]
 label = "- Cohesion"
-seg_uid = "2026-02-25_11-56-23"
 seg_overrides = ""
-tracking_uid = "2026-05-12_16-33-09"
+run = "tracking/2026-05-12_16-33-09"
+eval = "manual-iou_basic+track_overlap_2026-05-12_17-45-20"
+recall_eval = "manual-iou_basic+track_overlap_2026-05-12_17-45-20"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_cohesion_merge_config.toml"
 
 [nc281.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "2026-04-28_13-37-46"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "2026-05-12_17-06-45"
+run = "tracking/2026-05-12_17-06-45"
+eval = "manual-iou_basic+track_overlap_2026-05-12_17-45-48"
+recall_eval = "manual-iou_basic+track_overlap_2026-05-12_17-45-48"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_affinities_config.toml"
 
 [nc281.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-04-22_10-02-35"
 seg_overrides = "skip_merges = true"
-tracking_uid = "2026-05-12_17-28-54"
+run = "tracking/2026-05-12_17-28-54"
+eval = "manual-iou_basic+track_overlap_2026-05-12_17-46-14"
+recall_eval = "manual-iou_basic+track_overlap_2026-05-12_17-46-14"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_merges_config.toml"
 
 # =============================================================================
@@ -238,14 +240,10 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_merges_config.toml"
 # Dense GT (despite "sparse-label" name) — purity is a reliable signal here.
 # =============================================================================
 [nc281_sparse]
-experiment = "NC281-sparse-label"
-dataset_dir = "01_nuclei_denoised"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/merge_ablation_results_nc281-sparse.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/merge_ablation_results_nc281-sparse.png"
 suptitle = "NC28.1-sparse-label Merge Ablation"
-metrics_filename = "track_metrics_iou08.json"
-recall_metrics_filename = "track_metrics_iou08.json"
-recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/merge_ablation_recall_nc281-sparse.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/merge_ablation_recall_nc281-sparse.png"
 
 [nc281_sparse.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -274,30 +272,34 @@ reduction = "scalar"
 
 [nc281_sparse.conditions.baseline]
 label = "Baseline"
-seg_uid = "2026-04-01_11-08-44"
 seg_overrides = ""
-tracking_uid = "2026-04-29_11-36-23_R1"
+run = "tracking/sweeps/2026-04-29_11-36-23/runs/R1"
+eval = "manual-iou08_basic+track_overlap_2026-05-12_13-19-28"
+recall_eval = "manual-iou08_basic+track_overlap_2026-05-12_13-19-28"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config.toml"
 
 [nc281_sparse.conditions.no_cohesion]
 label = "- Cohesion"
-seg_uid = "2026-04-01_11-08-44"
 seg_overrides = ""
-tracking_uid = "2026-05-11_15-05-11_no_coh_R2"
+run = "tracking/2026-05-11_15-05-11_no_coh_R2"
+eval = "manual-iou08_basic+track_overlap_2026-05-12_13-20-03"
+recall_eval = "manual-iou08_basic+track_overlap_2026-05-12_13-20-03"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_cohesion_merge_config.toml"
 
 [nc281_sparse.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "2026-05-07_11-14-03"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "2026-05-11_15-05-11_no_aff_R2"
+run = "tracking/2026-05-11_15-05-11_no_aff_R2"
+eval = "manual-iou08_basic+track_overlap_2026-05-12_17-02-29"
+recall_eval = "manual-iou08_basic+track_overlap_2026-05-12_17-02-29"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_affinities_config.toml"
 
 [nc281_sparse.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-05-07_11-15-00"
 seg_overrides = "skip_merges = true"
-tracking_uid = "2026-05-11_15-05-11_no_mrg_R2"
+run = "tracking/2026-05-11_15-05-11_no_mrg_R2"
+eval = "manual-iou08_basic+track_overlap_2026-05-12_13-21-44"
+recall_eval = "manual-iou08_basic+track_overlap_2026-05-12_13-21-44"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_merges_config.toml"
 
 # =============================================================================
@@ -311,14 +313,10 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_merges_confi
 # Fill seg_uid (from cluster) and tracking_uid (train winner) as they arrive.
 # =============================================================================
 [nc281_sparse_train]
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_train"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/merge_ablation_results_nc281-sparse_train.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/merge_ablation_results_nc281-sparse_train.png"
 suptitle = "NC28.1-sparse-label (train) Merge Ablation"
-metrics_filename = "track_metrics.json"
-recall_metrics_filename = "track_metrics.json"
-recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/merge_ablation_recall_nc281-sparse_train.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/merge_ablation_recall_nc281-sparse_train.png"
 
 [nc281_sparse_train.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -347,30 +345,34 @@ reduction = "scalar"
 
 [nc281_sparse_train.conditions.baseline]
 label = "Baseline"
-seg_uid = "2026-07-02_10-32-29"
 seg_overrides = ""
-tracking_uid = "s0_dw100_cw500"  # Step-0 full-model train winner
+run = "tracking/s0_dw100_cw500"  # Step-0 full-model train winner
+eval = "manual_basic+track_overlap_2026-07-08_15-11-00"
+recall_eval = "manual_basic+track_overlap_2026-07-08_15-11-00"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
 
 [nc281_sparse_train.conditions.no_cohesion]
 label = "- Cohesion"
-seg_uid = "2026-07-02_10-32-29"
 seg_overrides = ""
-tracking_uid = "nocoh2_dw100"  # = solver_ablation no_cohesion (cohesion+adhesion zeroed, drift_w=100); sel=0.862
+run = "tracking/nocoh2_dw100"  # = solver_ablation no_cohesion (cohesion+adhesion zeroed, drift_w=100); sel=0.862
+eval = "manual_basic+track_overlap_2026-07-09_10-33-04"
+recall_eval = "manual_basic+track_overlap_2026-07-09_10-33-04"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_cohesion_config.toml"
 
 [nc281_sparse_train.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "2026-07-08_14-35-01"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "noaff2_dw200"  # cohesion+adhesion zeroed, drift_w=200; sel=0.862
+run = "tracking/noaff2_dw200"  # cohesion+adhesion zeroed, drift_w=200; sel=0.862
+eval = "manual_basic+track_overlap_2026-07-09_10-49-18"
+recall_eval = "manual_basic+track_overlap_2026-07-09_10-49-18"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_affinities_config.toml"
 
 [nc281_sparse_train.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-07-08_14-37-54"
 seg_overrides = "skip_merges = true"
-tracking_uid = "nomrg2_dw100"  # cohesion+adhesion zeroed, drift_w=100 (no-merge seg); sel=0.861
+run = "tracking/nomrg2_dw100"  # cohesion+adhesion zeroed, drift_w=100 (no-merge seg); sel=0.861
+eval = "manual_basic+track_overlap_2026-07-09_11-10-39"
+recall_eval = "manual_basic+track_overlap_2026-07-09_11-10-39"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_merges_config.toml"
 
 # =============================================================================
@@ -378,14 +380,10 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_merges
 # copied verbatim -- NO tuning on test). seg_uid = the test seg variants.
 # =============================================================================
 [nc281_sparse_test]
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_test"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/merge_ablation_results_nc281-sparse_test.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/merge_ablation_results_nc281-sparse_test.png"
 suptitle = "NC28.1-sparse-label (test) Merge Ablation"
-metrics_filename = "track_metrics.json"
-recall_metrics_filename = "track_metrics.json"
-recall_output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/merge_ablation_recall_nc281-sparse_test.png"
+recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/merge_ablation_recall_nc281-sparse_test.png"
 
 [nc281_sparse_test.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -414,28 +412,32 @@ reduction = "scalar"
 
 [nc281_sparse_test.conditions.baseline]
 label = "Baseline"
-seg_uid = "2026-07-08_14-40-36"
 seg_overrides = ""
-tracking_uid = "test_full"  # train baseline params on test; sel=0.858
+run = "tracking/test_full"  # train baseline params on test; sel=0.858
+eval = "manual_basic+track_overlap_2026-07-08_17-44-25"
+recall_eval = "manual_basic+track_overlap_2026-07-08_17-44-25"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"
 
 [nc281_sparse_test.conditions.no_cohesion]
 label = "- Cohesion"
-seg_uid = "2026-07-08_14-40-36"
 seg_overrides = ""
-tracking_uid = "test_nocoh2"  # = solver_ablation no_cohesion on test (coh+adh zeroed); sel=0.857
+run = "tracking/test_nocoh2"  # = solver_ablation no_cohesion on test (coh+adh zeroed); sel=0.857
+eval = "manual_basic+track_overlap_2026-07-09_11-19-36"
+recall_eval = "manual_basic+track_overlap_2026-07-09_11-19-36"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_cohesion_config.toml"
 
 [nc281_sparse_test.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "2026-07-08_14-42-25"
 seg_overrides = "scoring_function = 'symmetric'"
-tracking_uid = "test_noaff2"  # coh+adh zeroed, drift_w=200 on symmetric-scoring test seg; sel=0.846
+run = "tracking/test_noaff2"  # coh+adh zeroed, drift_w=200 on symmetric-scoring test seg; sel=0.846
+eval = "manual_basic+track_overlap_2026-07-09_11-27-50"
+recall_eval = "manual_basic+track_overlap_2026-07-09_11-27-50"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_affinities_config.toml"
 
 [nc281_sparse_test.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-07-08_14-43-25"
 seg_overrides = "skip_merges = true"
-tracking_uid = "test_nomrg2"  # coh+adh zeroed, drift_w=100 on no-merge test seg; sel=0.850
+run = "tracking/test_nomrg2"  # coh+adh zeroed, drift_w=100 on no-merge test seg; sel=0.850
+eval = "manual_basic+track_overlap_2026-07-09_11-31-47"
+recall_eval = "manual_basic+track_overlap_2026-07-09_11-31-47"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_merges_config.toml"

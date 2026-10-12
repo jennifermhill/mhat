@@ -41,10 +41,8 @@
 # ---------------------------------------------------------------------------
 
 [mda231]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "01_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/solver_ablation_results_mda231.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_ablation_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Solver Ablation"
 reference = "first"
 condition_order = ["baseline", "no_drift", "no_volume", "no_cohesion", "no_intensity", "no_all"]
@@ -74,28 +72,32 @@ reduction = "scalar"
 label = "Baseline"
 color = "#000000"
 params = "full model; wzfix_final params with adhesion_weight=-2500 (retuned 2026-09-22 on the cellpose-4.2.1.1 seg)"
-tracking_uid = "regenF01_baseline"
+run = "tracking/sweeps/regenF01/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-15-09"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 
 [mda231.conditions.no_intensity]
 label = "- Intensity"
 color = "#E69F00"
 params = "intensity zeroed; adhesion_weight=-2000"
-tracking_uid = "regenF01_no_intensity"
+run = "tracking/sweeps/regenF01/runs/no_intensity"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_intensity_config.toml"
 
 [mda231.conditions.no_volume]
 label = "- Volume"
 color = "#D55E00"
 params = "area zeroed; drift_weight=57, drift_constant=-4000, adhesion_weight=-2000"
-tracking_uid = "regenF01_no_volume"
+run = "tracking/sweeps/regenF01/runs/no_volume"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_volume_config.toml"
 
 [mda231.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
 params = "drift zeroed; area_constant=-5000, area_weight=2500, adhesion_weight=-2000, adhesion_constant=1000"
-tracking_uid = "regenF01_no_drift"
+run = "tracking/sweeps/regenF01/runs/no_drift"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_drift_config.toml"
 
 # DELIBERATE, 2026-10-02: `config` points at the MERGE ablation's - Coh/Adh config
@@ -109,14 +111,16 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_drift_config.toml"
 label = "- Coh/Adh"
 color = "#009E73"
 params = "cohesion+adhesion zeroed; drift_weight=100, area_weight=2500"
-tracking_uid = "regenF01_no_cohesion"
+run = "tracking/sweeps/regenF01/runs/no_cohesion"
+eval = "ctc_ctc_2026-09-22_16-15-09"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_cohesion_config.toml"
 
 [mda231.conditions.no_all]
 label = "- All"
 color = "#999999"
 params = "all feature costs zeroed; base_edge_constant=-500"
-tracking_uid = "regenF01_no_all"
+run = "tracking/sweeps/regenF01/runs/no_all"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_all_config.toml"
 
 # =============================================================================
@@ -124,10 +128,8 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_all_config.toml"
 # Same condition set as 01_cells; separate tracking runs.
 # =============================================================================
 [mda231_02cells]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "02_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/solver_ablation_results_mda231_02.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/solver_ablation_results_mda231_02.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Solver Ablation"
 reference = "first"
 condition_order = ["baseline", "no_drift", "no_volume", "no_cohesion", "no_intensity", "no_all"]
@@ -157,28 +159,32 @@ reduction = "scalar"
 label = "Baseline"
 color = "#000000"
 params = "full model; wzfix_final params with adhesion_weight=-2500 (retuned 2026-09-22 on the cellpose-4.2.1.1 seg)"
-tracking_uid = "regenF02_baseline"
+run = "tracking/sweeps/regenF02/runs/baseline"
+eval = "ctc_ctc_2026-09-22_16-12-37"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 
 [mda231_02cells.conditions.no_intensity]
 label = "- Intensity"
 color = "#E69F00"
 params = "intensity zeroed; adhesion_weight=-2000"
-tracking_uid = "regenF02_no_intensity"
+run = "tracking/sweeps/regenF02/runs/no_intensity"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_intensity_config.toml"
 
 [mda231_02cells.conditions.no_volume]
 label = "- Volume"
 color = "#D55E00"
 params = "area zeroed; drift_weight=57, drift_constant=-4000, adhesion_weight=-2000"
-tracking_uid = "regenF02_no_volume"
+run = "tracking/sweeps/regenF02/runs/no_volume"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_volume_config.toml"
 
 [mda231_02cells.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
 params = "drift zeroed; area_constant=-5000, area_weight=2500, adhesion_weight=-2000, adhesion_constant=1000"
-tracking_uid = "regenF02_no_drift"
+run = "tracking/sweeps/regenF02/runs/no_drift"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_drift_config.toml"
 
 # DELIBERATE, 2026-10-02: `config` points at the MERGE ablation's - Coh/Adh config
@@ -192,28 +198,27 @@ config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_drift_config.toml"
 label = "- Coh/Adh"
 color = "#009E73"
 params = "cohesion+adhesion zeroed; drift_weight=100, area_weight=2500"
-tracking_uid = "regenF02_no_cohesion"
+run = "tracking/sweeps/regenF02/runs/no_cohesion"
+eval = "ctc_ctc_2026-09-22_16-15-11"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_cohesion_config.toml"
 
 [mda231_02cells.conditions.no_all]
 label = "- All"
 color = "#999999"
 params = "all feature costs zeroed; base_edge_constant=-500"
-tracking_uid = "regenF02_no_all"
+run = "tracking/sweeps/regenF02/runs/no_all"
+eval = "ctc_ctc_2026-09-22_16-15-12"
 config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_all_config.toml"
 
 # =============================================================================
 # NC281-Fl2mSiH2B / 03_nuclei
 # =============================================================================
 [nc281]
-experiment = "NC281-Fl2mSiH2B"
-dataset_dir = "03_nuclei"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-Fl2mSiH2B/03_nuclei/solver_ablation_results_nc281.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/solver_ablation_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Solver Ablation"
 # Solver runs store point-matched TE/TF in track_metrics.json (the merge figure
 # used track_metrics_iou.json; the solver figure used point matching).
-metrics_filename = "track_metrics.json"
 reference = "first"
 condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]
 
@@ -233,28 +238,32 @@ reduction = "mean"
 label = "Baseline"
 color = "#000000"
 ablate_flags = ""
-tracking_uid = "2026-04-23_15-11-00"
+run = "tracking/_orphan_evals/2026-04-23_15-11-00"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-45"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_solver_config.toml"
 
 [nc281.conditions.no_cohesion]
 label = "- Cohesion"
 color = "#009E73"
 ablate_flags = "ablate_cohesion_adhesion = true"
-tracking_uid = "2026-04-23_14-29-18"
+run = "tracking/_orphan_evals/2026-04-23_14-29-18"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-45"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_cohesion_solver_config.toml"
 
 [nc281.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
 ablate_flags = "ablate_drift = true"
-tracking_uid = "2026-04-23_14-04-19"
+run = "tracking/_orphan_evals/2026-04-23_14-04-19"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-46"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_drift_config.toml"
 
 [nc281.conditions.no_all]
 label = "- All"
 color = "#999999"
 ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature = ablate_cohesion_adhesion = true"
-tracking_uid = "2026-04-24_15-41-01"
+run = "tracking/_orphan_evals/2026-04-24_15-41-01"
+eval = "manual_basic+track_overlap_2026-06-23_17-49-46"
 config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_all_config.toml"
 
 # =============================================================================
@@ -262,15 +271,12 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_all_config.toml"
 # Dense GT (despite "sparse-label" name) -- purity is a reliable signal here.
 # =============================================================================
 [nc281_sparse]
-experiment = "NC281-sparse-label"
-dataset_dir = "01_nuclei_denoised"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/01_nuclei_denoised/solver_ablation_results_nc281-sparse.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/solver_ablation_results_nc281-sparse.png"
 # Sparse-label is point-matched (the dataset's documented matcher). The solver
 # batch runs store point metrics as track_metrics.json; the Full/Baseline run
 # stores the same matcher as track_metrics_point.json (per-condition override).
 suptitle = "NC28.1-sparse-label Solver Ablation"
-metrics_filename = "track_metrics.json"
 reference = "first"
 condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]
 
@@ -294,29 +300,32 @@ reduction = "scalar"
 label = "Baseline"
 color = "#000000"
 ablate_flags = ""
-tracking_uid = "2026-04-29_11-36-23_R1"
+run = "tracking/sweeps/2026-04-29_11-36-23/runs/R1"
+eval = "manual-point_basic+track_overlap_2026-05-12_11-42-44"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config.toml"
-metrics_filename = "track_metrics_point.json"
 
 [nc281_sparse.conditions.no_cohesion]
 label = "- Cohesion"
 color = "#009E73"
 ablate_flags = "ablate_cohesion_adhesion = true"
-tracking_uid = "2026-05-01_10-02-14_ablat_no_coh"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/ablat_no_coh"
+eval = "manual_basic+track_overlap_2026-05-01_18-08-45"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_cohesion_solver_config.toml"
 
 [nc281_sparse.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
 ablate_flags = "ablate_drift = true"
-tracking_uid = "2026-05-01_10-02-14_ablat_no_drift"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/ablat_no_drift"
+eval = "manual_basic+track_overlap_2026-05-01_18-15-53"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_drift_config.toml"
 
 [nc281_sparse.conditions.no_all]
 label = "- All"
 color = "#999999"
 ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature = ablate_cohesion_adhesion = true"
-tracking_uid = "2026-05-01_10-02-14_ablat_no_all"
+run = "tracking/sweeps/2026-05-01_10-02-14/runs/ablat_no_all"
+eval = "manual_basic+track_overlap_2026-05-01_20-58-31"
 config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_all_config.toml"
 
 # =============================================================================
@@ -326,12 +335,9 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_all_config.t
 # train winners are chosen. Reuse: no_all == solver_addition none.
 # =============================================================================
 [nc281_sparse_train]
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_train"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_train/solver_ablation_results_nc281-sparse_train.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_ablation_results_nc281-sparse_train.png"
 suptitle = "NC28.1-sparse-label (train) Solver Ablation"
-metrics_filename = "track_metrics.json"
 reference = "first"
 condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]
 
@@ -354,28 +360,32 @@ reduction = "scalar"
 label = "Baseline"
 color = "#000000"
 ablate_flags = ""
-tracking_uid = "s0_dw100_cw500"  # Step-0 full-model train winner (= addition.full)
+run = "tracking/s0_dw100_cw500"  # Step-0 full-model train winner (= addition.full)
+eval = "manual_basic+track_overlap_2026-07-08_15-11-00"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
 
 [nc281_sparse_train.conditions.no_cohesion]
 label = "- Cohesion"
 color = "#009E73"
 ablate_flags = "cohesion+adhesion weight&constant = 0; drift_weight=100"
-tracking_uid = "nocoh2_dw100"  # sel=0.862 (= merge no_cohesion); cohesion inert
+run = "tracking/nocoh2_dw100"  # sel=0.862 (= merge no_cohesion); cohesion inert
+eval = "manual_basic+track_overlap_2026-07-09_10-33-04"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_cohesion_config.toml"
 
 [nc281_sparse_train.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
 ablate_flags = "drift weight&constant = 0; base_edge_constant=-2000; cohesion=-250/225"
-tracking_uid = "nodrift2_cw250"  # sel=0.423 (drift removed, base-edge floor kept)
+run = "tracking/nodrift2_cw250"  # sel=0.423 (drift removed, base-edge floor kept)
+eval = "manual_basic+track_overlap_2026-07-09_10-53-57"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_drift_config.toml"
 
 [nc281_sparse_train.conditions.no_all]
 label = "- All"
 color = "#999999"
 ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature = ablate_cohesion_adhesion = true"
-tracking_uid = "add_none_dc2000"  # reuse solver_addition none winner (empty model); sel=0.326
+run = "tracking/add_none_dc2000"  # reuse solver_addition none winner (empty model); sel=0.326
+eval = "manual_basic+track_overlap_2026-07-08_15-34-45"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_all_config.toml"
 
 # =============================================================================
@@ -383,12 +393,9 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_all_co
 # copied verbatim -- NO tuning on test).
 # =============================================================================
 [nc281_sparse_test]
-experiment = "NC281-sparse-label"
-dataset_dir = "02_nuclei_denoised_test"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/solver_ablation_results_nc281-sparse_test.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_ablation_results_nc281-sparse_test.png"
 suptitle = "NC28.1-sparse-label (test) Solver Ablation"
-metrics_filename = "track_metrics.json"
 reference = "first"
 condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]
 
@@ -411,26 +418,30 @@ reduction = "scalar"
 label = "Baseline"
 color = "#000000"
 ablate_flags = ""
-tracking_uid = "test_full"  # train baseline params on test; sel=0.858
+run = "tracking/test_full"  # train baseline params on test; sel=0.858
+eval = "manual_basic+track_overlap_2026-07-08_17-44-25"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"
 
 [nc281_sparse_test.conditions.no_cohesion]
 label = "- Cohesion"
 color = "#009E73"
 ablate_flags = "cohesion+adhesion weight&constant = 0; drift_weight=100"
-tracking_uid = "test_nocoh2"  # sel=0.857 (= baseline; cohesion inert)
+run = "tracking/test_nocoh2"  # sel=0.857 (= baseline; cohesion inert)
+eval = "manual_basic+track_overlap_2026-07-09_11-19-36"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_cohesion_config.toml"
 
 [nc281_sparse_test.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
 ablate_flags = "drift weight&constant = 0; base_edge_constant=-2000; cohesion=-250/225"
-tracking_uid = "test_nodrift2"  # sel=0.546 (drift removed; big drop from baseline 0.858)
+run = "tracking/test_nodrift2"  # sel=0.546 (drift removed; big drop from baseline 0.858)
+eval = "manual_basic+track_overlap_2026-07-09_11-23-43"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_drift_config.toml"
 
 [nc281_sparse_test.conditions.no_all]
 label = "- All"
 color = "#999999"
 ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature = ablate_cohesion_adhesion = true"
-tracking_uid = "test_none"  # reuse empty model; sel=0.316
+run = "tracking/test_none"  # reuse empty model; sel=0.316
+eval = "manual_basic+track_overlap_2026-07-08_17-48-21"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_all_config.toml"

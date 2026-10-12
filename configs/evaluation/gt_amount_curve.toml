@@ -63,9 +63,9 @@ linestyle = "-"
 # --- NC281-sparse-label ------------------------------------------------------
 # Point matcher, dense GT, 167 train tracks. Primary metric is target effectiveness.
 [datasets.NC281-sparse-label]
-csv_path = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/stage2_test.csv"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/gt_amount_curve.png"
-output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/NC281-sparse-label/02_nuclei_denoised_test/gt_amount/gt_amount_panels.png"
+csv_path = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/gt_amount/stage2_test.csv"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/gt_amount/gt_amount_curve.png"
+output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/gt_amount/gt_amount_panels.png"
 metric_column = "target_effectiveness"
 panel_metrics = ["target_effectiveness", "edge_recall", "node_recall"]
 ylabel = "Target effectiveness"
@@ -99,9 +99,9 @@ color = "#CC79A7"
 # held-fixed segmentation, so expect a lower, flatter panel than TRA/DET. The
 # hand-tuned reference scores SEG 0.7082 there.
 [datasets.Fluo-C3DL-MDA231]
-csv_path = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/stage2_test.csv"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/gt_amount_curve.png"
-output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/02_cells/gt_amount/gt_amount_panels.png"
+csv_path = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/gt_amount/stage2_test.csv"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/gt_amount/gt_amount_curve.png"
+output_panels_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/gt_amount/gt_amount_panels.png"
 metric_column = "tra"
 panel_metrics = ["tra", "det", "seg"]
 ylabel = "CTC TRA"

@@ -10,10 +10,8 @@
 #     scripts/05_evaluation/ssvm_merge_ablation.toml --dataset mda231
 
 [mda231]
-experiment = "Fluo-C3DL-MDA231"
-dataset_dir = "01_cells"
-eval_base_dir = "Y:/jennifer/mhat/experiments/evaluation"
-output_png = "Y:/jennifer/mhat/experiments/evaluation/Fluo-C3DL-MDA231/01_cells/merge_ablation_results_mda231_ssvm.png"
+output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231_ssvm.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation (SSVM-fit)"
 
 [mda231.metrics.TRA]
@@ -33,20 +31,22 @@ reduction = "scalar"
 
 [mda231.conditions.baseline]
 label = "Baseline"
-seg_uid = "2026-04-03_11-09-49"
-tracking_uid = "ssvm_full"
+run = "ssvm/ssvm_full"
+eval = "ctc_ctc_2026-07-06_16-50-20"
 
 [mda231.conditions.no_cohesion]
 label = "- Coh/Adh"
-seg_uid = "2026-04-03_11-09-49"
-tracking_uid = "ssvm_no_cohesion"
+run = "ssvm/ssvm_no_cohesion"
+eval = "ctc_ctc_2026-07-06_16-53-53"
 
 [mda231.conditions.no_affinities]
 label = "- Affinities"
-seg_uid = "2026-06-23_17-04-19"
-tracking_uid = "ssvm_no_affinities"
+run = "ssvm/ssvm_no_affinities"
+eval = "ctc_ctc_2026-07-06_16-52-05"
 
+# The ssvm_no_merges fit never finished, so this bar has no result; it was
+# plotted as a zero before. Left as a placeholder, which plot_spec.py skips.
 [mda231.conditions.no_merges]
 label = "- Merges"
-seg_uid = "2026-04-23_11-58-21"
-tracking_uid = "ssvm_no_merges"
+run = "<fill in>"
+eval = "<fill in>"

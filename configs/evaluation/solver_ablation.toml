@@ -448,20 +448,23 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_all_con
 
 # =============================================================================
 # primary_nk_cells / 01_cells
-# Phase 2 of nk_cells_optimization_log.md (run 2026-07-09). Each ablation zeroes
-# one cost's weight AND constant in `full` and changes nothing else -- the arms
-# were NOT re-tuned. `full` is the Phase 2 operating point (size_threshold = 20,
-# max_children = 3), not the campaign best (tracking/sweeps/nkgraph/runs/size120,
-# TE 0.6744), so the Full bar here is lower than MHAT's in the competitor figure.
-# There is no "- All" run. Cohesion and adhesion are ablated separately.
-# no_appeardisappear was also run, but appear/disappear is not one of the
-# figure's cost terms, so it is left out (TE 0.6307).
+# Full = Phase 2's `no_cohesion` (nk_cells_optimization_log.md), which beats the
+# Phase 2 `full` (cohesion on) on TE and AOGM and ties on FN; the campaign best
+# runs with cohesion off too. Each ablation zeroes one cost's weight AND constant
+# in that Full and changes nothing else -- the arms were NOT re-tuned. Cohesion is
+# not in Full, so it has no ablation bar; it appears only in the addition series
+# (as curvature does for MDA231). Re-run 2026-10-13 as sweep `nkabl` with the
+# current code; `base_repro` reproduces Phase 2 no_cohesion exactly (TE 0.6531).
+#
+# Full is the Phase 2 operating point (size_threshold = 20, max_children = 3), not
+# the campaign best (tracking/sweeps/nkgraph/runs/size120, TE 0.6744), so the Full
+# bar here is lower than MHAT's in the competitor figure. There is no "- All" run.
+# Appear/disappear is not one of the figure's cost terms and is not ablated.
 #
 # Sparse GT (gt/manual, corrected 2026-07-30), point matcher, match_threshold = 10,
-# so no metric counts false positives. Evals 2026-10-13 add traccuracy's plain
-# "aogm" (every weight 1); "AOGM" here = non-splits + FN nodes + FN edges +
-# wrong-semantic edges, i.e. AOGM without its two FP terms. TE equals the
-# 2026-07-30 corrgt0730 evals. Bars after Full are in descending TE.
+# so no metric counts false positives. "AOGM" here = traccuracy's plain "aogm"
+# counts (every weight 1) without the two FP terms: non-splits + FN nodes + FN
+# edges + wrong-semantic edges. Bars after Full are in descending TE.
 # =============================================================================
 [nk_cells]
 output_dir = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells"
@@ -469,10 +472,8 @@ output_png = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/sol
 suptitle = "Primary NK cells Solver Ablation"
 reference = "first"
 xtick_rotation = 30
-condition_order = ["full", "no_cohesion", "no_intensity", "no_adhesion", "no_volume", "no_drift"]
+condition_order = ["full", "no_intensity", "no_adhesion", "no_drift", "no_volume"]
 # contribution_dumbbell.py: the Full reference bar, and where the figure goes.
-# Flow has no addition dot (it is the addition base), so its row shows only the
-# ablation dot.
 full_condition = "full"
 dumbbell_output_png = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/contribution_dumbbell_nk_cells.png"
 
@@ -506,47 +507,39 @@ fmt = "{:.0f}"
 [nk_cells.conditions.full]
 label = "Full"
 color = "#000000"
-ablate_flags = ""
-run = "tracking/full"  # == 2026-06-29_16-24-53 (B0R0), reproduced
-eval = "manual_aogm+basic+track_overlap_2026-10-13_18-01-54"
+ablate_flags = "cohesion weight&constant = 0 (Phase 2 no_cohesion)"
+run = "tracking/sweeps/nkabl/runs/base_repro"
+eval = "nkabl_aogm+basic+track_overlap_2026-10-13_18-32-08"
 config = "configs/tracking/primary_nk_cells/01_cells/full_config.toml"
-
-[nk_cells.conditions.no_cohesion]
-label = "- Cohesion"
-color = "#009E73"
-ablate_flags = "cohesion weight&constant = 0"
-run = "tracking/no_cohesion"  # inert: attribute std 0.031
-eval = "manual_aogm+basic+track_overlap_2026-10-13_18-04-18"
-config = "configs/tracking/primary_nk_cells/01_cells/no_cohesion_config.toml"
 
 [nk_cells.conditions.no_intensity]
 label = "- Intensity"
 color = "#E69F00"
 ablate_flags = "intensity weight&constant = 0"
-run = "tracking/no_intensity"
-eval = "manual_aogm+basic+track_overlap_2026-10-13_18-05-29"
+run = "tracking/sweeps/nkabl/runs/no_intensity"
+eval = "nkabl_aogm+basic+track_overlap_2026-10-13_18-33-24"
 config = "configs/tracking/primary_nk_cells/01_cells/no_intensity_config.toml"
 
 [nk_cells.conditions.no_adhesion]
 label = "- Adhesion"
 color = "#009E73"
 ablate_flags = "adhesion weight&constant = 0"
-run = "tracking/no_adhesion"
-eval = "manual_aogm+basic+track_overlap_2026-10-13_18-02-30"
+run = "tracking/sweeps/nkabl/runs/no_adhesion"
+eval = "nkabl_aogm+basic+track_overlap_2026-10-13_18-33-25"
 config = "configs/tracking/primary_nk_cells/01_cells/no_adhesion_config.toml"
-
-[nk_cells.conditions.no_volume]
-label = "- Volume"
-color = "#D55E00"
-ablate_flags = "area weight&constant = 0"
-run = "tracking/no_area"
-eval = "manual_aogm+basic+track_overlap_2026-10-13_18-03-42"
-config = "configs/tracking/primary_nk_cells/01_cells/no_volume_config.toml"
 
 [nk_cells.conditions.no_drift]
 label = "- Flow"
 color = "#56B4E9"
 ablate_flags = "drift weight&constant = 0; no base_edge_constant (area + intensity constants, -2500, keep edges selectable)"
-run = "tracking/no_drift"
-eval = "manual_aogm+basic+track_overlap_2026-10-13_18-04-53"
+run = "tracking/sweeps/nkabl/runs/no_drift"
+eval = "nkabl_aogm+basic+track_overlap_2026-10-13_18-31-49"
 config = "configs/tracking/primary_nk_cells/01_cells/no_drift_config.toml"
+
+[nk_cells.conditions.no_volume]
+label = "- Volume"
+color = "#D55E00"
+ablate_flags = "area weight&constant = 0"
+run = "tracking/sweeps/nkabl/runs/no_volume"
+eval = "nkabl_aogm+basic+track_overlap_2026-10-13_18-31-57"
+config = "configs/tracking/primary_nk_cells/01_cells/no_volume_config.toml"

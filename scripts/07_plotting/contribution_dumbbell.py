@@ -25,6 +25,12 @@ in place of ``json_path``; one with ``higher_is_better = false`` keeps its true
 signed deltas but has its x axis flipped, so improvement points right in every
 panel.
 
+For an addition series that is not "None + X" for every X (primary_nk_cells:
+None -> Flow -> Flow + X), an addition condition may set ``added_to`` (the
+condition its gain is measured from; default the base) and ``dumbbell_label``
+(its row name, when the bar label is e.g. "Flow + Volume"), and the addition
+table ``addition_legend`` (the open-circle legend text).
+
 Usage:
     python scripts/07_plotting/contribution_dumbbell.py --ablation configs/evaluation/solver_ablation.toml \
         --addition configs/evaluation/solver_addition.toml --dataset mda231 [--output foo.png]
@@ -109,8 +115,12 @@ def main():
             continue
         c = strip_prefix(key)
         m = load_metrics(add, cond, metric_specs)
-        costs.setdefault(c, {})["add"] = {k: m[k] - none[k] for k in metric_specs}
-        costs[c]["label"] = nice_label(cond.get("label"))  # prefer addition label
+        ref = none
+        if "added_to" in cond:
+            ref = load_metrics(add, add["conditions"][cond["added_to"]], metric_specs)
+        costs.setdefault(c, {})["add"] = {k: m[k] - ref[k] for k in metric_specs}
+        # prefer the addition label
+        costs[c]["label"] = cond.get("dumbbell_label") or nice_label(cond.get("label"))
         costs[c].setdefault("color", cond.get("color", "#444444"))
 
     # Order rows by total spread (addition gain minus signed ablation change) on
@@ -176,7 +186,8 @@ def main():
     handles = [
         plt.Line2D([], [], marker="o", ls="", markerfacecolor="white",
                    markeredgecolor="#333", markeredgewidth=2, markersize=10,
-                   label=f"added to {base_label} → gain" + ("" if flipped else " (+)")),
+                   label=add.get("addition_legend", f"added to {base_label} → gain")
+                   + ("" if flipped else " (+)")),
         plt.Line2D([], [], marker="o", ls="", color="#333", markersize=10,
                    label="removed from Full → loss" + ("" if flipped else " (−)")),
     ]

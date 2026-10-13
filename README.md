@@ -161,7 +161,9 @@ uid (a timestamp unless you set `exp_uid`):
 - Cell Tracking Challenge ground truth is converted once with
   `scripts/05_evaluation/convert_ctc_gt.py`.
 - The `visualize_results.py` viewers take a run directory and find everything else from
-  it; `--raw` / `--gt-tracks` cover paths that differ on the viewing machine.
+  it; `--raw` covers a raw path that differs on the viewing machine. The tracking viewer
+  and `render_tracks_video.py` also take a ground truth in place of a run (e.g.
+  `<output_dir>/gt/ctc`), finding its raw movie through the same `raw.toml`.
 
 ### Bringing your own segmentation
 

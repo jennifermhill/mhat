@@ -165,14 +165,13 @@ class Dataset:
             run_dir = run_dir.parent
         stages = (stage,) if isinstance(stage, str) else tuple(stage)
 
-        output_dir = next(
-            (d for d in run_dir.parents if (d / RAW_RECORD).is_file()), None
-        )
-        if output_dir is None:
+        dataset = cls.containing(run_dir)
+        if dataset is None:
             raise ValueError(
                 f"{run_dir} is not inside an output directory (no {RAW_RECORD} "
                 f"in any folder above it)"
             )
+        output_dir = dataset.output_dir
         parts = run_dir.relative_to(output_dir).parts
         found = parts[0]
         n_prefix = 2 if found == "opticalflow" else 1
@@ -189,6 +188,23 @@ class Dataset:
                 f"{run_dir} is not a {' or '.join(stages)} run directory in "
                 f"{output_dir} ({layouts})"
             )
+        return dataset
+
+    @classmethod
+    def containing(cls, path: str | Path) -> "Dataset | None":
+        """The Dataset whose output directory holds ``path``, or None.
+
+        The output directory is the nearest folder above ``path`` holding a
+        ``raw.toml``; ``raw_path`` is the recorded one. Unlike
+        ``from_run_dir`` this accepts anything inside the directory, such as a
+        ground truth under ``<output_dir>/gt/``.
+        """
+        path = absolute_path(path)
+        output_dir = next(
+            (d for d in path.parents if (d / RAW_RECORD).is_file()), None
+        )
+        if output_dir is None:
+            return None
         dataset = cls(output_dir=output_dir)
         return cls(output_dir=output_dir, raw_path=dataset.recorded_raw_path())
 

@@ -104,8 +104,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# napari GUI: the per-stage visualize_results.py scripts and
-# scripts/05_evaluation/inspect_results.py.
+# napari GUI: the per-stage visualize_results.py scripts,
+# scripts/05_evaluation/inspect_results.py, and
+# scripts/04_tracking/render_tracks_video.py (imageio[ffmpeg] writes its mp4;
+# the imageio-ffmpeg wheels bundle an ffmpeg binary on every OS).
 #
 # The [pyqt5] marker matters — plain `napari` installs no Qt binding at all, so
 # the viewer would import and then fail to open a window. PyQt5 rather than
@@ -137,6 +139,7 @@ dependencies = [
 # case: upstream metadata that is wrong. Plain `pip install mhat[napari]` is
 # unaffected either way; pip resolves one platform at a time and backtracks.
 napari = [
+  "imageio[ffmpeg]>=2.31",
   "motile-tracker>=4.6.1,<5",
   "napari[pyqt5]>=0.6.2,<1",
   "napari-orthogonal-views>=0.2.1",

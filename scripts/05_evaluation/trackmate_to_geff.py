@@ -192,12 +192,18 @@ def load_trackmate_xml(xml_path: str | Path, include_untracked: bool = False):
     return spots, edges, image
 
 
-def build_graph_from_xml(spots, edges, image, axis_names, scale) -> nx.DiGraph:
+def build_graph_from_xml(
+    spots, edges, image, axis_names, scale, fixed_z: float | None = None
+) -> nx.DiGraph:
     """Track graph in the pipeline's GEFF convention, positions in world units.
 
     Each calibrated position goes through the pixel grid (``/ pixel_size``) and
     then into the scale source's frame (``* scale``). Untracked spots (when
     kept) each get a track id of their own above the TrackMate ones.
+
+    ``fixed_z`` (world units) replaces every node's z. Use it when TrackMate ran
+    on a z projection of 3D data, which leaves every spot at z = 0 -- the bottom
+    slice -- and so puts a constant offset into every 3D match distance.
     """
     pixel = dict(zip("xyz", image["pixel_size"]))
     world = dict(zip(axis_names[1:], scale[1:]))
@@ -210,6 +216,8 @@ def build_graph_from_xml(spots, edges, image, axis_names, scale) -> nx.DiGraph:
             track, next_track = next_track, next_track + 1
         pos = dict(zip("xyz", spot["pos"]))
         attrs = {axis: pos[axis] / pixel[axis] * world[axis] for axis in axis_names[1:]}
+        if fixed_z is not None:
+            attrs["z"] = fixed_z
         graph.add_node(
             spot_id + 1,
             time=spot["frame"],
@@ -269,12 +277,15 @@ def trackmate_xml_to_geff(
     output_path: str | Path,
     scale_source: str | Path,
     include_untracked: bool = False,
+    fixed_z: float | None = None,
 ) -> None:
     spots, edges, image = load_trackmate_xml(xml_path, include_untracked)
     axis_names, scale = read_axes(Path(scale_source))
     if axis_names[0] != "time" or not set(axis_names[1:]) <= {"z", "y", "x"}:
         raise ValueError(f"Unexpected axes {axis_names} in {scale_source}")
-    graph = build_graph_from_xml(spots, edges, image, axis_names, scale)
+    if fixed_z is not None and "z" not in axis_names:
+        raise ValueError(f"--fixed-z given, but {scale_source} has no z axis")
+    graph = build_graph_from_xml(spots, edges, image, axis_names, scale, fixed_z)
 
     output_path = Path(output_path)
     geff.write(
@@ -353,11 +364,17 @@ def main():
         "--include-untracked", action="store_true",
         help="XML only: also write spots that belong to no track, one track each.",
     )
+    parser.add_argument(
+        "--fixed-z", type=float, default=None,
+        help="XML only: give every node this z, in world units -- for TrackMate "
+        "run on a z projection of 3D data (e.g. the volume's center).",
+    )
     args = parser.parse_args()
 
     if Path(args.input).suffix.lower() == ".xml":
         trackmate_xml_to_geff(
-            args.input, args.output_geff, args.scale_source, args.include_untracked
+            args.input, args.output_geff, args.scale_source, args.include_untracked,
+            args.fixed_z,
         )
     else:
         trackmate_to_geff(args.input, args.output_geff, args.scale_source)

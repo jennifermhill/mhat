@@ -549,3 +549,103 @@ note = "train params applied to test (full tuned baseline); sel=0.858"
 run = "tracking/test_full"
 eval = "manual_basic+track_overlap_2026-07-08_17-44-25"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"
+
+# =============================================================================
+# primary_nk_cells / 01_cells
+# Phase 2 of nk_cells_optimization_log.md (run 2026-07-09). Unlike the other
+# tables, the base is `drift_only` (Flow alone), not an empty "None" model --
+# none was run. Each "+ X" adds one cost onto drift_only at its `full` value,
+# NOT re-tuned. `full` is the Phase 2 operating point (size_threshold = 20,
+# max_children = 3), not the campaign best (nkgraph/runs/size120, TE 0.6744).
+# The reference line is drift_only. add_cohesion is byte-identical to drift_only
+# (cohesion inert).
+#
+# Sparse GT (gt/manual, corrected 2026-07-30), point matcher, match_threshold = 10,
+# so no metric counts false positives. Evals 2026-10-13 add traccuracy's plain
+# "aogm" (every weight 1); "AOGM" here = non-splits + FN nodes + FN edges +
+# wrong-semantic edges, i.e. AOGM without its two FP terms. TE equals the
+# 2026-07-30 corrgt0730 evals. Bars are in descending TE.
+# =============================================================================
+[nk_cells]
+output_dir = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/solver_addition_results_nk_cells.png"
+suptitle = "Primary NK cells Solver Addition"
+reference = "drift_only"
+base_condition = "drift_only"  # contribution_dumbbell.py: additions are measured from here
+xtick_rotation = 30
+condition_order = ["full", "plus_volume", "plus_intensity", "drift_only", "plus_cohesion", "plus_adhesion"]
+
+[nk_cells.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+higher_is_better = true
+
+[nk_cells.metrics.FN]
+display_name = "False-negative detections"
+json_path = ["AOGMMetrics", "fn_nodes"]
+reduction = "scalar"
+higher_is_better = false
+unit_interval = false
+fmt = "{:.0f}"
+
+[nk_cells.metrics.AOGM]
+display_name = "AOGM"
+json_paths = [
+    ["AOGMMetrics", "ns_nodes"],
+    ["AOGMMetrics", "fn_nodes"],
+    ["AOGMMetrics", "fn_edges"],
+    ["AOGMMetrics", "ws_edges"],
+]
+reduction = "scalar"
+higher_is_better = false
+unit_interval = false
+fmt = "{:.0f}"
+
+[nk_cells.conditions.full]
+label = "Full"
+color = "#000000"
+note = "all costs (= solver_ablation [nk_cells] full)"
+run = "tracking/full"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-01-54"
+config = "configs/tracking/primary_nk_cells/01_cells/full_config.toml"
+
+[nk_cells.conditions.plus_volume]
+label = "+ Volume"
+color = "#D55E00"
+note = "drift_only + area (w=1500, c=-1500)"
+run = "tracking/add_area"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_17-59-31"
+config = "configs/tracking/primary_nk_cells/01_cells/plus_volume_config.toml"
+
+[nk_cells.conditions.plus_intensity]
+label = "+ Intensity"
+color = "#E69F00"
+note = "drift_only + intensity (w=25, c=-1000)"
+run = "tracking/add_intensity"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-00-43"
+config = "configs/tracking/primary_nk_cells/01_cells/plus_intensity_config.toml"
+
+[nk_cells.conditions.drift_only]
+label = "Flow only"
+color = "#56B4E9"
+note = "base of the addition series: drift (w=100, c=-1500) + appear/disappear 50"
+run = "tracking/drift_only"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-01-19"
+config = "configs/tracking/primary_nk_cells/01_cells/drift_only_config.toml"
+
+[nk_cells.conditions.plus_cohesion]
+label = "+ Cohesion"
+color = "#009E73"
+note = "drift_only + cohesion (w=-500, c=500); byte-identical to drift_only"
+run = "tracking/add_cohesion"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-00-07"
+config = "configs/tracking/primary_nk_cells/01_cells/plus_cohesion_config.toml"
+
+[nk_cells.conditions.plus_adhesion]
+label = "+ Adhesion"
+color = "#009E73"
+note = "drift_only + adhesion (w=-1500, c=1500)"
+run = "tracking/add_adhesion"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_17-58-55"
+config = "configs/tracking/primary_nk_cells/01_cells/plus_adhesion_config.toml"

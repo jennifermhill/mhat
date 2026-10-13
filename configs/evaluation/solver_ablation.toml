@@ -445,3 +445,108 @@ ablate_flags = "ablate_drift = ablate_area = ablate_intensity = ablate_curvature
 run = "tracking/test_none"  # reuse empty model; sel=0.316
 eval = "manual_basic+track_overlap_2026-07-08_17-48-21"
 config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_all_config.toml"
+
+# =============================================================================
+# primary_nk_cells / 01_cells
+# Phase 2 of nk_cells_optimization_log.md (run 2026-07-09). Each ablation zeroes
+# one cost's weight AND constant in `full` and changes nothing else -- the arms
+# were NOT re-tuned. `full` is the Phase 2 operating point (size_threshold = 20,
+# max_children = 3), not the campaign best (tracking/sweeps/nkgraph/runs/size120,
+# TE 0.6744), so the Full bar here is lower than MHAT's in the competitor figure.
+# There is no "- All" run. Cohesion and adhesion are ablated separately.
+# no_appeardisappear was also run, but appear/disappear is not one of the
+# figure's cost terms, so it is left out (TE 0.6307).
+#
+# Sparse GT (gt/manual, corrected 2026-07-30), point matcher, match_threshold = 10,
+# so no metric counts false positives. Evals 2026-10-13 add traccuracy's plain
+# "aogm" (every weight 1); "AOGM" here = non-splits + FN nodes + FN edges +
+# wrong-semantic edges, i.e. AOGM without its two FP terms. TE equals the
+# 2026-07-30 corrgt0730 evals. Bars after Full are in descending TE.
+# =============================================================================
+[nk_cells]
+output_dir = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/solver_ablation_results_nk_cells.png"
+suptitle = "Primary NK cells Solver Ablation"
+reference = "first"
+xtick_rotation = 30
+condition_order = ["full", "no_cohesion", "no_intensity", "no_adhesion", "no_volume", "no_drift"]
+# contribution_dumbbell.py: the Full reference bar, and where the figure goes.
+# Flow has no addition dot (it is the addition base), so its row shows only the
+# ablation dot.
+full_condition = "full"
+dumbbell_output_png = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/contribution_dumbbell_nk_cells.png"
+
+[nk_cells.metrics.TE]
+display_name = "Target Effectiveness"
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
+reduction = "scalar"
+higher_is_better = true
+
+[nk_cells.metrics.FN]
+display_name = "False-negative detections"
+json_path = ["AOGMMetrics", "fn_nodes"]
+reduction = "scalar"
+higher_is_better = false
+unit_interval = false
+fmt = "{:.0f}"
+
+[nk_cells.metrics.AOGM]
+display_name = "AOGM"
+json_paths = [
+    ["AOGMMetrics", "ns_nodes"],
+    ["AOGMMetrics", "fn_nodes"],
+    ["AOGMMetrics", "fn_edges"],
+    ["AOGMMetrics", "ws_edges"],
+]
+reduction = "scalar"
+higher_is_better = false
+unit_interval = false
+fmt = "{:.0f}"
+
+[nk_cells.conditions.full]
+label = "Full"
+color = "#000000"
+ablate_flags = ""
+run = "tracking/full"  # == 2026-06-29_16-24-53 (B0R0), reproduced
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-01-54"
+config = "configs/tracking/primary_nk_cells/01_cells/full_config.toml"
+
+[nk_cells.conditions.no_cohesion]
+label = "- Cohesion"
+color = "#009E73"
+ablate_flags = "cohesion weight&constant = 0"
+run = "tracking/no_cohesion"  # inert: attribute std 0.031
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-04-18"
+config = "configs/tracking/primary_nk_cells/01_cells/no_cohesion_config.toml"
+
+[nk_cells.conditions.no_intensity]
+label = "- Intensity"
+color = "#E69F00"
+ablate_flags = "intensity weight&constant = 0"
+run = "tracking/no_intensity"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-05-29"
+config = "configs/tracking/primary_nk_cells/01_cells/no_intensity_config.toml"
+
+[nk_cells.conditions.no_adhesion]
+label = "- Adhesion"
+color = "#009E73"
+ablate_flags = "adhesion weight&constant = 0"
+run = "tracking/no_adhesion"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-02-30"
+config = "configs/tracking/primary_nk_cells/01_cells/no_adhesion_config.toml"
+
+[nk_cells.conditions.no_volume]
+label = "- Volume"
+color = "#D55E00"
+ablate_flags = "area weight&constant = 0"
+run = "tracking/no_area"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-03-42"
+config = "configs/tracking/primary_nk_cells/01_cells/no_volume_config.toml"
+
+[nk_cells.conditions.no_drift]
+label = "- Flow"
+color = "#56B4E9"
+ablate_flags = "drift weight&constant = 0; no base_edge_constant (area + intensity constants, -2500, keep edges selectable)"
+run = "tracking/no_drift"
+eval = "manual_aogm+basic+track_overlap_2026-10-13_18-04-53"
+config = "configs/tracking/primary_nk_cells/01_cells/no_drift_config.toml"

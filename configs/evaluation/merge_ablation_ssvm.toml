@@ -30,16 +30,16 @@
 # track_metrics.json files were never overwritten.
 
 [mda231]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231_ssvm_regen.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231_ssvm_regen.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation - SSVM-fit weights (01_cells, train)"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_recall_mda231_ssvm_regen.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_recall_mda231_ssvm_regen.png"
 
 [mda231_02cells]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_results_mda231_02_ssvm_regen.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_results_mda231_02_ssvm_regen.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Merge Ablation - SSVM-fit weights (held-out test)"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_recall_mda231_02_ssvm_regen.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_recall_mda231_02_ssvm_regen.png"
 
 [mda231.metrics.TRA]
 display_name = "TRA"

@@ -18,7 +18,7 @@
 # Companion figure: ssvm_vs_handtuned_test.toml, which shows the held-out test scores.
 # Keep the two consistent -- if one is repointed at new runs, repoint the other.
 
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/_unsorted/evaluation/ssvm_vs_handtuned.png"
+output_png = "Y:/jennifer/mhat/experiments/_unsorted/evaluation/ssvm_vs_handtuned.png"
 suptitle = ""
 ylabel = "Score (higher is better)"
 dataset_order = ["nc281_train", "mda231"]
@@ -39,7 +39,7 @@ color = "#CC79A7"
 
 [datasets.mda231]
 name = "MDA231"
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
 json_path = ["CTCMetrics", "TRA"]
 reduction = "scalar"
 #
@@ -68,7 +68,7 @@ eval = "ctc_ctc+track_overlap_2026-09-30_14-51-34"
 
 [datasets.nc281_train]
 name = '$\mathit{Dictyostelium}$'   # literal string; mathtext -> italic tick label
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
 json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 reduction = "scalar"
 # No parity issue here: the hand-tuned run, the old ssvm_fit and regsweep_r11 all share

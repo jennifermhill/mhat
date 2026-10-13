@@ -10,8 +10,8 @@
 #     scripts/05_evaluation/ssvm_solver_ablation.toml --dataset mda231
 
 [mda231]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_ablation_results_mda231_ssvm.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_ablation_results_mda231_ssvm.png"
 suptitle = "Fluo-C3DL-MDA231 Solver Ablation (SSVM-fit)"
 reference = "first"
 condition_order = ["baseline", "no_intensity", "no_volume", "no_drift", "no_cohesion", "no_all"]

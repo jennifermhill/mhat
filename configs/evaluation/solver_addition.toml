@@ -43,8 +43,8 @@
 # ---------------------------------------------------------------------------
 
 [mda231]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_addition_results_mda231.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_addition_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Solver Addition"
 reference = "last"
 xtick_rotation = 30
@@ -130,8 +130,8 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/baseline_config.toml"
 # Same condition set as 01_cells; separate tracking runs.
 # =============================================================================
 [mda231_02cells]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/solver_addition_results_mda231_02.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/solver_addition_results_mda231_02.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Solver Addition"
 reference = "last"
 xtick_rotation = 30
@@ -216,8 +216,8 @@ config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/baseline_config.toml"
 # NC281-Fl2mSiH2B / 03_nuclei
 # =============================================================================
 [nc281]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/solver_addition_results_nc281.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
+output_png = "Y:/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/solver_addition_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Solver Addition"
 # Point-matched TE/TF in track_metrics.json (see solver_ablation.toml note).
 reference = "last"
@@ -300,8 +300,8 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/baseline_solver_config.toml
 # Dense GT (despite "sparse-label" name) -- purity is a reliable signal here.
 # =============================================================================
 [nc281_sparse]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/solver_addition_results_nc281-sparse.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/solver_addition_results_nc281-sparse.png"
 # Point-matched (dataset's documented matcher); see solver_ablation.toml note.
 suptitle = "NC28.1-sparse-label Solver Addition"
 reference = "last"
@@ -389,8 +389,8 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config
 # tracking_uid as each train sweep winner is chosen.
 # =============================================================================
 [nc281_sparse_train]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_addition_results_nc281-sparse_train.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_addition_results_nc281-sparse_train.png"
 suptitle = "NC28.1-sparse-label (train) Solver Addition"
 reference = "last"
 xtick_rotation = 30
@@ -472,8 +472,8 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_
 # verbatim from the train winners above -- NO tuning on test).
 # =============================================================================
 [nc281_sparse_test]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_addition_results_nc281-sparse_test.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_addition_results_nc281-sparse_test.png"
 suptitle = "NC28.1-sparse-label (test) Solver Addition"
 reference = "last"
 xtick_rotation = 30

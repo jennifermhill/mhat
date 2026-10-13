@@ -10,8 +10,8 @@
 #     scripts/05_evaluation/ssvm_solver_addition.toml --dataset mda231
 
 [mda231]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_addition_results_mda231_ssvm.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_addition_results_mda231_ssvm.png"
 suptitle = "Fluo-C3DL-MDA231 Solver Addition (SSVM-fit)"
 reference = "last"
 xtick_rotation = 30

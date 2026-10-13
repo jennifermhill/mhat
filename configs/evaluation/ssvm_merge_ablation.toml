@@ -10,8 +10,8 @@
 #     scripts/05_evaluation/ssvm_merge_ablation.toml --dataset mda231
 
 [mda231]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231_ssvm.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231_ssvm.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation (SSVM-fit)"
 
 [mda231.metrics.TRA]

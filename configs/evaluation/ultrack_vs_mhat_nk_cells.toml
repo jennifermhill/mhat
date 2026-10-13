@@ -7,11 +7,11 @@
 # match_threshold = 10.
 # Rendered by competitor_vs_mhat.py (same script as the NC281 figure).
 
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/ultrack_vs_mhat_nk_cells.png"
+output_png = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells/figures/ultrack_vs_mhat_nk_cells.png"
 title = ""
 ylabel = "Score (higher is better)"
 
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/primary_nk_cells/01_cells"
+output_dir = "Y:/jennifer/mhat/experiments/primary_nk_cells/01_cells"
 
 # x-groups: track-coverage metrics first, then the per-object recalls.
 metric_order = ["target_effectiveness", "track_fractions", "node_recall", "edge_recall"]

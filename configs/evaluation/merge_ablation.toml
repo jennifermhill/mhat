@@ -28,10 +28,10 @@
 # ---------------------------------------------------------------------------
 
 [mda231]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Merge Ablation"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_recall_mda231.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/merge_ablation_recall_mda231.png"
 
 [mda231.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -111,10 +111,10 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_merges_config.toml"
 # Same param values as 01_cells; separate dataset/segmentation/tracking runs.
 # =============================================================================
 [mda231_02cells]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_results_mda231_02.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_results_mda231_02.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Merge Ablation"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_recall_mda231_02.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/merge_ablation_recall_mda231_02.png"
 
 [mda231_02cells.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -178,10 +178,10 @@ config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_merges_config.toml"
 # NC281-Fl2mSiH2B / 03_nuclei
 # =============================================================================
 [nc281]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/merge_ablation_results_nc281.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
+output_png = "Y:/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/merge_ablation_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Merge Ablation"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/merge_ablation_recall_nc281.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/merge_ablation_recall_nc281.png"
 
 [nc281.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -240,10 +240,10 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_merges_config.toml"
 # Dense GT (despite "sparse-label" name) — purity is a reliable signal here.
 # =============================================================================
 [nc281_sparse]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/merge_ablation_results_nc281-sparse.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/merge_ablation_results_nc281-sparse.png"
 suptitle = "NC28.1-sparse-label Merge Ablation"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/merge_ablation_recall_nc281-sparse.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/merge_ablation_recall_nc281-sparse.png"
 
 [nc281_sparse.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -313,10 +313,10 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_merges_confi
 # Fill seg_uid (from cluster) and tracking_uid (train winner) as they arrive.
 # =============================================================================
 [nc281_sparse_train]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/merge_ablation_results_nc281-sparse_train.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/merge_ablation_results_nc281-sparse_train.png"
 suptitle = "NC28.1-sparse-label (train) Merge Ablation"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/merge_ablation_recall_nc281-sparse_train.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/merge_ablation_recall_nc281-sparse_train.png"
 
 [nc281_sparse_train.recall_metrics.NodeRecall]
 display_name = "Node Recall"
@@ -380,10 +380,10 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_merges
 # copied verbatim -- NO tuning on test). seg_uid = the test seg variants.
 # =============================================================================
 [nc281_sparse_test]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/merge_ablation_results_nc281-sparse_test.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/merge_ablation_results_nc281-sparse_test.png"
 suptitle = "NC28.1-sparse-label (test) Merge Ablation"
-recall_output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/merge_ablation_recall_nc281-sparse_test.png"
+recall_output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/merge_ablation_recall_nc281-sparse_test.png"
 
 [nc281_sparse_test.recall_metrics.NodeRecall]
 display_name = "Node Recall"

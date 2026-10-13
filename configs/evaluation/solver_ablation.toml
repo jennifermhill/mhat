@@ -41,8 +41,8 @@
 # ---------------------------------------------------------------------------
 
 [mda231]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_ablation_results_mda231.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells/figures/solver_ablation_results_mda231.png"
 suptitle = "Fluo-C3DL-MDA231 Solver Ablation"
 reference = "first"
 condition_order = ["baseline", "no_drift", "no_volume", "no_cohesion", "no_intensity", "no_all"]
@@ -128,8 +128,8 @@ config = "configs/tracking/Fluo-C3DL-MDA231/01_cells/no_all_config.toml"
 # Same condition set as 01_cells; separate tracking runs.
 # =============================================================================
 [mda231_02cells]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/solver_ablation_results_mda231_02.png"
+output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells"
+output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/solver_ablation_results_mda231_02.png"
 suptitle = "Fluo-C3DL-MDA231 02_cells Solver Ablation"
 reference = "first"
 condition_order = ["baseline", "no_drift", "no_volume", "no_cohesion", "no_intensity", "no_all"]
@@ -214,8 +214,8 @@ config = "configs/tracking/Fluo-C3DL-MDA231/02_cells/no_all_config.toml"
 # NC281-Fl2mSiH2B / 03_nuclei
 # =============================================================================
 [nc281]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/solver_ablation_results_nc281.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei"
+output_png = "Y:/jennifer/mhat/experiments/NC281-Fl2mSiH2B/03_nuclei/figures/solver_ablation_results_nc281.png"
 suptitle = "NC28.1-Fl2mSiH2B Solver Ablation"
 # Solver runs store point-matched TE/TF in track_metrics.json (the merge figure
 # used track_metrics_iou.json; the solver figure used point matching).
@@ -271,8 +271,8 @@ config = "configs/tracking/NC281-Fl2mSiH2B/03_nuclei/no_all_config.toml"
 # Dense GT (despite "sparse-label" name) -- purity is a reliable signal here.
 # =============================================================================
 [nc281_sparse]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/solver_ablation_results_nc281-sparse.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/01_nuclei_denoised/figures/solver_ablation_results_nc281-sparse.png"
 # Sparse-label is point-matched (the dataset's documented matcher). The solver
 # batch runs store point metrics as track_metrics.json; the Full/Baseline run
 # stores the same matcher as track_metrics_point.json (per-condition override).
@@ -335,8 +335,8 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/no_all_config.t
 # train winners are chosen. Reuse: no_all == solver_addition none.
 # =============================================================================
 [nc281_sparse_train]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_ablation_results_nc281-sparse_train.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_ablation_results_nc281-sparse_train.png"
 suptitle = "NC28.1-sparse-label (train) Solver Ablation"
 reference = "first"
 condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]
@@ -393,8 +393,8 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_all_co
 # copied verbatim -- NO tuning on test).
 # =============================================================================
 [nc281_sparse_test]
-output_dir = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
-output_png = "/groups/sgro/sgrolab/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_ablation_results_nc281-sparse_test.png"
+output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_ablation_results_nc281-sparse_test.png"
 suptitle = "NC28.1-sparse-label (test) Solver Ablation"
 reference = "first"
 condition_order = ["baseline", "no_cohesion", "no_drift", "no_all"]

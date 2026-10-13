@@ -15,6 +15,9 @@ one of two modes:
 TracksViewer shows one set of tracks at a time, so predictions and GT are two
 separate videos.
 
+To show the raw movie alone (with the timestamp and scale bar), name an output
+directory (or its ``raw.toml``) instead of tracks, or give only ``--raw``.
+
 Frames are captured one by one with ``viewer.screenshot()`` rather than with
 napari-animation, which deep-copies the viewer state to interpolate between
 keyframes and crashes on TracksViewer's backing objects. Each frame is written
@@ -25,12 +28,15 @@ produced it, and a rerun with different settings refuses to reuse its frames
 
 Videos go next to the tracks they show: ``<run>/videos/`` for predictions,
 ``<gt folder>/videos/`` (e.g. ``<output_dir>/gt/ctc/videos/``) for a ground
-truth.
+truth, ``<output_dir>/videos/raw_*.mp4`` for the raw movie alone. A raw movie
+given only by ``--raw`` belongs to no output directory, so it needs ``-o``.
 
 Usage:
     python scripts/04_tracking/render_tracks_video.py <tracks> --setup
     python scripts/04_tracking/render_tracks_video.py --config render.toml
     python scripts/04_tracking/render_tracks_video.py <tracks> --end 3 -o test.mp4
+    python scripts/04_tracking/render_tracks_video.py <output_dir> --raw <zarr>
+    python scripts/04_tracking/render_tracks_video.py --raw <zarr> -o raw.mp4
 
 ``--setup`` opens the loaded viewer without rendering. Adjust the view by hand,
 then press Shift-S (or close the window) to print the display settings as TOML,
@@ -40,6 +46,7 @@ Example TOML config (keep these under scratch_configs/visualization/):
 
     tracks = "Y:/jennifer/mhat/experiments/<exp>/<dataset>/tracking/<uid>"
     # tracks = "Y:/jennifer/mhat/experiments/<exp>/<dataset>/gt/ctc"  # a GT
+    # tracks = "Y:/jennifer/mhat/experiments/<exp>/<dataset>"  # raw alone
     raw_path = "Y:/jennifer/mhat/data/<dataset>.zarr"  # if raw.toml's path is
                                                         # not valid here (--raw)
     # seg_path = "..."       # default: pred_seg.zarr / correct_seg.zarr beside
@@ -93,10 +100,9 @@ import numpy as np
 import toml
 from tqdm import tqdm
 
-from mhat.dataset import absolute_path
+from mhat.dataset import RAW_RECORD, Dataset, absolute_path
 from mhat.visualization.timestamps import time_formatter
 from mhat.visualization.tracks_view import (
-    TracksSource,
     load_raw,
     load_tracks,
     resolve_tracks,
@@ -258,14 +264,37 @@ class Scene:
     axes: list[dict]
     n_spatial: int
     n_time: int
+    raw_only: bool = False
 
 
-def load_scene(cfg: RenderConfig) -> tuple[Scene, TracksSource]:
-    """Build the viewer: raw plus one set of tracks."""
-    if cfg.tracks is None:
+def named_output_dir(path: str | Path) -> Dataset | None:
+    """The output directory ``path`` names (it, or its ``raw.toml``), or None
+    if ``path`` is something else, such as a run or a ground truth.
+    """
+    path = absolute_path(path)
+    if path.name == RAW_RECORD:
+        path = path.parent
+    if not (path / RAW_RECORD).is_file():
+        return None
+    return Dataset(output_dir=path, raw_path=Dataset(path).recorded_raw_path())
+
+
+def load_scene(cfg: RenderConfig) -> tuple[Scene, Path | None]:
+    """Build the viewer: raw plus one set of tracks, or raw alone.
+
+    Returns:
+        (scene, the folder whose ``videos/`` the output goes in by default, or
+        None for a raw movie given only by ``raw_path``).
+    """
+    if cfg.tracks is None and cfg.raw_path is None:
         raise ValueError(
-            "No tracks given (positional argument or `tracks` in the config)"
+            "Nothing to show: give tracks or an output directory (positional "
+            "argument or `tracks` in the config), or a raw movie (--raw)"
         )
+    dataset = named_output_dir(cfg.tracks) if cfg.tracks is not None else None
+    if cfg.tracks is None or dataset is not None:
+        return load_raw_scene(cfg, dataset)
+
     source = resolve_tracks(cfg.tracks, cfg.seg_path)
     raw_path = cfg.raw_path or (
         source.dataset.raw_path if source.dataset is not None else None
@@ -298,7 +327,35 @@ def load_scene(cfg: RenderConfig) -> tuple[Scene, TracksSource]:
         n_spatial=len(axes) - 1,
         n_time=n_time,
     )
-    return scene, source
+    return scene, source.home
+
+
+def load_raw_scene(
+    cfg: RenderConfig, dataset: Dataset | None
+) -> tuple[Scene, Path | None]:
+    """Build the viewer with the raw movie alone; no TracksViewer is opened."""
+    if cfg.seg_path is not None:
+        raise ValueError("--seg needs tracks to color it by; none were given")
+    raw_path = cfg.raw_path or dataset.raw_path
+    if raw_path is None or not Path(raw_path).exists():
+        where = f" (from {dataset.output_dir / RAW_RECORD})" if dataset else ""
+        raise FileNotFoundError(
+            f"Raw movie {raw_path}{where} does not exist here; pass --raw"
+        )
+    viewer = napari.Viewer()
+    raw_layer, _, axes = load_raw(viewer, raw_path, None, cfg.channel)
+    scene = Scene(
+        viewer=viewer,
+        raw_layer=raw_layer,
+        seg_layer=None,
+        tracks_layer=None,
+        points_layer=None,
+        axes=axes,
+        n_spatial=len(axes) - 1,
+        n_time=raw_layer.data.shape[0],
+        raw_only=True,
+    )
+    return scene, dataset.output_dir if dataset is not None else None
 
 
 def apply_display(scene: Scene, cfg: RenderConfig, mode: str) -> None:
@@ -579,17 +636,26 @@ def render(scene: Scene, cfg: RenderConfig, frames_dir: Path, output: Path) -> N
 
 
 def default_output(
-    cfg: RenderConfig, mode: str, n_spatial: int, source: TracksSource
+    cfg: RenderConfig, mode: str, scene: Scene, home: Path | None
 ) -> Path:
-    """``<run>/videos/`` for predictions, ``<gt folder>/videos/`` for a GT."""
-    stem = mode if not (mode == "2d" and n_spatial == 3) else f"2d_z{cfg.z}"
-    return source.home / "videos" / f"{stem}.mp4"
+    """``<run>/videos/`` for predictions, ``<gt folder>/videos/`` for a GT,
+    ``<output_dir>/videos/raw_*`` for the raw movie alone.
+    """
+    if home is None:
+        raise ValueError(
+            "A raw movie given only by --raw belongs to no output directory; "
+            "pass -o, or name the output directory instead"
+        )
+    stem = mode if not (mode == "2d" and scene.n_spatial == 3) else f"2d_z{cfg.z}"
+    if scene.raw_only:
+        stem = f"raw_{stem}"
+    return home / "videos" / f"{stem}.mp4"
 
 
 def parse_args() -> tuple[RenderConfig, argparse.Namespace]:
     parser = argparse.ArgumentParser(
         description="Render a video of a run's predicted tracks, or a ground "
-        "truth, over the raw movie.",
+        "truth, over the raw movie; or of the raw movie alone.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -599,7 +665,8 @@ def parse_args() -> tuple[RenderConfig, argparse.Namespace]:
         default=None,
         help="a tracking run, <output_dir>/tracking/<uid>, or an SSVM fit, "
         "<output_dir>/ssvm/<uid> (or its config.toml); or a ground truth, e.g. "
-        "<output_dir>/gt/ctc or its correct_tracks.zarr",
+        "<output_dir>/gt/ctc or its correct_tracks.zarr; or an output "
+        "directory (or its raw.toml), to show its raw movie alone",
     )
     parser.add_argument("--config", type=Path, default=None, help="render TOML")
     parser.add_argument(
@@ -607,7 +674,8 @@ def parse_args() -> tuple[RenderConfig, argparse.Namespace]:
         type=Path,
         default=None,
         help="raw movie, if the path in raw.toml is not valid on this machine, "
-        "or the tracks are outside any output directory",
+        "or the tracks are outside any output directory; given alone, the "
+        "raw movie is shown without tracks (needs -o)",
     )
     parser.add_argument(
         "--seg",
@@ -657,7 +725,7 @@ def parse_args() -> tuple[RenderConfig, argparse.Namespace]:
 
 def main():
     cfg, args = parse_args()
-    scene, source = load_scene(cfg)
+    scene, home = load_scene(cfg)
     mode = resolve_mode(cfg, scene.n_spatial)
     apply_display(scene, cfg, mode)
 
@@ -668,7 +736,7 @@ def main():
     output = (
         absolute_path(Path(cfg.output))
         if cfg.output
-        else default_output(cfg, mode, scene.n_spatial, source)
+        else default_output(cfg, mode, scene, home)
     )
     frames_dir = output.parent / f"{output.stem}_frames"
     prepare_frames_dir(frames_dir, cfg.frame_settings(), args.overwrite)

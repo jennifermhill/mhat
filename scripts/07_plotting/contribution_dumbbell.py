@@ -17,6 +17,14 @@ so it works unchanged on the SSVM TOMLs later. Costs are matched between the two
 files by stripping the no_/plus_ prefix (curvature has no ablation twin -> only
 its addition dot is drawn).
 
+Optional table keys: ``full_condition`` in the ablation table (default
+"baseline") and ``base_condition`` in the addition table (default "none") name
+the two reference bars, for a dataset whose addition series starts from
+something other than an empty model. A metric may give ``json_paths`` (summed)
+in place of ``json_path``; one with ``higher_is_better = false`` keeps its true
+signed deltas but has its x axis flipped, so improvement points right in every
+panel.
+
 Usage:
     python scripts/07_plotting/contribution_dumbbell.py --ablation configs/evaluation/solver_ablation.toml \
         --addition configs/evaluation/solver_addition.toml --dataset mda231 [--output foo.png]
@@ -47,7 +55,8 @@ def load_metrics(dataset_cfg, cond, metric_specs):
     m = plot_spec.load_metrics(dataset_cfg, cond)
     if m is None:
         raise ValueError(f"condition {cond.get('label')!r} is still a placeholder")
-    return {k: reduce_value(walk(m, spec["json_path"]), spec["reduction"])
+    return {k: sum(reduce_value(walk(m, path), spec["reduction"])
+                   for path in spec.get("json_paths", [spec.get("json_path")]))
             for k, spec in metric_specs.items()}
 
 
@@ -75,15 +84,17 @@ def main():
     metric_specs = abl["metrics"]
 
     # Reference points.
-    full_cond = abl["conditions"]["baseline"]
-    none_cond = add["conditions"]["none"]
+    full_key = abl.get("full_condition", "baseline")
+    base_key = add.get("base_condition", "none")
+    full_cond = abl["conditions"][full_key]
+    none_cond = add["conditions"][base_key]
     full = load_metrics(abl, full_cond, metric_specs)
     none = load_metrics(add, none_cond, metric_specs)
 
     # cost key -> {ablation deltas, addition deltas, label, color}
     costs = {}
     for key, cond in abl["conditions"].items():
-        if key in ("baseline", "no_all"):
+        if key in (full_key, "no_all"):
             continue
         c = strip_prefix(key)
         m = load_metrics(abl, cond, metric_specs)
@@ -94,7 +105,7 @@ def main():
         costs[c].setdefault("label", nice_label(cond.get("label")))
         costs[c].setdefault("color", cond.get("color", "#444444"))
     for key, cond in add["conditions"].items():
-        if key in ("none", "full"):
+        if key in (base_key, "full"):
             continue
         c = strip_prefix(key)
         m = load_metrics(add, cond, metric_specs)
@@ -142,19 +153,32 @@ def main():
             if a is not None:
                 ax.scatter(a, i, s=95, color=col, zorder=3)
         ax.axvline(0, color="gray", lw=0.9, ls="--", alpha=0.7)
-        ax.set_title(spec["display_name"], fontsize=13, fontweight="bold")
-        ax.set_xlabel(f"Δ {spec['display_name']}   (− removed · + added)")
+        title = spec["display_name"]
+        if spec.get("higher_is_better", True):
+            signs = "(− removed · + added)"
+        else:
+            # Lower is better: a helpful cost lowers the metric when added and
+            # raises it when removed. Flip the axis so "better" is still right.
+            signs = "(+ removed · − added)"
+            ax.invert_xaxis()
+        if "higher_is_better" in spec:
+            title += " (↑)" if spec["higher_is_better"] else " (↓)"
+        ax.set_title(title, fontsize=13, fontweight="bold")
+        ax.set_xlabel(f"Δ {spec['display_name']}   {signs}")
         ax.margins(x=0.18)
         ax.grid(axis="x", alpha=0.25)
     axes[0].set_yticks(y)
     axes[0].set_yticklabels([costs[c]["label"] for c in order], fontsize=11)
 
+    # The signs in the legend only hold where higher is better.
+    flipped = any(not s.get("higher_is_better", True) for s in metric_specs.values())
+    base_label = none_cond.get("label", "None")
     handles = [
         plt.Line2D([], [], marker="o", ls="", markerfacecolor="white",
                    markeredgecolor="#333", markeredgewidth=2, markersize=10,
-                   label="added to None → gain (+)"),
+                   label=f"added to {base_label} → gain" + ("" if flipped else " (+)")),
         plt.Line2D([], [], marker="o", ls="", color="#333", markersize=10,
-                   label="removed from Full → loss (−)"),
+                   label="removed from Full → loss" + ("" if flipped else " (−)")),
     ]
     fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
                bbox_to_anchor=(0.5, 1.005), fontsize=10)

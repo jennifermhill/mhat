@@ -145,7 +145,7 @@ def main():
 
     output_path = Path(args.output or cfg["output_png"])
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_path, dpi=500, bbox_inches="tight")
     print(f"Saved {output_path}")
 
 

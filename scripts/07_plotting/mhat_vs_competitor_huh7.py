@@ -25,6 +25,8 @@ Spec schema (TOML) -- see scratch_configs/evaluation/mhat_vs_competitor_huh7.tom
     json_path        = ["F1AOGMMetrics", "Detection F1"]
     higher_is_better = true
     fmt              = "{:.3f}"
+    [metrics.errors]                 # a sum of several values
+    json_paths       = [["AOGMMetrics", "fn_nodes"], ["AOGMMetrics", "fn_edges"]]
     method_order = ["mhat", "ultrack", "trackmate"]
     [methods.mhat]         label, color, [[methods.mhat.datasets]] label/output_dir/run/eval
     [methods.ultrack]      label, color, published = {detection_f1 = 0.921, ...}
@@ -53,9 +55,14 @@ def method_values(method, metrics, metric_keys):
                 f"{method['label']} {dataset['label']!r} is still a placeholder"
             )
         for key in metric_keys:
-            path = metrics[key]["json_path"]
-            values[key].append(float(plot_spec.walk_json_path(track_metrics, path)))
+            values[key].append(metric_value(track_metrics, metrics[key]))
     return values
+
+
+def metric_value(track_metrics, metric):
+    """One metric's value: ``json_path``, or the sum over ``json_paths``."""
+    paths = metric.get("json_paths", [metric.get("json_path")])
+    return sum(float(plot_spec.walk_json_path(track_metrics, p)) for p in paths)
 
 
 def main():

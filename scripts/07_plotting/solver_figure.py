@@ -16,9 +16,15 @@ Optional per-metric keys (defaults reproduce the original 0-1 score panels):
 ``higher_is_better`` (appends an up/down arrow to the panel title). A table's
 ``reference`` may also name a condition, to draw the line at that bar.
 
+``--metrics`` plots only the named metric keys (e.g. ``TE``) and, without
+``--output``, appends them to the output file name (``..._TE.png``), so the
+full figure is kept. ``--no-title`` drops the suptitle. ``--font-scale``
+multiplies every font size.
+
 Usage:
     python scripts/07_plotting/solver_figure.py configs/evaluation/solver_ablation.toml --dataset mda231
     python scripts/07_plotting/solver_figure.py configs/evaluation/solver_addition.toml --dataset nc281 --output foo.png
+    python scripts/07_plotting/solver_figure.py configs/evaluation/solver_ablation.toml --dataset mda231 --metrics TE --no-title --font-scale 1.5
 """
 import argparse
 from pathlib import Path
@@ -71,6 +77,11 @@ def main():
     parser.add_argument("config", help="Path to solver_ablation.toml or solver_addition.toml")
     parser.add_argument("--dataset", required=True, help="Top-level dataset key in the TOML (e.g., mda231, nc281)")
     parser.add_argument("--output", default=None, help="Override output_png from TOML")
+    parser.add_argument("--metrics", nargs="+", default=None,
+                        help="Plot only these metric keys (e.g. TE); default every metric in the TOML")
+    parser.add_argument("--no-title", action="store_true", help="Drop the figure suptitle")
+    parser.add_argument("--font-scale", type=float, default=1.0,
+                        help="Multiply every font size (e.g. 1.5 for a single-panel figure)")
     args = parser.parse_args()
 
     config = toml.load(args.config)
@@ -79,6 +90,11 @@ def main():
     dataset_cfg = config[args.dataset]
 
     metric_specs = dataset_cfg["metrics"]
+    if args.metrics:
+        unknown = [key for key in args.metrics if key not in metric_specs]
+        if unknown:
+            raise KeyError(f"metrics {unknown} not in [{args.dataset}.metrics]; available: {list(metric_specs)}")
+        metric_specs = {key: metric_specs[key] for key in args.metrics}
     conditions = dataset_cfg["conditions"]
     condition_order = dataset_cfg["condition_order"]
     rotation = dataset_cfg.get("xtick_rotation", 0)
@@ -119,16 +135,17 @@ def main():
         title = spec["display_name"]
         if "higher_is_better" in spec:
             title += " (↑)" if spec["higher_is_better"] else " (↓)"
-        ax.set_title(title, fontsize=13, fontweight="bold")
+        ax.set_title(title, fontsize=17 * args.font_scale, fontweight="bold")
         ax.set_xticks(x)
         if rotation:
-            ax.set_xticklabels(labels, fontsize=9, rotation=rotation, ha="right")
+            ax.set_xticklabels(labels, fontsize=14 * args.font_scale, rotation=rotation, ha="right")
         else:
-            ax.set_xticklabels(labels, fontsize=9)
+            ax.set_xticklabels(labels, fontsize=14 * args.font_scale)
+        ax.tick_params(axis="y", labelsize=13 * args.font_scale)
         unit_interval = spec.get("unit_interval", True)
         top = 1.0 if unit_interval else 1.15 * max(values)
         ax.set_ylim(0, top)
-        ax.set_ylabel("Score" if unit_interval else "Count")
+        ax.set_ylabel("Score" if unit_interval else "Count", fontsize=15 * args.font_scale)
         if reference == "first":
             ax.axhline(y=values[0], color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
         elif reference == "last":
@@ -144,15 +161,18 @@ def main():
                 fmt.format(val),
                 ha="center",
                 va="bottom",
-                fontsize=8,
+                fontsize=13 * args.font_scale,
             )
 
-    fig.suptitle(dataset_cfg["suptitle"], fontsize=14, fontweight="bold")
+    if not args.no_title:
+        fig.suptitle(dataset_cfg["suptitle"], fontsize=19 * args.font_scale, fontweight="bold")
     plt.tight_layout()
 
     output_path = plot_spec.figure_path(
         dataset_cfg, f"{Path(args.config).stem}_results_{args.dataset}.png", args.output
     )
+    if args.metrics and not args.output:
+        output_path = output_path.with_name(f"{output_path.stem}_{'_'.join(args.metrics)}{output_path.suffix}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     print(f"Saved {output_path}")

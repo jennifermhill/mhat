@@ -388,13 +388,23 @@ config = "configs/tracking/NC281-sparse-label/01_nuclei_denoised/baseline_config
 # tie-break TF). Point-matched (matcher="point", match_threshold=10). Fill
 # tracking_uid as each train sweep winner is chosen.
 # =============================================================================
+# NOTE (2026-10-14): every bar below is the `wzff` rerun -- waterz-convention seg
+# (*_wzfix, 5d94e3b) + frame-averaging-fix flow (favgfix, 1faca04). Each condition was
+# re-tuned over its original July point set and every July winner reproduced, so only
+# the inputs changed, not the solver params. Pre-fix July runs (baseline TE 0.829 on
+# test) are in git history and in the *_prefix_july figure PNGs.
+# PARKED pre-fix (2026-10-14): + Cohesion / + Volume / + Intensity / + Momentum have
+# no post-fix run -- the wzff sweep covered only None, + Flow and Full. Their condition
+# tables below still hold the July (pre-fix) runs and are kept verbatim; they are simply
+# dropped from condition_order so this figure is post-fix throughout. Restore them by
+# putting their names back in condition_order once they are rerun on wzff.
 [nc281_sparse_train]
 output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
-output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_addition_results_nc281-sparse_train.png"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train/figures/solver_addition_results_nc281-sparse_train_wzff.png"
 suptitle = "NC28.1-sparse-label (train) Solver Addition"
 reference = "last"
 xtick_rotation = 30
-condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
+condition_order = ["none", "plus_drift", "full"]
 
 [nc281_sparse_train.metrics.TE]
 display_name = "Target Effectiveness"
@@ -414,10 +424,10 @@ reduction = "scalar"
 [nc281_sparse_train.conditions.none]
 label = "None"
 color = "#999999"
-note = "empty model (drift_weight=0, drift_constant=-2000 flat edge cost); sel=0.326"
-run = "tracking/add_none_dc2000"
-eval = "manual_basic+track_overlap_2026-07-08_15-34-45"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/no_all_config.toml"
+note = "empty model (drift_weight=0, drift_constant=-2000 flat edge cost); sel=0.309 (wzff)"
+run = "tracking/sweeps/wzff/runs/none_dc2000"  # wzff rerun; TE 0.2942 / Purity 0.3235 / sel 0.309
+eval = "wzff_basic+f1_aogm+track_overlap_2026-10-14_15-15-59"
+config = "<run>/config.toml"  # saved with the run (sweep spec: scratch_configs/sweeps/wzff_nc281_train.toml)
 
 [nc281_sparse_train.conditions.plus_cohesion]
 label = "+ Cohesion"
@@ -454,30 +464,40 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_curv
 [nc281_sparse_train.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
-note = "active: drift (drift_weight=100, constant=-2000); sel=0.862"
-run = "tracking/add_drift_w100"
-eval = "manual_basic+track_overlap_2026-07-08_16-36-42"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/plus_drift_config.toml"
+note = "active: drift (drift_weight=100, constant=-2000); sel=0.859 (wzff)"
+run = "tracking/sweeps/wzff/runs/drift_w100"  # wzff rerun; TE 0.8062 / Purity 0.9112 / sel 0.859
+eval = "wzff_basic+f1_aogm+track_overlap_2026-10-14_15-15-58"
+config = "<run>/config.toml"  # saved with the run (sweep spec: scratch_configs/sweeps/wzff_nc281_train.toml)
 
 [nc281_sparse_train.conditions.full]
 label = "Full"
 color = "#000000"
-note = "all costs active (full tuned baseline; Step-0 train tune, drift_w=100, coh=-500/450); sel=0.861"
-run = "tracking/s0_dw100_cw500"
-eval = "manual_basic+track_overlap_2026-07-08_15-11-00"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/baseline_config.toml"
+note = "all costs active (full tuned baseline; Step-0 train tune, drift_w=100, coh=-500/450); sel=0.859 (wzff)"
+run = "tracking/sweeps/wzff/runs/full_dw100_cw500"  # wzff rerun; TE 0.8062 / Purity 0.9112 / sel 0.859
+eval = "wzff_basic+f1_aogm+track_overlap_2026-10-14_15-16-08"
+config = "<run>/config.toml"  # saved with the run (sweep spec: scratch_configs/sweeps/wzff_nc281_train.toml)
 
 # =============================================================================
 # NC281-sparse-label / 02_nuclei_denoised_test  (final eval; params copied
 # verbatim from the train winners above -- NO tuning on test).
 # =============================================================================
+# NOTE (2026-10-14): every bar below is the `wzff` rerun -- waterz-convention seg
+# (*_wzfix, 5d94e3b) + frame-averaging-fix flow (favgfix, 1faca04). Each condition was
+# re-tuned over its original July point set and every July winner reproduced, so only
+# the inputs changed, not the solver params. Pre-fix July runs (baseline TE 0.829 on
+# test) are in git history and in the *_prefix_july figure PNGs.
+# PARKED pre-fix (2026-10-14): + Cohesion / + Volume / + Intensity / + Momentum have
+# no post-fix run -- the wzff sweep covered only None, + Flow and Full. Their condition
+# tables below still hold the July (pre-fix) runs and are kept verbatim; they are simply
+# dropped from condition_order so this figure is post-fix throughout. Restore them by
+# putting their names back in condition_order once they are rerun on wzff.
 [nc281_sparse_test]
 output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test"
-output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_addition_results_nc281-sparse_test.png"
+output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/solver_addition_results_nc281-sparse_test_wzff.png"
 suptitle = "NC28.1-sparse-label (test) Solver Addition"
 reference = "last"
 xtick_rotation = 30
-condition_order = ["none", "plus_cohesion", "plus_volume", "plus_intensity", "plus_curvature", "plus_drift", "full"]
+condition_order = ["none", "plus_drift", "full"]
 
 [nc281_sparse_test.metrics.TE]
 display_name = "Target Effectiveness"
@@ -497,10 +517,10 @@ reduction = "scalar"
 [nc281_sparse_test.conditions.none]
 label = "None"
 color = "#999999"
-note = "train params applied to test (empty model); sel=0.316"
-run = "tracking/test_none"
-eval = "manual_basic+track_overlap_2026-07-08_17-48-21"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/no_all_config.toml"
+note = "train params applied to test (empty model); sel=0.291 (wzff)"
+run = "tracking/sweeps/wzff/runs/test_none"  # wzff rerun; TE 0.2828 / Purity 0.2996 / sel 0.291
+eval = "wzff_basic+f1_aogm+track_overlap_2026-10-14_15-24-03"
+config = "<run>/config.toml"  # saved with the run (sweep spec: scratch_configs/sweeps/wzff_nc281_test.toml)
 
 [nc281_sparse_test.conditions.plus_cohesion]
 label = "+ Cohesion"
@@ -537,18 +557,18 @@ config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_curva
 [nc281_sparse_test.conditions.plus_drift]
 label = "+ Flow"
 color = "#56B4E9"
-note = "train params applied to test (drift_weight=100); sel=0.857"
-run = "tracking/test_plus_drift"
-eval = "manual_basic+track_overlap_2026-07-08_18-16-07"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/plus_drift_config.toml"
+note = "train params applied to test (drift_weight=100); sel=0.849 (wzff)"
+run = "tracking/sweeps/wzff/runs/test_drift"  # wzff rerun; TE 0.8200 / Purity 0.8787 / sel 0.849
+eval = "wzff_basic+f1_aogm+track_overlap_2026-10-14_15-24-03"
+config = "<run>/config.toml"  # saved with the run (sweep spec: scratch_configs/sweeps/wzff_nc281_test.toml)
 
 [nc281_sparse_test.conditions.full]
 label = "Full"
 color = "#000000"
-note = "train params applied to test (full tuned baseline); sel=0.858"
-run = "tracking/test_full"
-eval = "manual_basic+track_overlap_2026-07-08_17-44-25"
-config = "configs/tracking/NC281-sparse-label/02_nuclei_denoised_test/baseline_config.toml"
+note = "train params applied to test (full tuned baseline); sel=0.850 (wzff)"
+run = "tracking/sweeps/wzff/runs/test_full"  # wzff rerun; TE 0.8196 / Purity 0.8795 / sel 0.850
+eval = "wzff_basic+f1_aogm+track_overlap_2026-10-14_15-24-02"
+config = "<run>/config.toml"  # saved with the run (sweep spec: scratch_configs/sweeps/wzff_nc281_test.toml)
 
 # =============================================================================
 # primary_nk_cells / 01_cells

@@ -49,6 +49,11 @@ Usage:
 then press Shift-S (or close the window) to print the display settings as TOML,
 ready to paste into the config.
 
+The scale bar is drawn onto each frame (``mhat.visualization.scale_bar``): one
+line without end ticks, its length written above it. napari's scale bar can't
+be made thicker. The setup viewer shows napari's as a preview of the bar's
+place; its automatic length may differ from the render's.
+
 Example TOML config (keep these under scratch_configs/visualization/):
 
     tracks = "Y:/jennifer/mhat/experiments/<exp>/<dataset>/tracking/<uid>"
@@ -72,7 +77,11 @@ Example TOML config (keep these under scratch_configs/visualization/):
     show_points = false
     scale_bar = true
     # scale_bar_length = 50.0  # fixed length in the spatial unit (e.g. um);
-                               # default: napari picks one from the zoom
+                               # default: 1, 2 or 5 x 10^n, up to 150 screen px
+    scale_bar_thickness = 3      # screen px of the setup viewer
+    scale_bar_color = "white"    # name, "#rrggbb" or [r, g, b]
+    scale_bar_position = "bottom_right"  # or bottom_left, top_right, top_left
+    scale_bar_font = "Arial"
     # time_unit = "min"      # force one unit ("s", "min" or "h"); default fits
                              # the movie, e.g. 7hr:15min for 30 x 15 min
     timestamp_font_size = 18     # as in the setup viewer; the render scales
@@ -112,6 +121,7 @@ import napari
 import numpy as np
 import toml
 from mhat.dataset import RAW_RECORD, Dataset, absolute_path
+from mhat.visualization.scale_bar import ScaleBar, nice_length, unit_symbol
 from mhat.visualization.timestamps import time_formatter
 from mhat.visualization.tracks_view import (
     load_raw,
@@ -131,6 +141,15 @@ EXTRA_RAW_COLORMAPS = ("magenta", "cyan", "yellow")
 SEG_KEYS = {"visible", "opacity", "contour", "rendering"}
 CAMERA_KEYS = {"angles", "zoom", "center", "perspective"}
 
+# The drawn scale bar's sizes are in screen pixels of the setup viewer, as
+# napari's are. napari draws a font_size-point label with digits 1.3 screen px
+# tall per point (measured on Windows, napari 0.8), so the drawn label matches
+# the timestamp's size at the same font size. The automatic length is the
+# longest 1, 2 or 5 x 10^n up to napari's 150 px, and the margin is 10 px.
+SCALE_BAR_CAP_HEIGHT_PER_PT = 1.3
+SCALE_BAR_TARGET_PX = 150.0
+SCALE_BAR_MARGIN_PX = 10.0
+
 # Settings that change what a frame looks like. A frames directory rendered
 # with other values for any of these is not reused; the frame range, fps,
 # quality and output path only affect which frames are assembled, and how.
@@ -149,6 +168,10 @@ FRAME_SETTINGS = (
     "show_points",
     "scale_bar",
     "scale_bar_length",
+    "scale_bar_thickness",
+    "scale_bar_color",
+    "scale_bar_position",
+    "scale_bar_font",
     "time_unit",
     "timestamp_font_size",
     "scale_bar_font_size",
@@ -180,6 +203,10 @@ class RenderConfig:
     show_points: bool = False
     scale_bar: bool = True
     scale_bar_length: float | None = None
+    scale_bar_thickness: float = 3.0
+    scale_bar_color: str | list[int] = "white"
+    scale_bar_position: str = "bottom_right"
+    scale_bar_font: str = "Arial"
     time_unit: str | None = None
     timestamp_font_size: float = 18
     scale_bar_font_size: float = 20
@@ -487,9 +514,11 @@ def apply_display(scene: Scene, cfg: RenderConfig, mode: str) -> None:
     if scene.points_layer is not None:
         scene.points_layer.visible = cfg.show_points
 
+    # napari's scale bar previews the drawn one in the setup viewer; the
+    # render hides it (prepare_capture).
     viewer.scale_bar.visible = cfg.scale_bar
-    # None lets napari pick a length from the zoom, which can differ between
-    # the setup viewer and the render (the render zooms in by screenshot_scale).
+    viewer.scale_bar.ticks = False
+    viewer.scale_bar.position = cfg.scale_bar_position
     viewer.scale_bar.length = cfg.scale_bar_length
     set_units(viewer, scene.axes)
     viewer.scale_bar.font_size = cfg.scale_bar_font_size
@@ -601,6 +630,13 @@ def read_display(scene: Scene, cfg: RenderConfig, canvas: list[int]) -> dict:
     # them.
     out["timestamp_font_size"] = cfg.timestamp_font_size
     out["scale_bar_font_size"] = cfg.scale_bar_font_size
+    for key in (
+        "scale_bar_thickness",
+        "scale_bar_color",
+        "scale_bar_position",
+        "scale_bar_font",
+    ):
+        out[key] = getattr(cfg, key)
 
     if scene.raw_layer is not None:
         out["raw"] = _read_raw(scene.raw_layer, ndisplay)
@@ -669,28 +705,107 @@ def run_setup(scene: Scene, cfg: RenderConfig) -> None:
     print_settings()
 
 
-def render(scene: Scene, cfg: RenderConfig, frames_dir: Path, output: Path) -> None:
-    """Capture one PNG per frame (skipping those already on disk), then
-    assemble the video.
+def prepare_capture(scene: Scene, cfg: RenderConfig) -> ScaleBar | None:
+    """Frame the view for capture and hide napari's scale bar.
+
+    Returns:
+        The scale bar to draw onto every frame instead, or None without one.
     """
     viewer = scene.viewer
-    end = scene.n_time if cfg.end is None else min(cfg.end, scene.n_time)
-    frame_range = range(cfg.start, end)
-    if not frame_range:
-        raise ValueError(f"Empty frame range [{cfg.start}, {end})")
     if "zoom" not in cfg.camera:
         fit_to_canvas(viewer, cfg.canvas_size)
         if "center" in cfg.camera:
             viewer.camera.center = tuple(cfg.camera["center"])
+    viewer.scale_bar.visible = False
+    return make_scale_bar(scene, cfg) if cfg.scale_bar else None
+
+
+def make_scale_bar(scene: Scene, cfg: RenderConfig) -> ScaleBar:
+    """The scale bar for the current view, in frame pixels."""
+    viewer = scene.viewer
+    # A frame is the setup canvas enlarged by screenshot_scale, in physical
+    # pixels; camera.zoom is screen (logical) pixels per world unit, in 2D and
+    # in an orthographic 3D view alike.
+    frame_px = viewer.window._qt_viewer.devicePixelRatio() * cfg.screenshot_scale
+    zoom = viewer.camera.zoom
+    if viewer.dims.ndisplay == 3 and viewer.camera.perspective:
+        print(
+            "Warning: perspective camera; the scale bar is exact only at the "
+            "depth of the camera center"
+        )
+    length = cfg.scale_bar_length or nice_length(SCALE_BAR_TARGET_PX / zoom)
+    # The last displayed axis's unit, as napari does when they differ.
+    unit = unit_symbol(scene.axes[-1].get("unit"))
+    color = cfg.scale_bar_color
+    return ScaleBar(
+        length_px=length * zoom * frame_px,
+        text=f"{length:g} {unit}".strip(),
+        thickness=cfg.scale_bar_thickness * frame_px,
+        cap_height=cfg.scale_bar_font_size * SCALE_BAR_CAP_HEIGHT_PER_PT * frame_px,
+        margin=SCALE_BAR_MARGIN_PX * frame_px,
+        color=color if isinstance(color, str) else tuple(color),
+        position=cfg.scale_bar_position,
+        font=cfg.scale_bar_font,
+    )
+
+
+def capture_frame(
+    scene: Scene,
+    cfg: RenderConfig,
+    t: int,
+    timestamp: str | None,
+    scale_bar: ScaleBar | None,
+    scale_bar_text: bool = True,
+) -> np.ndarray:
+    """Screenshot of frame ``t``, after ``prepare_capture``.
+
+    Args:
+        timestamp: Text for the top-left corner, or None for none.
+        scale_bar: Drawn onto the frame, if given.
+        scale_bar_text: Write the bar's length above it.
+    """
+    viewer = scene.viewer
+    viewer.dims.set_point(0, t)  # time has scale 1 on every layer
+    # Set on every frame: TracksViewer resets the overlay text and font size
+    # whenever its display mode changes. screenshot(scale=...) enlarges the
+    # canvas but draws text at its on-screen pixel size, so the font is
+    # scaled up to keep the setup viewer's proportions.
+    viewer.text_overlay.visible = timestamp is not None
+    if timestamp is not None:
+        viewer.text_overlay.text = timestamp
+        viewer.text_overlay.font_size = cfg.timestamp_font_size * cfg.screenshot_scale
+    # screenshot(scale=...) enlarges the canvas without zooming in, so the
+    # content would come out smaller. Zoom in to match; napari restores the
+    # zoom after the capture.
+    zoom = viewer.camera.zoom
+    viewer.camera.zoom = zoom * cfg.screenshot_scale
+    try:
+        frame = viewer.screenshot(
+            size=tuple(cfg.canvas_size),
+            scale=cfg.screenshot_scale,
+            canvas_only=True,
+            flash=False,
+        )
+    finally:
+        viewer.camera.zoom = zoom
+    frame = even_crop(frame)  # first, so the bar's margins are exact
+    if scale_bar is not None:
+        frame = scale_bar.draw(frame, text=scale_bar_text)
+    return frame
+
+
+def render(scene: Scene, cfg: RenderConfig, frames_dir: Path, output: Path) -> None:
+    """Capture one PNG per frame (skipping those already on disk), then
+    assemble the video.
+    """
+    end = scene.n_time if cfg.end is None else min(cfg.end, scene.n_time)
+    frame_range = range(cfg.start, end)
+    if not frame_range:
+        raise ValueError(f"Empty frame range [{cfg.start}, {end})")
+    scale_bar = prepare_capture(scene, cfg)
     # Formatted for the whole movie, not the rendered range, so frames reused
     # from a render of another range carry the same format.
     time_label = time_formatter(scene.axes[0], scene.n_time, cfg.time_unit)
-    # screenshot(scale=...) enlarges the canvas but draws text at its on-screen
-    # pixel size, so the fonts are scaled up to keep the setup viewer's
-    # proportions. The timestamp's is reapplied on every frame: TracksViewer
-    # resets the overlay text and font size whenever its display mode changes.
-    font_size = cfg.timestamp_font_size * cfg.screenshot_scale
-    viewer.scale_bar.font_size = cfg.scale_bar_font_size * cfg.screenshot_scale
 
     frame_paths = []
     for t in tqdm(frame_range, desc="Rendering frames"):
@@ -698,24 +813,8 @@ def render(scene: Scene, cfg: RenderConfig, frames_dir: Path, output: Path) -> N
         frame_paths.append(frame_path)
         if frame_path.exists():
             continue  # captured by an earlier, interrupted run
-        viewer.dims.set_point(0, t)  # time has scale 1 on every layer
-        viewer.text_overlay.text = time_label(t)
-        viewer.text_overlay.font_size = font_size
-        # screenshot(scale=...) enlarges the canvas without zooming in, so
-        # the content would come out smaller. Zoom in to match; napari
-        # restores the zoom after the capture.
-        zoom = viewer.camera.zoom
-        viewer.camera.zoom = zoom * cfg.screenshot_scale
-        try:
-            frame = viewer.screenshot(
-                size=tuple(cfg.canvas_size),
-                scale=cfg.screenshot_scale,
-                canvas_only=True,
-                flash=False,
-            )
-        finally:
-            viewer.camera.zoom = zoom
-        iio.imwrite(frame_path, even_crop(frame))
+        frame = capture_frame(scene, cfg, t, time_label(t), scale_bar)
+        iio.imwrite(frame_path, frame)
 
     write_video(frame_paths, output, cfg.fps, cfg.quality)
 
@@ -791,7 +890,7 @@ def parse_args() -> tuple[RenderConfig, argparse.Namespace]:
         type=float,
         default=None,
         help="fixed scale bar length in the spatial unit (e.g. 50 for 50 um); "
-        "default: chosen by napari from the zoom",
+        "default: 1, 2 or 5 x 10^n, chosen from the zoom",
     )
     parser.add_argument(
         "--time-unit",

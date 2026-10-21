@@ -3,13 +3,16 @@
 output_dir = "/path/to/results/movie/"
 flow_result = "flow_result"
 flow_kind = "3d"
+# output = "quiver.mp4"   # default: <flow run>/videos/quiver_z<z>_conf<p>_gap<g>_scale<s>.mp4
 
 # Metadata
-xy_scale = 0.5
-z_scale = 2.0
-t_scale = 1.0
-xyz_scale_unit = 'µm'
-t_scale_unit = 'min'
+# Default: the axes recorded in <output_dir>/raw.toml. Set these when that
+# metadata is wrong, or to change units (t_scale = 0.5 with t_scale_unit =
+# 'min' for a 30 s interval makes the legend read um/min).
+# xy_scale = 0.5
+# t_scale = 1.0
+# xyz_scale_unit = 'µm'
+# t_scale_unit = 'min'
 
 # Thresholding
 confidence_percentile = 90
@@ -18,7 +21,19 @@ confidence_percentile = 90
 z_slice = 2
 gap = 2
 quiver_scale = 1
-scale_bar_velocity = 10
+arrow_width = 0.3          # data units
+scale_bar_velocity = 10    # legend arrow speed, in xyz_scale_unit / t_scale_unit
+legend_corner = "bottom_right"   # or bottom_left, top_right, top_left
+timestamp_font_size = 18   # points; scale with dpi along with everything else
+legend_font_size = 14
+# time_unit = "min"        # force one unit ("s", "min" or "h"); default fits
+                           # the movie, e.g. 7hr:15min
+fig_width = 10             # inches; the height follows the slice's aspect ratio
+dpi = 150                  # frames come out fig_width * dpi px wide
 
 # Movie settings
-fps = 5
+start = 0                  # frame range [start, end); default every frame. The
+# end = 30                 # trailing all-zero placeholder comes out with no
+                           # arrows, keeping the movie in step with the raw one
+fps = 4                    # as render_tracks_video.py, so the videos play in step
+quality = 9                # 0-10, passed to imageio's ffmpeg writer

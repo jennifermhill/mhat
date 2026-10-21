@@ -1,8 +1,9 @@
 """MHAT vs competing trackers on Fluo-C3DL-MDA231 (02_cells, the held-out test movie).
 
 Replaces ``leaderboard_comparison_mda231.py`` (MHAT vs the CTC leaderboard top-3).
-One panel per metric, one bar per method, each panel on its own axis: target
-effectiveness, false-negative detections and AOGM.
+One panel per metric, one bar per method, each panel on its own axis, titled with
+the metric name and an arrow for the better direction: target effectiveness and
+false-negative detections (an AOGM panel was dropped 2026-10-19).
 
 Each method names its ``run`` and exact ``eval`` (see plot_spec.py); values are
 loaded live from that ``track_metrics.json``. A method whose run or eval is still
@@ -13,7 +14,7 @@ that is missing raises.
 Spec schema (TOML) -- see scratch_configs/evaluation/Fluo-C3DL-MDA231/mhat_vs_competitor_mda231_02.toml:
 
     output_dir   = ".../experiments/Fluo-C3DL-MDA231/02_cells"
-    metric_order = ["te", "fn", "aogm"]
+    metric_order = ["te", "fn"]
     [metrics.fn]
     label            = "False-negative detections"
     json_path        = ["F1AOGMMetrics", "Detection FN"]
@@ -67,7 +68,7 @@ def main():
             print(f"  {key:<14} {values[mk][key]:.4f}")
 
     fig, axes = plt.subplots(
-        1, len(metric_keys), figsize=(3.1 * len(metric_keys), 3.4)
+        1, len(metric_keys), figsize=(3.8 * len(metric_keys), 4.0)
     )
     for ax, key in zip(np.atleast_1d(axes), metric_keys):
         metric = metrics[key]
@@ -86,24 +87,26 @@ def main():
                 bar.set_hatch("xxx")
                 bar.set_alpha(0.35)
                 ax.text(bar.get_x() + bar.get_width() / 2, 0.02 * top, "no result",
-                        rotation=90, ha="center", va="bottom", fontsize=7, color="#444")
+                        rotation=90, ha="center", va="bottom", fontsize=11, color="#444")
             else:
                 ax.text(bar.get_x() + bar.get_width() / 2, v + 0.012 * top, fmt.format(v),
-                        ha="center", va="bottom", fontsize=8, color="#333333")
+                        ha="center", va="bottom", fontsize=12, color="#333333")
 
         ax.set_xticks(x)
-        ax.set_xticklabels(names, fontsize=9)
+        ax.set_xticklabels(names, fontsize=13)
+        ax.tick_params(axis="y", labelsize=12)
         ax.set_xlim(-0.6, len(method_keys) - 0.4)
         ax.set_ylim(0, top)
         arrow = "↑" if metric.get("higher_is_better", True) else "↓"
-        ax.set_ylabel(f"{metric['label']} ({arrow})", fontsize=10)
+        ax.set_title(f"{metric['label']} ({arrow})", fontsize=15)
+        ax.set_ylabel(metric["label"], fontsize=13)
 
         ax.spines[["top", "right"]].set_visible(False)
         ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)
         ax.set_axisbelow(True)
 
     if cfg.get("title"):
-        fig.suptitle(cfg["title"])
+        fig.suptitle(cfg["title"], fontsize=16)
     fig.tight_layout()
     out = plot_spec.figure_path(cfg, "mhat_vs_competitor_mda231_02.png", args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

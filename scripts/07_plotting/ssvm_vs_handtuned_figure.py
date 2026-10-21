@@ -104,7 +104,9 @@ def main():
     x = np.arange(n_groups)
     width = 0.76 / len(cond_keys)
 
-    fig, ax = plt.subplots(figsize=(2.6 * n_groups + 2, 5))
+    # 1.3 in per bar per group, so value labels and the one-row legend keep their
+    # room as conditions are added (2 conditions: the original 2.6 in per group).
+    fig, ax = plt.subplots(figsize=(1.3 * len(cond_keys) * n_groups + 2, 5))
     for i, ck in enumerate(cond_keys):
         offset = (i - (len(cond_keys) - 1) / 2) * width
         vals = values[ck]
@@ -123,19 +125,20 @@ def main():
                 bar.set_hatch("xxx")
                 bar.set_alpha(0.35)
                 ax.text(bar.get_x() + bar.get_width() / 2, 0.02, "no result",
-                        rotation=90, ha="center", va="bottom", fontsize=7, color="#444")
+                        rotation=90, ha="center", va="bottom", fontsize=10, color="#444")
             else:
                 ax.text(bar.get_x() + bar.get_width() / 2, v + 0.01, f"{v:.3f}",
-                        ha="center", va="bottom", fontsize=9, color="#333333")
+                        ha="center", va="bottom", fontsize=13, color="#333333")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(group_labels, fontsize=11)
+    ax.set_xticklabels(group_labels, fontsize=17)
+    ax.tick_params(axis="y", labelsize=14)
     ax.set_ylim(0, 1.0)
-    ax.set_ylabel(cfg.get("ylabel", "Score (higher is better)"))
+    ax.set_ylabel(cfg.get("ylabel", "Score (higher is better)"), fontsize=16)
     if cfg.get("suptitle"):
-        ax.set_title(cfg["suptitle"], fontsize=13, fontweight="bold")
+        ax.set_title(cfg["suptitle"], fontsize=18, fontweight="bold")
     # One row above the axes, so it never sits on a bar's value label.
-    ax.legend(frameon=False, fontsize=10, loc="lower center",
+    ax.legend(frameon=False, fontsize=14, loc="lower center",
               bbox_to_anchor=(0.5, 1.0), ncol=len(cond_keys))
 
     ax.spines[["top", "right"]].set_visible(False)

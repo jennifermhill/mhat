@@ -2,7 +2,8 @@
 
 The GT is sparse (MTrackJ points, corrected 2026-07-30), so every metric shown
 must ignore false positives: an unannotated true cell is otherwise counted as
-an error. One panel per metric, one bar per method, each panel on its own axis.
+an error. One panel per metric, one bar per method, each panel on its own axis,
+titled with the metric name and an arrow for the better direction.
 
 Each method names its ``run`` and exact ``eval`` (see plot_spec.py); values are
 loaded live from that ``track_metrics.json``. A metric gives a ``json_path``, or
@@ -63,7 +64,7 @@ def main():
             print(f"  {key:<14} {values[mk][key]:.4f}")
 
     fig, axes = plt.subplots(
-        1, len(metric_keys), figsize=(3.1 * len(metric_keys), 3.4)
+        1, len(metric_keys), figsize=(3.8 * len(metric_keys), 4.0)
     )
     for ax, key in zip(np.atleast_1d(axes), metric_keys):
         metric = metrics[key]
@@ -77,21 +78,23 @@ def main():
         fmt = metric.get("fmt", "{:.3f}")
         for bar, v in zip(bars, heights):
             ax.text(bar.get_x() + bar.get_width() / 2, v + 0.012 * top, fmt.format(v),
-                    ha="center", va="bottom", fontsize=8, color="#333333")
+                    ha="center", va="bottom", fontsize=12, color="#333333")
 
         ax.set_xticks(x)
-        ax.set_xticklabels(names, fontsize=9)
+        ax.set_xticklabels(names, fontsize=13)
+        ax.tick_params(axis="y", labelsize=12)
         ax.set_xlim(-0.6, len(method_keys) - 0.4)
         ax.set_ylim(0, top)
         arrow = "↑" if metric.get("higher_is_better", True) else "↓"
-        ax.set_ylabel(f"{metric['label']} ({arrow})", fontsize=10)
+        ax.set_title(f"{metric['label']} ({arrow})", fontsize=15)
+        ax.set_ylabel(metric["label"], fontsize=13)
 
         ax.spines[["top", "right"]].set_visible(False)
         ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)
         ax.set_axisbelow(True)
 
     if cfg.get("title"):
-        fig.suptitle(cfg["title"])
+        fig.suptitle(cfg["title"], fontsize=16)
     fig.tight_layout()
     out = plot_spec.figure_path(cfg, "mhat_vs_competitor_nk_cells.png", args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

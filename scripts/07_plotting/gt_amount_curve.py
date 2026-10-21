@@ -10,8 +10,9 @@ and the dense-crop arm (C, parameterized by volume fraction) on one axis — the
 annotated object-frame count is the budget they actually share.
 
 Runs that did not produce a usable result (empty solution, failed fit) are drawn
-as open markers just above 0 and excluded from the mean — a degenerate fit is not
-a score of zero, and averaging it in would hide the failure.
+as open markers just above 0, labeled "k/n no solution", and excluded from the
+mean — a degenerate fit is not a score of zero, and averaging it in would hide the
+failure.
 
 Pass several metrics to put them side by side in one figure; every panel shows
 both arms.
@@ -173,7 +174,7 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
             label=style.get("label", arm_key),
             color=style.get("color", None),
             marker=style.get("marker", "o"),
-            markersize=6,
+            markersize=7,
             markerfacecolor=(
                 "white" if style.get("linestyle", "-") != "-" else style.get("color", None)
             ),
@@ -213,14 +214,14 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
             # Stagger by series so two conditions failing at the same budget don't
             # overwrite each other's label.
             ax.annotate(
-                f"{len(entries)}/{len(entries) + n_ok} empty",
+                f"{len(entries)}/{len(entries) + n_ok} no solution",
                 (float(np.mean(fail_x)), 0.012),
                 textcoords="offset points",
-                xytext=(-4 + 8 * arm_index, 10),
+                xytext=(-6 + 12 * arm_index, 10),
                 ha="center",
                 va="bottom",
                 rotation=90,
-                fontsize=7.5,
+                fontsize=12,
                 color=style.get("color", None),
             )
 
@@ -229,9 +230,9 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
             f"full GT ({full_n:g})",
             (full_n, full_value),
             textcoords="offset points",
-            xytext=(-8, -16),
+            xytext=(4, -34),
             ha="right",
-            fontsize=9,
+            fontsize=13,
             color="#333333",
         )
 
@@ -267,7 +268,7 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
             textcoords="offset points",
             xytext=(4, 3),
             ha="left",
-            fontsize=8,
+            fontsize=12,
             color=base.get("color", "#888888"),
         )
 
@@ -282,7 +283,8 @@ def draw_metric(ax, rows, metric, cfg, errorbar="sem", annotate_full=True):
         if x_field == "n_gt_nodes_annotated"
         else "Annotated GT tracks used for fitting"
     )
-    ax.set_xlabel(cfg.get("xlabel", default_xlabel))
+    ax.set_xlabel(cfg.get("xlabel", default_xlabel), fontsize=16)
+    ax.tick_params(axis="both", labelsize=14)
     ax.set_ylim(0, 1.0)
     ax.spines[["top", "right"]].set_visible(False)
     ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)
@@ -334,32 +336,32 @@ def render(cfg, metrics, output_path, errorbar) -> None:
     for ax, metric in zip(axes, metrics):
         handles = draw_metric(ax, rows, metric, cfg, errorbar=errorbar)
         if len(metrics) == 1:
-            ax.set_ylabel(cfg.get("ylabel", labels.get(metric, metric)))
+            ax.set_ylabel(cfg.get("ylabel", labels.get(metric, metric)), fontsize=16)
         else:
-            ax.set_title(labels.get(metric, metric), fontsize=11)
+            ax.set_title(labels.get(metric, metric), fontsize=16)
     if len(metrics) > 1:
-        axes[0].set_ylabel(cfg.get("panels_ylabel", "Score (higher is better)"))
+        axes[0].set_ylabel(cfg.get("panels_ylabel", "Score (higher is better)"), fontsize=16)
 
     if len(metrics) == 1:
-        axes[0].legend(frameon=False, fontsize=10, loc="lower right")
+        axes[0].legend(frameon=False, fontsize=14, loc="lower right")
     else:
         # one shared legend below the panels, so it never covers a curve
         fig.legend(
             handles=handles,
             frameon=False,
-            fontsize=10,
+            fontsize=14,
             loc="lower center",
             ncol=len(handles),
-            bbox_to_anchor=(0.5, -0.04),
+            bbox_to_anchor=(0.5, -0.06),
         )
 
     if cfg.get("suptitle"):
-        fig.suptitle(cfg["suptitle"], fontsize=13, fontweight="bold")
+        fig.suptitle(cfg["suptitle"], fontsize=18, fontweight="bold")
     plt.tight_layout()
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_path, dpi=400, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved {output_path}")
 

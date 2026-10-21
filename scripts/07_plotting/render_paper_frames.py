@@ -1,18 +1,23 @@
 """Render chosen frames of a track (or raw) view as PNGs for a paper figure.
 
-Takes a ``render_tracks_video.py`` config plus ``frames``, the frame indices
-to render, and renders exactly as the video would, except that:
+The config names a ``render_tracks_video.py`` config, ``render_config``, and
+the frame indices to render, ``frames``. Each frame is rendered as that
+video's frame would be, except that:
 
 - no frame has a timestamp;
 - every frame has the scale bar, at the same place, but only the last one has
   its length written above it.
 
-The PNGs are ``<output>/frame_{t:04d}.png``; ``output`` is a directory here,
-by default ``<run>/paper_frames/<mode>/`` (``<gt folder>/paper_frames/...``
-for a ground truth, ``<output_dir>/paper_frames/raw_<mode>/`` for the raw
-movie alone). As with the videos, the directory records the settings that
-produced it, and a rerun with other settings, a different ``frames`` list
-included, needs ``--overwrite``.
+So the video and the stills share one set of view settings. The video config's
+``start``, ``end``, ``fps``, ``quality`` and ``output`` don't apply here.
+Any other render key in this config overrides the video config's (a table such
+as ``[camera]`` key by key), e.g. a smaller ``scale_bar_font_size`` for print.
+
+The PNGs are ``<output>/frame_{t:04d}.png``; ``output`` is a directory, by
+default ``<run>/paper_frames/<this config's name>/`` (``<gt folder>/...`` for
+a ground truth, ``<output_dir>/...`` for the raw movie alone). As with the
+videos, the directory records the settings that produced it, and a rerun with
+other settings, a different ``frames`` list included, needs ``--overwrite``.
 
 Usage:
     python scripts/07_plotting/render_paper_frames.py --config frames.toml
@@ -20,16 +25,19 @@ Usage:
     python scripts/07_plotting/render_paper_frames.py --config frames.toml \
         --frames 0 10 20 -o <dir> --overwrite
 
-Example TOML config (keep these under scratch_configs/visualization/): any
-render config, without the video-only keys, plus
+``--setup`` prints the view as ``render_tracks_video.py --setup`` does, to
+paste into the video config.
 
+Example TOML config (keep these under scratch_configs/visualization/):
+
+    render_config = "tracks_seg_easy.toml"  # relative to this file's folder
     frames = [0, 10, 20]     # increasing; the scale bar's length is on frame 20
     # output = "<dir>"       # where the PNGs go
+    # scale_bar_font_size = 12   # overrides of the video config, if any
 """
 
 import argparse
 import sys
-from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
 
@@ -44,22 +52,40 @@ sys.path.insert(0, str(REPO / "scripts" / "04_tracking"))
 import render_tracks_video as rtv  # noqa: E402
 
 # Keys of a render config that only a video uses.
-VIDEO_KEYS = ("start", "end", "fps", "quality")
+VIDEO_KEYS = {"start", "end", "fps", "quality", "output"}
+# The tables of a render config, by their TOML name.
+TABLES = {"raw": "raw_display", "seg": "seg", "camera": "camera"}
 
 
-@dataclass
-class PaperFramesConfig(rtv.RenderConfig):
-    frames: list[int] = field(default_factory=list)
+def load_config(path: Path) -> tuple[rtv.RenderConfig, list[int], str | None]:
+    """The video config with this config's overrides, the frames, and the
+    output directory (None for the default).
+    """
+    data = toml.load(path)
+    if "render_config" not in data:
+        raise ValueError(f"{path}: no render_config (the video config to use)")
+    render_path = Path(data.pop("render_config"))
+    if not render_path.is_absolute():
+        render_path = path.parent / render_path
+    frames = data.pop("frames", [])
+    output = data.pop("output", None)
 
-    @classmethod
-    def from_toml(cls, path: str | Path) -> "PaperFramesConfig":
-        video_only = sorted(set(toml.load(path)) & set(VIDEO_KEYS))
-        if video_only:
-            raise ValueError(
-                f"{path}: {video_only} only apply to a video; the frames "
-                f"rendered are `frames`"
-            )
-        return super().from_toml(path)
+    video_only = sorted(set(data) & VIDEO_KEYS)
+    if video_only:
+        raise ValueError(f"{path}: {video_only} only apply to a video")
+    cfg = rtv.RenderConfig.from_toml(render_path)
+    fields = set(rtv.RenderConfig.__dataclass_fields__)
+    for key, value in data.items():
+        if key in TABLES:
+            if not isinstance(value, dict):
+                raise ValueError(f"{path}: `{key}` must be a table")
+            getattr(cfg, TABLES[key]).update(value)
+        elif key in fields and key not in TABLES.values():
+            setattr(cfg, key, value)
+        else:
+            raise ValueError(f"Unknown key in {path}: {key!r}")
+    cfg.check_tables(path)
+    return cfg, frames, output
 
 
 def check_frames(frames: list[int], n_time: int) -> list[int]:
@@ -100,11 +126,12 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
-    cfg = PaperFramesConfig.from_toml(args.config)
+    config_path = absolute_path(args.config)
+    cfg, frames, output = load_config(config_path)
     if args.frames is not None:
-        cfg.frames = args.frames
+        frames = args.frames
     if args.output is not None:
-        cfg.output = str(args.output)
+        output = args.output
     scene, home = rtv.load_scene(cfg)
     mode = rtv.resolve_mode(cfg, scene.n_spatial)
     rtv.apply_display(scene, cfg, mode)
@@ -114,14 +141,16 @@ def main():
         rtv.run_setup(scene, cfg)
         return
 
-    frames = check_frames(cfg.frames, scene.n_time)
-    if cfg.output is not None:
-        out_dir = absolute_path(Path(cfg.output))
-        if out_dir.suffix == ".mp4":
-            raise ValueError(f"output is the directory for the PNGs, got {out_dir}")
+    frames = check_frames(frames, scene.n_time)
+    if output is not None:
+        out_dir = absolute_path(output)
+    elif home is not None:
+        out_dir = home / "paper_frames" / config_path.stem
     else:
-        video = rtv.default_output(cfg, mode, scene, home)
-        out_dir = video.parent.parent / "paper_frames" / video.stem
+        raise ValueError(
+            "A raw movie given only by raw_path belongs to no output directory; "
+            "set output or pass -o"
+        )
     prepare_frames_dir(
         out_dir, cfg.frame_settings() | {"frames": frames}, args.overwrite
     )

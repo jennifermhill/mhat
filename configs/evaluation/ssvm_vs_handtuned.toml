@@ -1,6 +1,7 @@
 # Hand-tuned vs SSVM-fit comparison figure -- TRAIN/fit sets.
-# Two datasets, each fit + evaluated on its own train/fit set; primary metric
-# differs per dataset (TRA for MDA231, TE for NC281-sparse train).
+# Two datasets, each fit + evaluated on its own train/fit set; both bars show TE
+# (MDA231 switched from CTC TRA on 2026-10-19; TE there is track_overlap under the CTC
+# matcher).
 # Rendered by ssvm_vs_handtuned_figure.py.
 #
 # The SSVM bars are the CURRENT BEST fits: stage-1 regularizer-sweep runs from the
@@ -12,35 +13,37 @@
 # raw argmax) is what picks the value when the grid ends flat.
 #
 # MDA231 was REFIT on 2026-09-30 after the waterz affinity-convention fix and the
-# cellpose 4.0.7 -> 4.2.1.1 change; see the segmentation-parity note below. NC281 is
-# unchanged (regsweep_r11, ssvm_reg 0.0121) and still on its pre-fix segmentation.
+# cellpose 4.0.7 -> 4.2.1.1 change; see the segmentation-parity note below. NC281 was
+# REFIT on 2026-10-20 on the wzff inputs (fixed waterz convention + fixed flow):
+# regsweep_r14, ssvm_reg 0.00681.
 #
 # Companion figure: ssvm_vs_handtuned_test.toml, which shows the held-out test scores.
 # Keep the two consistent -- if one is repointed at new runs, repoint the other.
 
 output_png = "Y:/jennifer/mhat/experiments/_unsorted/evaluation/ssvm_vs_handtuned.png"
 suptitle = ""
-ylabel = "Score (higher is better)"
+ylabel = "Target effectiveness (↑)"
 dataset_order = ["nc281_train", "mda231"]
 
-# Wong orange #E69F00 for SSVM, Wong reddish purple #CC79A7 for the hand-tuned
+# Wong yellow #F0E442 for SSVM (orange #E69F00 until 2026-10-19; orange now means
+# Dense GT in the GT-amount curve), Wong reddish purple #CC79A7 for the hand-tuned
 # ("Claude-tuned") model. Must stay identical to ssvm_vs_handtuned_test.toml, which
 # also carries the gray "Z-scored" negative control (test split only, so it
 # has no bar here).
 condition_order = ["hand_tuned", "ssvm"]
 
 [conditions.ssvm]
-label = "SSVM"
-color = "#E69F00"
+label = "Algorithmic"
+color = "#F0E442"
 
 [conditions.hand_tuned]
-label = "Claude-tuned"
+label = "Agentic"
 color = "#CC79A7"
 
 [datasets.mda231]
 name = "MDA231"
 output_dir = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/01_cells"
-json_path = ["CTCMetrics", "TRA"]
+json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 reduction = "scalar"
 #
 # SEGMENTATION PARITY: both bars are seg fs1cpm6_seg_base_wzfix / flow
@@ -61,7 +64,9 @@ reduction = "scalar"
 # seg_cp_20260720_fs1_cpm6 / flow 2026-02-17_15-55-00.
 [datasets.mda231.hand_tuned]
 run = "tracking/sweeps/regenF01/runs/baseline"
-eval = "ctc_ctc_2026-09-22_16-15-09"
+# TE needs track_overlap; this re-eval of the same run carries it (TRA identical to
+# the ctc-only eval ctc_ctc_2026-09-22_16-15-09 the TRA version of this figure read).
+eval = "ctc_f1aogm_ctc+f1_aogm+track_overlap_2026-10-15_11-29-58"
 [datasets.mda231.ssvm]
 run = "ssvm/sweeps/stage1_regsweep_regen/runs/regsweep_r05"
 eval = "ctc_ctc+track_overlap_2026-09-30_14-51-34"
@@ -71,11 +76,20 @@ name = '$\mathit{Dictyostelium}$'   # literal string; mathtext -> italic tick la
 output_dir = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_train"
 json_path = ["TrackOverlapMetrics", "target_effectiveness"]
 reduction = "scalar"
-# No parity issue here: the hand-tuned run, the old ssvm_fit and regsweep_r11 all share
-# seg 2026-07-02_10-32-29 / flow 2026-07-02_10-43-07, so only the SSVM bar moves.
+# SEGMENTATION PARITY (2026-10-20): both bars are seg 2026-07-02_10-32-29_wzfix / flow
+# favgfix -- post waterz-convention fix and post frame-averaging flow fix ("wzff").
+# Hand-tuned = the wzff final run; SSVM = the wzff stage-1 regularizer calibration
+# (spec scratch_configs/tracking/NC281-sparse-label/02_nuclei_denoised_train/
+# ssvm_wzff_stage1.toml, 25-point grid), plateau rule: 10 points r10..r19 within 0.005
+# of the argmax r18, geometric center 0.00619 -> regsweep_r14, ssvm_reg 0.00681,
+# n_labeled 10877 -> effective 74.07.
+#
+# Superseded values, for reference: hand-tuned tracking/2026-07-02_10-55-33 TE 0.8093
+# and SSVM ssvm/sweeps/stage1_regsweep/runs/regsweep_r11 (ssvm_reg 0.0121) TE 0.8093,
+# both on seg 2026-07-02_10-32-29 / flow 2026-07-02_10-43-07.
 [datasets.nc281_train.hand_tuned]
-run = "tracking/2026-07-02_10-55-33"
-eval = "manual_basic+track_overlap_2026-07-02_11-22-11"
+run = "tracking/sweeps/wzff/runs/full_dw100_cw500"
+eval = "wzff_basic+f1_aogm+track_overlap_2026-10-14_15-16-08"
 [datasets.nc281_train.ssvm]
-run = "ssvm/sweeps/stage1_regsweep/runs/regsweep_r11"
-eval = "manual_basic+track_overlap_2026-08-03_15-37-38"
+run = "ssvm/sweeps/stage1_regsweep_wzff/runs/regsweep_r14"
+eval = "stage1_regsweep_wzff_basic+f1_aogm+track_overlap_2026-10-20_10-13-01"

@@ -11,9 +11,10 @@
 #
 # The two datasets deliberately share arm labels, colours and x semantics so the
 # figures can be set side by side without re-reading either legend. What they cannot
-# share is the metric: NC281 is point-matched (TrackOverlapMetrics), MDA231 is
-# CTC-matched (CTCMetrics), and BasicMetrics cannot run alongside a CTC matching at
-# all. Hence per-dataset metric_column / panel_metrics / ylabel / baselines.
+# share is the matcher: NC281 is point-matched, MDA231 CTC-matched, and BasicMetrics
+# cannot run alongside a CTC matching at all. Both plot target effectiveness
+# (TrackOverlapMetrics) as the primary metric, but the side panels differ. Hence
+# per-dataset metric_column / panel_metrics / ylabel / baselines.
 #
 # Every run in both sweeps is fit at a FIXED EFFECTIVE regularizer: stage 1
 # calibrates ssvm_reg on the fully annotated train split, and each run divides that
@@ -41,7 +42,7 @@ suptitle = ""
 # Arm A = sparse annotation (unlabeled candidates removed from the graph).
 [arms.A]
 label = "Sparse GT"
-color = "#0072B2"
+color = "#CC79A7"   # Wong reddish purple (was blue #0072B2 until 2026-10-19)
 linestyle = "-"
 
 # Arm B (gt_selected=None, motile API) is omitted from the figure — it is the
@@ -56,7 +57,7 @@ linestyle = "-"
 # styling used by the merged two-sweep figure, which would misread here.
 [arms.C]
 label = "Dense GT"
-color = "#009E73"
+color = "#E69F00"   # Wong orange (was bluish green #009E73 until 2026-10-19)
 linestyle = "-"
 
 
@@ -68,13 +69,14 @@ output_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised
 output_panels_png = "Y:/jennifer/mhat/experiments/NC281-sparse-label/02_nuclei_denoised_test/figures/gt_amount/gt_amount_panels.png"
 metric_column = "target_effectiveness"
 panel_metrics = ["target_effectiveness", "edge_recall", "node_recall"]
-ylabel = "Target effectiveness"
+ylabel = "Target effectiveness (↑)"
 
 # Reference lines on the same held-out test split.
-[datasets.NC281-sparse-label.baselines.hand_tuned]
-label = "Claude-tuned (full GT)"
-value = 0.8290
-color = "#CC79A7"
+# REMOVED FROM THE FIGURE (2026-10-19): the hand-tuned line. Uncomment to restore.
+# [datasets.NC281-sparse-label.baselines.hand_tuned]
+# label = "Claude-tuned (full GT)"
+# value = 0.8290
+# color = "#CC79A7"
 
 # REMOVED FROM THE FIGURE: the older full-GT SSVM run fit at ssvm_reg = 0.1
 # (effective ~1088, test TE 0.7209). It was never a correctness check against this
@@ -88,23 +90,24 @@ color = "#CC79A7"
 
 
 # --- Fluo-C3DL-MDA231 --------------------------------------------------------
-# CTC matcher, 33 train tracks / 364 GT nodes. Primary metric is CTC TRA — the
-# dataset's established headline number and the one both reference lines are quoted
-# in. Panels are TRA / DET / SEG: tracking, detection and segmentation quality of the
-# same solution, which is what the arms trade against each other. LNK stays a CSV
-# diagnostic — 02_cells has three dividing tracks while the graph is built with
-# divisions = false, which caps achievable LNK for reasons unrelated to GT amount.
+# CTC matcher, 33 train tracks / 364 GT nodes. Primary metric is target effectiveness
+# (switched from CTC TRA on 2026-10-19 to match NC281 and the other figures; TE here is
+# track_overlap under the CTC matcher, already a column of stage2_test.csv). Panels are
+# TE / DET / SEG: tracking, detection and segmentation quality of the same solution,
+# which is what the arms trade against each other. TRA and LNK stay CSV diagnostics —
+# 02_cells has three dividing tracks while the graph is built with divisions = false,
+# which caps achievable LNK for reasons unrelated to GT amount.
 #
 # SEG is measured on 13 sparse annotated z-slices and is bounded above by the
-# held-fixed segmentation, so expect a lower, flatter panel than TRA/DET. The
-# hand-tuned reference scores SEG 0.7082 there.
+# held-fixed segmentation, so expect a lower, flatter panel than TE/DET. The
+# hand-tuned reference scores SEG 0.7118 there.
 [datasets.Fluo-C3DL-MDA231]
 csv_path = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/gt_amount/stage2_test.csv"
 output_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/gt_amount/gt_amount_curve.png"
 output_panels_png = "Y:/jennifer/mhat/experiments/Fluo-C3DL-MDA231/02_cells/figures/gt_amount/gt_amount_panels.png"
-metric_column = "tra"
-panel_metrics = ["tra", "det", "seg"]
-ylabel = "CTC TRA"
+metric_column = "target_effectiveness"
+panel_metrics = ["target_effectiveness", "det", "seg"]
+ylabel = "Target effectiveness (↑)"
 
 # `metric` is REQUIRED on every baseline here. gt_amount_curve.py filters reference
 # lines with base.get("metric", "target_effectiveness"), so an MDA231 baseline
@@ -114,11 +117,15 @@ ylabel = "CTC TRA"
 # Legitimate as a reference: its parameters were chosen on 01_cells and only then
 # scored on test. It also runs curvature_weight = 0.0, matching this sweep's
 # ablate_curvature = true.
-[datasets.Fluo-C3DL-MDA231.baselines.hand_tuned]
-label = "Claude-tuned (full GT)"
-value = 0.9392
-metric = "tra"
-color = "#CC79A7"
+# Source: 02_cells tracking/holdout_fs1_cpm6, eval ctc_ctc+track_overlap_2026-10-19_16-04-04
+# (TE 0.9242, TRA 0.9369). The TRA line this replaced said 0.9392, which neither of that
+# run's evals gives (both 0.9369, as ssvm_results.md quotes); its source is unknown.
+# REMOVED FROM THE FIGURE (2026-10-19). Uncomment to restore.
+# [datasets.Fluo-C3DL-MDA231.baselines.hand_tuned]
+# label = "Claude-tuned (full GT)"
+# value = 0.9242
+# metric = "target_effectiveness"
+# color = "#CC79A7"
 
 # REMOVED FROM THE FIGURE: SSVM at the old default ssvm_reg = 0.1, full GT,
 # curvature-ablated, produced on this seg pair by stage 0c (stage-1 grid point
@@ -133,8 +140,9 @@ color = "#CC79A7"
 # active and failed at linking, LNK 0.560; this one gets LNK 0.8965). So on this
 # dataset the headroom between "SSVM at a default regularizer" and "hand-tuned" is
 # now small, and the curve is mostly about how fast that degrades as GT shrinks.
+# (TE of that run, tracking/sweeps/gt_amount/runs/ref_reg0p1: 0.8731.)
 # [datasets.Fluo-C3DL-MDA231.baselines.ssvm_full_gt_reg0p1]
 # label = "SSVM full GT, old ssvm_reg=0.1"
-# value = 0.9339
-# metric = "tra"
+# value = 0.8731
+# metric = "target_effectiveness"
 # color = "#999999"

@@ -342,6 +342,6 @@ if __name__ == "__main__":
     else:
         threshold = config["merge_thresholds"]
         get_segmentation(
-            output_root, threshold, merge_history_file, config["waterz_params"],
+            output_root, threshold, merge_history_file, config.get("waterz_params"),
             neighborhood=config["affinity_params"]["neighborhood"],
         )

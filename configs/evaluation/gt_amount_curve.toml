@@ -42,7 +42,7 @@ suptitle = ""
 # Arm A = sparse annotation (unlabeled candidates removed from the graph).
 [arms.A]
 label = "Sparse GT"
-color = "#CC79A7"   # Wong reddish purple (was blue #0072B2 until 2026-10-19)
+color = "#0072B2"   # Wong blue (reddish purple #CC79A7 2026-10-19 to 2026-10-27)
 linestyle = "-"
 
 # Arm B (gt_selected=None, motile API) is omitted from the figure — it is the

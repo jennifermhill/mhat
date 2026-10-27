@@ -3,7 +3,8 @@
 Ultrack (Bergamaschi et al. 2025) reports Detection F1, TRA and false-negative
 detections for Huh7 as the mean over videos 01 and 02, so every method is
 averaged over the same two videos here. One panel per metric, one bar per
-method; F1 and TRA share a 0-1 axis, the FN count gets its own.
+method, each panel titled with the metric name and an arrow for the better
+direction; F1 and TRA share a 0-1 axis, the FN count gets its own.
 
 Data provenance
 ---------------
@@ -88,7 +89,7 @@ def main():
             print(f"  {key:<14} {per_video}  -> mean {np.mean(values[mk][key]):.4f}")
 
     fig, axes = plt.subplots(
-        1, len(metric_keys), figsize=(3.1 * len(metric_keys), 3.4)
+        1, len(metric_keys), figsize=(3.8 * len(metric_keys), 4.0)
     )
     for ax, key in zip(np.atleast_1d(axes), metric_keys):
         metric = metrics[key]
@@ -102,21 +103,23 @@ def main():
         fmt = metric.get("fmt", "{:.3f}")
         for bar, v in zip(bars, heights):
             ax.text(bar.get_x() + bar.get_width() / 2, v + 0.012 * top, fmt.format(v),
-                    ha="center", va="bottom", fontsize=8, color="#333333")
+                    ha="center", va="bottom", fontsize=12, color="#333333")
 
         ax.set_xticks(x)
-        ax.set_xticklabels(names, fontsize=9)
+        ax.set_xticklabels(names, fontsize=13)
+        ax.tick_params(axis="y", labelsize=12)
         ax.set_xlim(-0.6, len(method_keys) - 0.4)
         ax.set_ylim(0, top)
-        direction = "higher" if metric.get("higher_is_better", True) else "lower"
-        ax.set_ylabel(f"{metric['label']}\n({direction} is better)", fontsize=10)
+        arrow = "↑" if metric.get("higher_is_better", True) else "↓"
+        ax.set_title(f"{metric['label']} ({arrow})", fontsize=15)
+        ax.set_ylabel(metric["label"], fontsize=13)
 
         ax.spines[["top", "right"]].set_visible(False)
         ax.yaxis.grid(True, color="#e6e6e6", linewidth=0.8)
         ax.set_axisbelow(True)
 
     if cfg.get("title"):
-        fig.suptitle(cfg["title"])
+        fig.suptitle(cfg["title"], fontsize=16)
     fig.tight_layout()
     out = plot_spec.figure_path(cfg, "mhat_vs_competitor_huh7.png", args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

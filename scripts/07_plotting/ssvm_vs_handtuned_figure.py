@@ -104,9 +104,9 @@ def main():
     x = np.arange(n_groups)
     width = 0.76 / len(cond_keys)
 
-    # 1.3 in per bar per group, so value labels and the one-row legend keep their
-    # room as conditions are added (2 conditions: the original 2.6 in per group).
-    fig, ax = plt.subplots(figsize=(1.3 * len(cond_keys) * n_groups + 2, 5))
+    # Same canvas, dpi and font sizes as gt_amount_curve.py's single-panel curve,
+    # which this figure is set beside at the same width.
+    fig, ax = plt.subplots(figsize=(6.5, 5))
     for i, ck in enumerate(cond_keys):
         offset = (i - (len(cond_keys) - 1) / 2) * width
         vals = values[ck]
@@ -125,13 +125,14 @@ def main():
                 bar.set_hatch("xxx")
                 bar.set_alpha(0.35)
                 ax.text(bar.get_x() + bar.get_width() / 2, 0.02, "no result",
-                        rotation=90, ha="center", va="bottom", fontsize=10, color="#444")
+                        rotation=90, ha="center", va="bottom", fontsize=12, color="#444")
             else:
                 ax.text(bar.get_x() + bar.get_width() / 2, v + 0.01, f"{v:.3f}",
                         ha="center", va="bottom", fontsize=13, color="#333333")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(group_labels, fontsize=17)
+    # The dataset names take the place of the curve's x-axis label, so its size.
+    ax.set_xticklabels(group_labels, fontsize=16)
     ax.tick_params(axis="y", labelsize=14)
     ax.set_ylim(0, 1.0)
     ax.set_ylabel(cfg.get("ylabel", "Score (higher is better)"), fontsize=16)
@@ -148,7 +149,7 @@ def main():
 
     output_path = Path(args.output or cfg["output_png"])
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path, dpi=500, bbox_inches="tight")
+    plt.savefig(output_path, dpi=400, bbox_inches="tight")
     print(f"Saved {output_path}")
 
 

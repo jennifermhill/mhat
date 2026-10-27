@@ -4,6 +4,7 @@ left out would go unnoticed in a figure.
 
 import numpy as np
 import pytest
+
 from mhat.visualization.scale_bar import ScaleBar, nice_length
 
 

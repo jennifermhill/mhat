@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from functools import cache
 
 import numpy as np
-import pint
 from matplotlib import font_manager
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
@@ -38,6 +37,10 @@ def unit_symbol(unit: str | None) -> str:
     """
     if not unit:
         return ""
+    # pint isn't a core dependency; it comes with napari, which every caller of
+    # this needs anyway.
+    import pint
+
     registry = pint.get_application_registry()
     try:
         parsed = registry.Unit(unit)
@@ -58,7 +61,7 @@ def _font_file(family: str) -> str:
 def load_font(family: str, cap_height: float) -> ImageFont.FreeTypeFont:
     """``family`` at the size whose digits are ``cap_height`` pixels tall."""
     path = _font_file(family)
-    left, top, right, bottom = ImageFont.truetype(path, 1000).getbbox("0123456789")
+    _left, top, _right, bottom = ImageFont.truetype(path, 1000).getbbox("0123456789")
     return ImageFont.truetype(path, max(1, round(cap_height * 1000 / (bottom - top))))
 
 
@@ -90,8 +93,7 @@ class ScaleBar:
     def __post_init__(self):
         if self.position not in POSITIONS:
             raise ValueError(
-                f"scale bar position must be one of {POSITIONS}, "
-                f"got {self.position!r}"
+                f"scale bar position must be one of {POSITIONS}, got {self.position!r}"
             )
 
     def bar_box(self, height: int, width: int) -> tuple[int, int, int, int]:
